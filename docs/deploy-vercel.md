@@ -41,7 +41,7 @@ flowchart LR
 
 | Phase | Việc | Ai làm | Thời lượng |
 |---|---|---|---|
-| **1** | Chuyển project sang PostgreSQL (schema, dev DB qua Docker, test, e2e, migrations mới) | **Tôi làm được trong repo** (báo tôi) | ~1 task |
+| **1** ✅ | Chuyển project sang PostgreSQL (schema, dev DB qua Docker, test, e2e, migrations mới) | **XONG** (23/09/2026 — chi tiết dưới) | ~1 task |
 | **2** | Tạo project Supabase + lấy 2 connection string | Bạn (dashboard) | ~5 phút |
 | **3** | Tạo project Vercel + env + cấu hình không auto-deploy prod | Bạn (dashboard) | ~10 phút |
 | **4** | Thêm GitHub Secrets + bật workflows | Bạn (GitHub) | ~5 phút |
@@ -51,9 +51,10 @@ Các file **đã sẵn trong repo** (commit kèm guide này): `vercel.json` (roo
 
 ---
 
-## Phase 1 — Chuyển sang PostgreSQL (bắt buộc trước)
+## Phase 1 — Chuyển sang PostgreSQL ✅ (HOÀN TẤT 23/09/2026)
 
 > Nếu đã làm xong phase này (schema `provider = "postgresql"`) thì nhảy tới Phase 2.
+> Dưới đây là nội dung đã thực thi — giữ lại làm tài liệu tham chiếu.
 
 ### 1.1. Đổi provider schema
 
@@ -92,7 +93,7 @@ volumes:
 
 Chạy: `docker compose -f docker-compose.dev.yml up -d` (dừng: `... down`).
 
-Tạo thêm 2 database cho test + e2e (1 lần duy nhất):
+2 database cho test + e2e được tạo **tự động** bởi `dev-db.init.sql` (mount vào `/docker-entrypoint-initdb.d/`, chạy 1 lần khi volume PG khởi tạo): `expense_tracker_test` + `expense_tracker_e2e`. Volume đã tồn tại mà thiếu DB (trường hợp hiếm) thì chạy tay:
 
 ```bash
 docker compose -f docker-compose.dev.yml exec postgres psql -U etracker -c "CREATE DATABASE expense_tracker_test;" -c "CREATE DATABASE expense_tracker_e2e;"
@@ -108,18 +109,19 @@ JWT_SECRET="<chuỗi ngẫu nhiên>"
 
 ### 1.3. Tạo lại migrations cho PostgreSQL
 
-Migrations SQLite cũ **không tương thích** PostgreSQL — xoá và tạo mới:
+Migrations SQLite cũ **không tương thích** PostgreSQL — đã xoá và tạo mới (migration `*_init` PG hiện có trong `apps/api/prisma/migrations/`):
 
 ```bash
-# xoá migrations sqlite (data dev.db là tài khoản test — chấp nhận mất)
-rm -rf apps/api/prisma/migrations/*
-pnpm --filter @expense-tracker/api db:migrate   # prisma migrate dev → sinh migration PG "init"
+# xoá migrations sqlite (data dev.db là tài khoản test — chấp nhận mất; Windows: rmdir /s /q)
+pnpm --filter @expense-tracker/api exec prisma migrate dev --name init
 ```
 
-### 1.4. Chỉ test + e2e sang Postgres
+### 1.4. Test + e2e chạy trên Postgres
 
-- `apps/api/vitest.config.ts` — `env.DATABASE_URL` → `postgresql://etracker:etracker@localhost:5432/expense_tracker_test` (global-setup `db push --force-reset` vẫn hoạt động trên PG).
-- `apps/web/playwright.config.ts` — env API của `webServer` → `postgresql://etracker:etracker@localhost:5432/expense_tracker_e2e`.
+- `apps/api/test/dbUrl.ts` (mới) — `testDatabaseUrl()`: default `postgresql://etracker:etracker@localhost:5432/expense_tracker_test`, CI override bằng env **`TEST_DATABASE_URL`** (dùng trong `vitest.config.ts` + `test/global-setup.ts` — `db push --force-reset` vẫn hoạt động trên PG).
+- `apps/web/playwright.config.ts` — env API của `webServer`: `E2E_DATABASE_URL` (default `postgresql://etracker:etracker@localhost:5432/expense_tracker_e2e`) + `DIRECT_URL`.
+- `.github/workflows/ci.yml` + `deploy.yml` — thêm env `TEST_DATABASE_URL` trỏ service postgres:16 trong Actions.
+- **Kèm theo**: stack self-host `docker/` cũng thêm service `postgres:16` (schema 1 provider duy nhất — SQLite không còn tồn tại ở môi trường nào; xem `docs/deploy.md` §A).
 - README: thêm bước `docker compose -f docker-compose.dev.yml up -d` trước `pnpm test` / `pnpm test:e2e`.
 
 ⚠️ Sau phase này, `pnpm dev` / `pnpm test` yêu cầu Postgres Docker đang chạy. (Đây là trade-off để dev = prod.)

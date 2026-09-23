@@ -7,9 +7,9 @@ Kiến trúc: **API stateless** (Express + Prisma, auth bằng JWT access token 
 | | **A. Self-host Docker** | **B. Vercel + Supabase** |
 |---|---|---|
 | Chi phí | 0 (1 VPS bất kỳ) / máy nhà | Free tier đủ dùng (Vercel Hobby + Supabase Free) |
-| DB mặc định | SQLite (volume) — đơn giản nhất | PostgreSQL (Supabase) |
+| DB | PostgreSQL (named volume) | PostgreSQL (Supabase) |
 | Bảo trì | Tự cập nhật (`compose up --build`) | Tự động theo Git push |
-| Trạng thái | ✅ Đã build + chạy thử trong project này | 📋 Hướng dẫn — **cần kiểm chứng trước khi áp dụng** |
+| Trạng thái | ✅ Đã build + chạy thử trong project này (xác minh lại với PG 23/09/2026) | 📋 Hướng dẫn — **cần kiểm chứng trước khi áp dụng** |
 
 ---
 
@@ -22,7 +22,7 @@ File đã có sẵn trong repo:
 | `apps/api/Dockerfile` | Image API (node:24-alpine, Prisma + tsx) |
 | `apps/web/Dockerfile` | Image web (build Vite + PWA → nginx:alpine) |
 | `apps/web/nginx.conf` | Serve SPA + proxy `/api` → container `api` (same domain — refresh cookie hoạt động, không cần CORS) |
-| `docker/docker-compose.yml` | Orchestrate 2 container + volume SQLite |
+| `docker/docker-compose.yml` | Orchestrate 3 container (postgres + api + web) + named volume `pgdata` |
 | `docker/.env.example` | Mẫu biến môi trường |
 
 ### Chạy
@@ -50,18 +50,17 @@ Container `api` tự chạy `prisma migrate deploy` khi khởi động — **kh�
 | `JWT_SECRET` | ✅ | — | Chuỗi ngẫu nhiên dài: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 | `WEB_PORT` | — | `8080` | Port expose web ra máy host |
 
-`DATABASE_URL` của API được đặt sẵn trong compose (`file:/data/et.db` — SQLite trên named volume `etdb`).
+`DATABASE_URL`/`DIRECT_URL` của API được đặt sẵn trong compose (`postgresql://etracker:etracker@postgres:5432/expense_tracker` — service postgres nội bộ, không expose port ra host).
 
 ### Dữ liệu & backup
 
-- Toàn bộ dữ liệu nằm trong file `et.db` (volume `etdb`).
-- **Backup**: dừng app rồi sao chép file SQLite:
+- Toàn bộ dữ liệu nằm trong database `expense_tracker` (named volume `pgdata`).
+- **Backup** (`pg_dump` — không cần dừng app):
   ```bash
-  docker compose down
-  docker run --rm -v expense-tracker_etdb:/data -v %cd%:/backup alpine cp /data/et.db /backup/et-backup.db
+  docker compose exec postgres pg_dump -U etracker expense_tracker > backup-ngay.sql
   ```
-  (macOS/Linux: thay `%cd%` bằng đường dẫn tuyệt đối.) Khôi phục: copy file vào volume theo hướng ngược lại.
-- **Cập nhật app**: `git pull` → `docker compose up -d --build`.
+  Khôi phục: `docker compose exec -T postgres psql -U etracker -d expense_tracker < backup-ngay.sql`
+- **Cập nhật app**: `git pull` → `docker compose up -d --build` (container `api` tự chạy `prisma migrate deploy` khi khởi động).
 
 ### Domain + HTTPS (nếu dùng tên miền)
 
@@ -76,26 +75,19 @@ chi.tiengiadinh.vn {
 
 Không cần sửa gì trong app: web gọi API bằng đường dẫn tương đối (`/api/...`) và cookie không gắn domain cứng → hoạt động với mọi domain.
 
-### Nâng cấp PostgreSQL (tuỳ chọn)
+### PostgreSQL ở mọi môi trường (từ Phase 1 — 23/09/2026)
 
-SQLite đủ tốt cho dữ liệu gia đình trên 1 server. Chỉ chuyển PostgreSQL khi cần **nhiều instance API** hoặc DB ở hạ tầng riêng:
-
-1. Đổi `provider = "sqlite"` → `provider = "postgresql"` trong `apps/api/prisma/schema.prisma`.
-2. `DATABASE_URL=postgresql://user:pass@db-host:5432/expense_tracker`.
-3. DB mới: `pnpm --filter @expense-tracker/api db:migrate` tạo migration PostgreSQL. DB cũ (SQLite) có dữ liệu: xuất → import thủ công (MVP chấp nhận khởi đầu mới).
-4. Thêm service `postgres` vào `docker-compose.yml` và trỏ `DATABASE_URL` sang container đó.
-
-> Lưu ý: SQLite và PostgreSQL có 2 bộ migration riêng (SQL sinh theo provider). Dev giữ SQLite, prod dùng PostgreSQL — migration file chia nhánh theo từng lần đổi provider, không dùng chung 1 thư mục `prisma/migrations` cho cả 2.
+Schema Prisma dùng **PostgreSQL cho tất cả môi trường**: dev/test/e2e chạy Postgres qua Docker (`docker-compose.dev.yml` ở root repo), self-host chạy service `postgres` trong compose ở trên, Vercel+Supabase chạy trên Supabase. SQLite không còn dùng ở đâu — không còn bước "nâng cấp SQLite → PostgreSQL".
 
 ### Kết quả kiểm chứng trong project này
 
-Chạy `docker compose up -d --build` trên máy dev (Docker Desktop, Windows):
+Chạy `docker compose up -d --build` trên máy dev (Docker Desktop, Windows) — **23/09/2026, sau khi chuyển PostgreSQL**:
 
-- **Build**: 2 image thành công (`node:24-alpine` cho api, `nginx:alpine` cho web — web build chạy `tsc` + `vite` + PWA trong container).
+- **Build**: 2 image thành công (`node:24-alpine` cho api, `nginx:alpine` cho web — web build chạy `tsc` + `vite` + PWA trong container) + container `postgres:16-alpine`. Container `api` chờ postgres **healthy** rồi mới start (tự chạy `prisma migrate deploy` với migration PG).
 - **Smoke test qua `http://localhost:8080`** (request đi qua proxy nginx → container api, đúng đường như người dùng thật):
   - `GET /api/health` → 200 · `GET /` → 200 (SPA + manifest PWA)
-  - `POST /api/auth/register` → 201 (dữ liệu ghi vào SQLite volume) · `POST /api/auth/login` → 200 + access token
-  - `POST /api/families` → 201 + 7 preset categories · `POST /api/expenses` → 201 · `GET .../expenses` → đúng 1 khoản · `POST /api/auth/refresh` → 200 (rotation)
+  - `POST /api/auth/register` → 201 (dữ liệu ghi vào Postgres volume) · `POST /api/families` → 201 + 7 preset categories
+  - `POST /api/expenses` → 201 · `GET .../expenses` → đúng 1 khoản
 - Dọn dẹp sau test: `docker compose down -v` (xoá container + volume test).
 
 ---

@@ -35,6 +35,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://etracker:etracker@localhost:5432/et_test
       DIRECT_URL: postgresql://etracker:etracker@localhost:5432/et_test
+      # Unit test đọc DB này qua apps/api/test/dbUrl.ts (override default local docker)
+      TEST_DATABASE_URL: postgresql://etracker:etracker@localhost:5432/et_test
       JWT_SECRET: ci-only-secret-khong-dung-san-sanh
     steps:
       - uses: actions/checkout@v4

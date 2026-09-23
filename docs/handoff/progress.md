@@ -3,7 +3,9 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 23/09/2026 — sau **WBS 14** (HOÀN TẤT): Polish + hướng dẫn local + guide deploy — **toàn bộ 14 WBS đã xong**
+## Cập nhật: 23/09/2026 — sau **Phase 1** (HOÀN TẤT): chuyển toàn bộ project SQLite → PostgreSQL — **14/14 WBS + Phase 1 đã xong**
+
+> Trước đó (cùng ngày): WBS 14 hoàn tất (Polish + hướng dẫn local + guide deploy) — toàn bộ 14 WBS xong.
 
 ## Đã xong
 - [x] **Task 1**: Scaffold monorepo (web + api + shared)
@@ -24,6 +26,7 @@
 - [x] **WBS 13** (chi tiết dưới): E2E Playwright 8 test (auth, khoản chi, offline)
 - [x] **WBS 14** (chi tiết dưới): Polish (lazy StatsPage) + README hướng dẫn local + `docs/deploy.md` (Docker đã test thật, Vercel/Supabase guide)
 - [x] **Guide deploy Vercel + Supabase + CI/CD** (post-WBS, chi tiết dưới): `docs/deploy-vercel.md` 5 phase + file deploy sẵn trong repo
+- [x] **Phase 1** (post-WBS, chi tiết dưới): chuyển toàn bộ project từ SQLite → PostgreSQL (điều kiện deploy Vercel+Supabase)
 
 ### Chi tiết Polish WBS 10 — nhóm theo ngày + edit khoản
 - **`core/expenseGroups.ts`** (mới) — `groupByDay(expenses) → DayGroup[]` (`{ date, label, total, expenses }`, giữ thứ tự input = date desc của API) + `dayLabel(date)` = "Hôm nay" / "Hôm qua" / `shortDate` ("22/09", kèm năm nếu khác năm). Dùng chung 2 màn
@@ -68,7 +71,17 @@
 - **`docs/deploy-vercel.md`** (mới) — guide 5 phase: (1) chuyển project sang PostgreSQL (bắt buộc — Prisma không cho schema SQLite chạy trên PG; dev DB = Postgres qua `docker-compose.dev.yml`, migrations tạo lại, test/e2e chỉ sang PG) · (2) Supabase — 2 connection string (direct :5432 cho migration + session pooler :6543 cho runtime, schema có `directUrl`) · (3) Vercel monorepo **cùng domain** (refresh cookie same-origin; cấu hình **Production Branch để trống** → không auto-deploy prod) · (4) GitHub Actions: PR → CI + preview; push `main` → test → `migrate deploy` → `vercel deploy --prod` (thứ tự bắt buộc qua `needs`) · (5) checklist verify + bảng troubleshooting + chi phí free tier
 - **File deploy đã commit sẵn** (chờ Phase 1 + secrets): `vercel.json` (root: buildCommand web + 2 builds + routes `/api/*` → function, SPA fallback) · `apps/api/src/vercel.ts` (entry serverless — export Express app, không `.listen()`) · `.github/workflows/ci.yml` (lint+test+build, Postgres service) · `.github/workflows/deploy.yml` (test → migrate → deploy)
 - **Code**: `app.ts` CORS đổi từ hardcode `http://localhost:5173` sang env `CORS_ORIGIN` (default giữ nguyên — prod same domain không cần CORS)
-- **Chưa chạy thật** trên Vercel/Supabase (cần tài khoản user) — Phase 1 (PG) làm được trong repo; Phase 2–5 theo guide
+- **Chưa chạy thật** trên Vercel/Supabase (cần tài khoản user) — Phase 1 (PG) đã xong, Phase 2–5 theo guide
+
+### Chi tiết Phase 1 — chuyển SQLite → PostgreSQL (23/09/2026)
+- **Schema**: `provider = "postgresql"` + `directUrl = env("DIRECT_URL")` (`apps/api/prisma/schema.prisma`); xoá migration SQLite → `prisma migrate dev --name init` → migration PG `20260923071509_init`; `migration_lock.toml` = postgresql
+- **Dev/test/e2e DB**: `docker-compose.dev.yml` (root, postgres:16-alpine, healthcheck) + `dev-db.init.sql` (tự tạo `expense_tracker_test` + `expense_tracker_e2e` khi init volume); `apps/api/.env` + `.env.example` → PG URL + `DIRECT_URL`
+- **Test/e2e**: `apps/api/test/dbUrl.ts` (mới) — env `TEST_DATABASE_URL` override cho CI, default PG local; `vitest.config.ts` + `test/global-setup.ts` + `playwright.config.ts` (+ env `E2E_DATABASE_URL`) chỉ sang PG; workflows `ci.yml`/`deploy.yml` thêm `TEST_DATABASE_URL`
+- **Self-host prod** (`docker/`): thêm service `postgres:16` (user etracker, volume `pgdata`, healthcheck; api `depends_on: service_healthy`), bỏ SQLite volume `etdb`
+- **Verified (đủ 8 AC)**: unit **169/169** trên PG · tsc + lint + build sạch · E2E **8/8 (18.9s)** · dev smoke `SMOKE_ALL_PASS` (register → family 7 preset → khoản chi → list → xoá; tài khoản test `final@test.com`/`MatKhau123!` + family "Nhà Final" được khôi phục trên DB mới) · docker self-host rebuild + smoke `DOCKER_SMOKE_ALL_PASS` (PG + api + nginx `:8080`) rồi `down -v` sạch
+- **Docs**: README (yêu cầu Docker, bước bật PG trước, renumber mục 2→6) · `docs/deploy.md` §A (3 container, backup `pg_dump`, xoá mục "nâng cấp PostgreSQL") · `docs/deploy-vercel.md` Phase 1 đánh dấu XONG + khớp implement
+- **Bẫy gặp**: `prisma generate` EPERM khi dev server cũ đang giữ `query_engine-*.dll.node` (Windows) — phải kill cả chuỗi `pnpm dev` (tsx watch tự restart process con) rồi generate lại; script kill theo CommandLine khớp luôn VS Code đang mở project (để ý khi kill theo pattern)
+- **Còn để ý**: `apps/api/prisma/{dev,test,e2e}.db` (file SQLite cũ, gitignored) không dùng nữa — có thể xoá tay
 
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
@@ -134,14 +147,15 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 23/09/2026)
-- 7 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
+- 8 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
   - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
   - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
   - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
   - (WBS 10) — `feat: WBS 10 — Home/History nhóm theo ngày có tiểu kết + màn sửa khoản chi` — xem `git log --oneline`
   - (WBS 13) — `feat: WBS 13 — E2E Playwright (auth, khoản chi, offline) + fix sync lúc khởi động` — xem `git log --oneline`
   - (WBS 14) — `feat: WBS 14 — Polish (lazy StatsPage) + README hướng dẫn local + deploy guide (Docker self-host đã test, Vercel/Supabase)` — xem `git log --oneline`
-  - (post-WBS) — `feat: chuẩn bị deploy Vercel + Supabase — vercel.json + entry serverless + workflows CI/CD + hướng dẫn 5 phase` — xem `git log --oneline`
+  - (post-WBS) — `feat: chuẩn bị deploy Vercel + Supabase — vercel.json + entry serverless + workflows CI/CD + hướng dẫn 5 phase`
+  - (post-WBS) — `refactor: Phase 1 — chuyển toàn bộ project từ SQLite sang PostgreSQL (schema, dev/test/e2e DB, self-host compose) + docs` — xem `git log --oneline`
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 

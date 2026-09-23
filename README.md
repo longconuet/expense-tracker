@@ -18,7 +18,7 @@ Web app (PWA) quản lý chi tiêu cho gia đình — mobile-first, nhập liệ
 | Frontend | React 19 + TypeScript + Vite + Tailwind CSS v4 + Zustand + Recharts |
 | PWA | vite-plugin-pwa (manifest + service worker, offline queue trong IndexedDB) |
 | Backend | Node.js + Express 5 + TypeScript |
-| ORM / DB | Prisma — SQLite (dev), PostgreSQL (prod) |
+| ORM / DB | Prisma — PostgreSQL (dev: local Docker · prod: Supabase/VPS) |
 | Test | Vitest (unit/integration) + Playwright (E2E) |
 | Monorepo | pnpm workspaces |
 
@@ -35,13 +35,15 @@ expense-tracker/
 │  ├─ plan.md     # Kế hoạch đã duyệt (stack, data model, API, UX, WBS)
 │  ├─ deploy.md   # Hướng dẫn deploy (Docker self-host · Vercel + Supabase)
 │  └─ handoff/    # Chạy tiếp trạng thái công việc giữa các session
-├─ docker/        # docker-compose.yml + .env.example (self-host)
+├─ docker/        # Self-host: docker-compose.yml (postgres + api + web) + .env.example
+├─ docker-compose.dev.yml  # Postgres local cho dev/test/e2e
+├─ dev-db.init.sql         # Tạo DB test + e2e khi khởi tạo volume
 └─ tsconfig.base.json
 ```
 
 ## Chạy local
 
-Yêu cầu: **Node.js 20+** (tested trên Node 24) · **pnpm 12** (repo pin `pnpm@12.5.1`).
+Yêu cầu: **Node.js 20+** (tested trên Node 24) · **pnpm 12** (repo pin `pnpm@12.5.1`) · **Docker Desktop** (chạy PostgreSQL local).
 
 ### 1. Cài dependencies
 
@@ -49,7 +51,15 @@ Yêu cầu: **Node.js 20+** (tested trên Node 24) · **pnpm 12** (repo pin `pnp
 pnpm install
 ```
 
-### 2. Cấu hình API
+### 2. Bật Postgres local
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+```
+
+Tạo 3 database tự động: `expense_tracker` (dev) · `expense_tracker_test` (unit test) · `expense_tracker_e2e` (E2E). Dừng: `... down` (giữ data).
+
+### 3. Cấu hình API
 
 ```bash
 # Windows
@@ -62,16 +72,17 @@ Sửa `apps/api/.env`:
 
 | Biến | Giá trị |
 |---|---|
-| `DATABASE_URL` | Để nguyên `file:./dev.db` (SQLite, đường dẫn tính từ `apps/api/prisma/`) |
+| `DATABASE_URL` | Để nguyên (PostgreSQL local: `postgresql://etracker:etracker@localhost:5432/expense_tracker`) |
+| `DIRECT_URL` | Để nguyên (trùng `DATABASE_URL` khi không dùng connection pooler) |
 | `JWT_SECRET` | **Bắt buộc đổi** — chuỗi ngẫu nhiên: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 
-### 3. Tạo database
+### 4. Tạo database
 
 ```bash
 pnpm --filter @expense-tracker/api db:migrate
 ```
 
-Lần chạy đầu tạo file `apps/api/prisma/dev.db` từ migration. Tuỳ chọn — seed family demo (mã mời `TEST12`, kèm preset categories — để thử luồng join):
+Lần chạy đầu tạo các bảng trong database `expense_tracker` từ migration PostgreSQL. Tuỳ chọn — seed family demo (mã mời `TEST12`, kèm preset categories — để thử luồng join):
 
 ```bash
 pnpm --filter @expense-tracker/api db:seed
@@ -79,7 +90,7 @@ pnpm --filter @expense-tracker/api db:seed
 
 Tài khoản dùng để đăng nhập **tạo trực tiếp từ màn hình web** (mục Đăng ký) — không cần tạo sẵn.
 
-### 4. Chạy dev
+### 5. Chạy dev
 
 ```bash
 pnpm dev
@@ -88,7 +99,7 @@ pnpm dev
 - Web: <http://localhost:5173> (Vite đã proxy `/api` → `http://localhost:3001`)
 - API: <http://localhost:3001/api/health>
 
-### 5. Test PWA (offline)
+### 6. Test PWA (offline)
 
 Service worker + manifest **chỉ có ở build production** — dev server không chạy SW:
 
@@ -107,8 +118,8 @@ Quy trình kiểm thử offline: mở app ở `:4173` → tắt API (kill proces
 |---|---|
 | `pnpm dev` | Chạy API + Web song song (dev) |
 | `pnpm build` | Build tất cả packages (web: tsc + vite + PWA) |
-| `pnpm test` | Unit/integration test tất cả packages (Vitest) |
-| `pnpm test:e2e` | E2E Playwright — môi trường tự động: API `:3101` + `e2e.db` (reset mỗi lần) + web `:5199`, **không đụng** dev server/dev DB |
+| `pnpm test` | Unit/integration test tất cả packages (Vitest) — cần Postgres local đang chạy |
+| `pnpm test:e2e` | E2E Playwright — môi trường tự động: API `:3101` + DB Postgres `expense_tracker_e2e` (reset mỗi lần) + web `:5199`, **không đụng** dev server/dev DB — cần Postgres local đang chạy |
 | `pnpm lint` | ESLint toàn repo |
 | `pnpm format` | Prettier toàn repo |
 
@@ -125,6 +136,8 @@ Scripts web: `e2e` (Playwright), `icons` (tái sinh icon PWA từ `apps/web/scri
 
 ## Testing
 
+> `pnpm test` và `pnpm test:e2e` đều yêu cầu Postgres local đang chạy (mục 2 ở trên).
+
 - **Unit/integration** — Vitest, pattern AAA, coverage ≥ 80%: `pnpm test`
 - **E2E** — Playwright trên Chromium thật (8 test: auth, nhập/sửa/xoá khoản, flow offline):
   ```bash
@@ -132,7 +145,7 @@ Scripts web: `e2e` (Playwright), `icons` (tái sinh icon PWA từ `apps/web/scri
   pnpm --filter @expense-tracker/web exec playwright install chromium
   pnpm test:e2e
   ```
-- **PWA/offline** — verify thủ công qua `vite preview` (mục 5 trên), dev server không có service worker.
+- **PWA/offline** — verify thủ công qua `vite preview` (mục 6 trên), dev server không có service worker.
 
 ## Quy ước API
 
@@ -145,5 +158,5 @@ Scripts web: `e2e` (Playwright), `icons` (tái sinh icon PWA từ `apps/web/scri
 
 Xem [`docs/deploy.md`](docs/deploy.md):
 
-- **Self-host Docker** (khuyến nghị cho gia đình): 2 container (api + web/nginx) + SQLite trên volume — có sẵn `docker/docker-compose.yml`.
-- **Vercel + Supabase (Postgres)**: hướng dẫn từng bước (cần chuyển schema sang PostgreSQL).
+- **Self-host Docker** (khuyến nghị cho gia đình): 3 container (postgres + api + web/nginx) — có sẵn `docker/docker-compose.yml`.
+- **Vercel + Supabase (Postgres)**: hướng dẫn từng bước — Phase 1 (chuyển PostgreSQL) đã xong, Phase 2–5 làm theo [`docs/deploy-vercel.md`](docs/deploy-vercel.md).

@@ -1,14 +1,17 @@
 // Prisma schema — Chi Tiêu Gia Đình
-// Dev: SQLite (zero-setup). Prod: đổi provider thành "postgresql" + DATABASE_URL.
-// SQLite không hỗ trợ enum của Prisma → role dùng String + const phía code.
+// PostgreSQL cho MỌI môi trường (Phase 1):
+// - Dev/test/e2e: Postgres local qua `docker-compose.dev.yml` (root repo)
+// - Prod: Supabase (Vercel) hoặc self-host Docker — xem docs/deploy*.md
+// Không dùng enum của Prisma → role dùng String + const phía code.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // runtime (app)
+  directUrl = env("DIRECT_URL")   // Prisma CLI (migrate, db push) — = url khi không có pooler
 }
 
 model User {

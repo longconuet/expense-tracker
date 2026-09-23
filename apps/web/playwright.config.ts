@@ -2,11 +2,18 @@ import { defineConfig } from "@playwright/test";
 
 /**
  * E2E (WBS 13) — Playwright trên Chromium thật, môi trường tách biệt:
- * - API :3101, SQLite `prisma/e2e.db` (tạo mới bằng `db push --force-reset`
- *   trước mỗi lần chạy — không đụng dev DB :3001 + dev.db)
+ * - API :3101, PostgreSQL `expense_tracker_e2e` (Postgres local —
+ *   `docker compose -f docker-compose.dev.yml up -d`; `db push --force-reset`
+ *   trước mỗi lần chạy — không đụng dev DB :3001)
  * - Web: vite dev :5199 (strictPort) proxy /api → :3101
  *   (qua `VITE_API_PROXY_TARGET` — xem vite.config.ts)
  */
+
+// DB e2e trên Postgres local; CI có thể override bằng env E2E_DATABASE_URL
+const E2E_DATABASE_URL =
+  process.env.E2E_DATABASE_URL ??
+  "postgresql://etracker:etracker@localhost:5432/expense_tracker_e2e";
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
@@ -28,7 +35,8 @@ export default defineConfig({
       url: "http://localhost:3101/api/health",
       env: {
         PORT: "3101",
-        DATABASE_URL: "file:./e2e.db",
+        DATABASE_URL: E2E_DATABASE_URL,
+        DIRECT_URL: E2E_DATABASE_URL,
         JWT_SECRET: "e2e-secret-cu-cho-playwright-0123456789abcdef",
       },
       timeout: 120_000,
