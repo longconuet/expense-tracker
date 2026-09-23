@@ -7,6 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "postinstall": "pnpm --filter @expense-tracker/api exec prisma generate",
     "dev": "pnpm --filter @expense-tracker/shared build && concurrently -n shared,api,web -c yellow,blue,green \"pnpm --filter @expense-tracker/shared dev\" \"pnpm --filter @expense-tracker/api dev\" \"pnpm --filter @expense-tracker/web dev\"",
     "build": "pnpm -r build",
     "test": "pnpm --filter @expense-tracker/shared build && pnpm -r test",

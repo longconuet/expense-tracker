@@ -169,22 +169,25 @@ Lưu ý free tier: DB **tự pause sau 1 tuần không hoạt động** → app 
 
 ```jsonc
 {
-  "buildCommand": "pnpm -r build",               // build shared (dist JS) + typecheck + Vite/PWA
+  "buildCommand": "pnpm -r build",               // build shared (dist JS) + prisma generate + typecheck + Vite/PWA
   "outputDirectory": "apps/web/dist",             // static web → serve từ ROOT domain
   "functions": {
-    "api/index.ts": { "maxDuration": 300 }        // API → serverless function (route /api + /api/*)
+    "api/index.ts": { "maxDuration": 300 }        // API → serverless function (route /api)
   },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" } // SPA fallback (chỉ path không có file thật)
+    { "source": "/api/(.*)", "destination": "/api" },        // /api/* → function (PHẢI trước SPA fallback)
+    { "source": "/(.*)", "destination": "/index.html" }      // SPA fallback (chỉ path không có file thật)
   ]
 }
 ```
 
-`api/index.ts` (root repo) là entry mỏng re-export app Express từ `apps/api/src/vercel.ts` — theo convention Vercel: file trong thư mục `api/` = serverless function tại route `/api` (và `/api/*`). `apps/api/src/vercel.ts` export thẳng Express app (không `.listen()`). Dev không dùng 2 file này.
+`api/index.ts` (root repo) là entry mỏng re-export app Express từ `apps/api/src/vercel.ts` — theo convention Vercel: file trong thư mục `api/` = serverless function tại route `/api`; rewrite `/api/(.*) → /api` đưa cả prefix `/api/*` về function (function nhận URL gốc, Express match route `/api/...`). `api/package.json` (`"type": "module"`) **bắt buộc** — không có nó, shim nằm ở root repo (không có `"type": "module"`) được compile ra CommonJS → `ERR_REQUIRE_ESM` khi require app ESM. `apps/api/src/vercel.ts` export thẳng Express app (không `.listen()`). Dev không dùng 2 file này.
 
 > ⚠️ **Bẫy đã gặp thật (verify 23/09/2026):**
 > - **Package workspace phải build ra `dist` (JS + d.ts)** — nếu `@expense-tracker/shared` export source TS (`main: src/index.ts`), function Vercel chết runtime `ERR_MODULE_NOT_FOUND ... shared/src/index.ts` (builder có copy package + transpile sang `.js`, nhưng `package.json` vẫn trỏ file `.ts` không tồn tại trong output). Fix: `packages/shared` có script `build` (tsc → `dist/`), mọi flow (dev/test/e2e/CI/Docker/Vercel) build shared **trước** — xem scripts root `package.json` + CI.
 > - **KHÔNG dùng config `builds` (legacy) cho static** — Vercel mới (2026): trỏ `@vercel/static` vào file `index.html` riêng lẻ → output chỉ có đúng file đó (mất `assets/`, manifest, SW); trỏ **thư mục** → bị **skip lặng lẽ** → toàn bộ web 404. Dùng `outputDirectory` + `functions` (kiểm chứng bằng `npx vercel build` local + đọc `.vercel/output`).
+> - **Prisma Client bị ghi đè bằng stub** — builder Vercel chạy `pnpm install` lần 2 ở bước build function; postinstall của `@prisma/client` không tìm thấy schema (nằm trong `apps/api/`) → **ghi đè client đã generate bằng stub** → runtime `@prisma/client did not initialize yet`. Fix: script `postinstall` ở root `package.json` (`pnpm --filter @expense-tracker/api exec prisma generate`) chạy **sau** mọi postinstall dependency → client luôn ở trạng thái generate.
+> - **SPA rewrite nuốt `/api/*`** — nếu `rewrites` chỉ có `/(.*) → /index.html`, mọi path `/api/...` trả về HTML của web (không vào function). Phải khai rewrite `/api/(.*) → /api` **trước** fallback.
 > - **Deployment Protection (Vercel Authentication)**: nếu đang bật (Vercel có thể gợi ý bật khi tạo project), MỌI request bị chuyển hướng sang trang đăng nhập Vercel (API 401 + `vercel_auth_enabled` trong body). Tắt: **Project → Settings → Security → Deployment Protection → Off**.
 
 ### 3.3. Lấy Org ID + Project ID (cho Phase 4)
@@ -273,6 +276,9 @@ Vercel project → **Settings → Git → Connect to Git** (nếu import lúc t�
 | API 500 `FUNCTION_INVOCATION_FAILED`, log `ERR_MODULE_NOT_FOUND ... @expense-tracker/shared/src/index.ts` | Package workspace export source TS (không có `dist`) | Build shared ra `dist` (bẫy §3.2 Phase 3); verify bằng `npx vercel build` local + đọc `.vercel/output` |
 | Toàn bộ web 404 (kể cả `/index.html`, assets) | Config `builds` (legacy) + `@vercel/static` (file → chỉ copy file đó; thư mục → bị skip) | Dùng `outputDirectory` + `functions` (bẫy §3.2 Phase 3) |
 | Mọi request bị redirect trang login Vercel (API 401, body có `vercel_auth_enabled`) | **Deployment Protection** đang bật | Project → Settings → Security → Deployment Protection → **Off** |
+| API 500, log `ERR_REQUIRE_ESM ... from /var/task/api/index.js` | Shim `api/index.ts` ở root repo bị compile CommonJS (không có `"type": "module"`) | Có `api/package.json` với `"type": "module"` (bẫy §3.2 Phase 3) |
+| API 500, log `@prisma/client did not initialize yet. Please run "prisma generate"` | Builder chạy `pnpm install` lần 2 → postinstall ghi đè client bằng stub | Root `package.json` có script `postinstall` chạy `prisma generate` (bẫy §3.2 Phase 3) |
+| `/api/*` trả về HTML của web thay vì JSON | SPA rewrite `/(.*) → /index.html` khớp trước function | Rewrite `/api/(.*) → /api` phải đứng **trước** trong `vercel.json` (bẫy §3.2 Phase 3) |
 
 ---
 

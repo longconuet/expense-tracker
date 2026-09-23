@@ -104,6 +104,11 @@
   - `"buildCommand": "pnpm -r build"` · `"outputDirectory": "apps/web/dist"` (static serve ở root domain) · `"functions": { "api/index.ts": { "maxDuration": 300 } }` · `rewrites` SPA fallback
   - `api/index.ts` (root, MỚI) — entry mỏng re-export app Express từ `apps/api/src/vercel.ts` (convention Vercel: file trong `api/` = function tại route `/api` + `/api/*`)
   - Output local đúng: static full ở root (index.html + assets + sw + manifest + icons) + function `api/index.func` runtime nodejs24.x chứa `packages/shared/dist/index.js`
+- **Fix 3 — các lỗi lộ khi deploy thật** (mỗi lần deploy → đọc `npx vercel logs <url>` → fix → redeploy):
+  - Cloud build fail: api `tsc` chạy khi Prisma Client chưa generate (auto-generate của Vercel chỉ ở bước function) → script build API: `prisma generate && tsc --noEmit`
+  - `/api/*` trả HTML web: SPA rewrite nuốt trước function → thêm rewrite `/api/(.*) → /api` **trước** fallback trong `vercel.json`
+  - `ERR_REQUIRE_ESM` từ `api/index.js`: shim ở root repo bị compile CJS (root `package.json` không có `"type": "module"`) → thêm `api/package.json` `{"type":"module"}`
+  - `@prisma/client did not initialize yet`: builder chạy `pnpm install` **lần 2** ở bước function → postinstall `@prisma/client` không thấy schema (nằm trong `apps/api/`) → ghi đè client bằng stub → script `postinstall` root: `pnpm --filter @expense-tracker/api exec prisma generate` (chạy sau mọi postinstall dependency — verified local: xoá client + `pnpm install --force` → regenerate)
 - **Verified local**: unit **169/169** · E2E **8/8 (17.1s)** · lint sạch (thêm `.vercel/**` vào eslint ignores; `.gitignore` + `.vercel` do CLI tự thêm) · docker self-host rebuild + `DOCKER_SMOKE_ALL_PASS` (health + web + register + /me) rồi `down -v`
 - **Docs**: `docs/deploy-vercel.md` §3.2 (config final + 3 bẫy thật) + 4 dòng Troubleshooting mới (shared `.ts`, static legacy, Deployment Protection, ...)
 - **Vercel IDs (đã lấy bằng token)**: Org/Team `team_XlBNRntktz7iEVVFH0VXw1ud` · Project `prj_tcIH0xdkBCaB6ubaxQyXeAUza3GL` · Node version project = 24.x
@@ -173,7 +178,7 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 23/09/2026)
-- 10 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
+- 12 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
   - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
   - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
   - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
@@ -184,6 +189,8 @@
   - (post-WBS) — `refactor: Phase 1 — chuyển toàn bộ project từ SQLite sang PostgreSQL (schema, dev/test/e2e DB, self-host compose) + docs`
   - (post-WBS) — `docs: Phase 2 — verify kết nối Supabase (connection string working + bẫy DNS/pgbouncer)` — xem `git log --oneline`
   - (post-WBS) — `fix: Phase 3 — Vercel deployment (shared build sang dist + vercel.json outputDirectory/functions)`
+  - (post-WBS) — `fix: Phase 3 — prisma generate trước tsc trong build API (cloud build không có client sẵn)`
+  - (post-WBS) — `fix: Phase 3 — deploy Vercel xanh: rewrite /api/* + api/package.json ESM + postinstall prisma generate`
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 
