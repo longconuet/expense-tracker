@@ -156,8 +156,8 @@ Lưu ý free tier: DB **tự pause sau 1 tuần không hoạt động** → app 
 
    | Biến | Giá trị |
    |---|---|
-   | `DATABASE_URL` | Connection string **session pooling** (`:6543`) — Phase 2 |
-   | `DIRECT_URL` | Connection string **direct** (`:5432`) — Phase 2 |
+   | `DATABASE_URL` | URL **transaction pooling** (`:6543` — pooler) + **`?pgbouncer=true`** ở cuối URL — bắt buộc cho Prisma, xem bẫy §3.2 |
+   | `DIRECT_URL` | Connection string **session pooler** (`:5432` — pooler; hoặc direct `db.<ref>.supabase.co:5432`) — chỉ Prisma CLI (migrate) |
    | `JWT_SECRET` | Chuỗi ngẫu nhiên **mới** (khác dev): `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
 
 3. **Project Settings → General → Node.js Version**: chọn **22.x** (repo engines `>=20`; 22 là LTS ổn định trên Vercel).
@@ -187,6 +187,7 @@ Lưu ý free tier: DB **tự pause sau 1 tuần không hoạt động** → app 
 > - **Package workspace phải build ra `dist` (JS + d.ts)** — nếu `@expense-tracker/shared` export source TS (`main: src/index.ts`), function Vercel chết runtime `ERR_MODULE_NOT_FOUND ... shared/src/index.ts` (builder có copy package + transpile sang `.js`, nhưng `package.json` vẫn trỏ file `.ts` không tồn tại trong output). Fix: `packages/shared` có script `build` (tsc → `dist/`), mọi flow (dev/test/e2e/CI/Docker/Vercel) build shared **trước** — xem scripts root `package.json` + CI.
 > - **KHÔNG dùng config `builds` (legacy) cho static** — Vercel mới (2026): trỏ `@vercel/static` vào file `index.html` riêng lẻ → output chỉ có đúng file đó (mất `assets/`, manifest, SW); trỏ **thư mục** → bị **skip lặng lẽ** → toàn bộ web 404. Dùng `outputDirectory` + `functions` (kiểm chứng bằng `npx vercel build` local + đọc `.vercel/output`).
 > - **Prisma Client bị ghi đè bằng stub** — builder Vercel chạy `pnpm install` lần 2 ở bước build function; postinstall của `@prisma/client` không tìm thấy schema (nằm trong `apps/api/`) → **ghi đè client đã generate bằng stub** → runtime `@prisma/client did not initialize yet`. Fix: script `postinstall` ở root `package.json` (`pnpm --filter @expense-tracker/api exec prisma generate`) chạy **sau** mọi postinstall dependency → client luôn ở trạng thái generate.
+> - **`?pgbouncer=true` bắt buộc trong `DATABASE_URL` (port 6543)** — `aws-<region>.pooler.supabase.com:6543` là **transaction mode** (Supavisor, không hỗ trợ prepared statements — sau 28/02/2025 port 6543 chỉ còn transaction). Prisma dùng prepared statement mặc định → lỗi **`prepared statement "s0" already exists`** (thường query đầu OK, query sau fail). Fix: thêm `?pgbouncer=true` vào cuối URL (Prisma tự chuyển simple protocol). URL `:5432` (session mode) và direct KHÔNG cần.
 > - **SPA rewrite nuốt `/api/*`** — nếu `rewrites` chỉ có `/(.*) → /index.html`, mọi path `/api/...` trả về HTML của web (không vào function). Phải khai rewrite `/api/(.*) → /api` **trước** fallback.
 > - **Deployment Protection (Vercel Authentication)**: nếu đang bật (Vercel có thể gợi ý bật khi tạo project), MỌI request bị chuyển hướng sang trang đăng nhập Vercel (API 401 + `vercel_auth_enabled` trong body). Tắt: **Project → Settings → Security → Deployment Protection → Off**.
 
@@ -279,6 +280,7 @@ Vercel project → **Settings → Git → Connect to Git** (nếu import lúc t�
 | API 500, log `ERR_REQUIRE_ESM ... from /var/task/api/index.js` | Shim `api/index.ts` ở root repo bị compile CommonJS (không có `"type": "module"`) | Có `api/package.json` với `"type": "module"` (bẫy §3.2 Phase 3) |
 | API 500, log `@prisma/client did not initialize yet. Please run "prisma generate"` | Builder chạy `pnpm install` lần 2 → postinstall ghi đè client bằng stub | Root `package.json` có script `postinstall` chạy `prisma generate` (bẫy §3.2 Phase 3) |
 | `/api/*` trả về HTML của web thay vì JSON | SPA rewrite `/(.*) → /index.html` khớp trước function | Rewrite `/api/(.*) → /api` phải đứng **trước** trong `vercel.json` (bẫy §3.2 Phase 3) |
+| API 500, log `prepared statement "s0" already exists` (query đầu OK, query sau fail) | `DATABASE_URL` trỏ pooler **transaction mode** (`:6543`) mà thiếu `?pgbouncer=true` | Thêm `?pgbouncer=true` vào cuối `DATABASE_URL` trong Vercel + redeploy (bẫy §3.2 Phase 3) |
 
 ---
 

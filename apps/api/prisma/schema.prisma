@@ -10,7 +10,7 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL") // runtime (app)
+  url       = env("DATABASE_URL") // runtime (app) — nếu qua pooler transaction mode (Supabase :6543) phải có query param `?pgbouncer=true` ở CUỐI URL
   directUrl = env("DIRECT_URL")   // Prisma CLI (migrate, db push) — = url khi không có pooler
 }
 
