@@ -2,7 +2,7 @@
 
 Web app (PWA) quản lý chi tiêu cho gia đình — mobile-first, nhập liệu nhanh, giao diện tối giản, chạy được offline.
 
-> Kế hoạch chi tiết đã duyệt: [`docs/plan.md`](docs/plan.md) · Trạng thái công việc: [`docs/handoff/progress.md`](docs/handoff/progress.md) · Hướng dẫn deploy: [`docs/deploy.md`](docs/deploy.md)
+> Kế hoạch chi tiết đã duyệt: [`docs/plan.md`](docs/plan.md) · Trạng thái công việc: [`docs/handoff/progress.md`](docs/handoff/progress.md) · Hướng dẫn deploy: [`docs/deploy.md`](docs/deploy.md) (Docker self-host) + [`docs/deploy-vercel.md`](docs/deploy-vercel.md) (Vercel + Supabase + CI/CD)
 
 ## Tính năng
 

@@ -23,6 +23,7 @@
 - [x] **Polish WBS 10** (chi tiết dưới): Home/History nhóm theo ngày có tiểu kết + màn sửa khoản
 - [x] **WBS 13** (chi tiết dưới): E2E Playwright 8 test (auth, khoản chi, offline)
 - [x] **WBS 14** (chi tiết dưới): Polish (lazy StatsPage) + README hướng dẫn local + `docs/deploy.md` (Docker đã test thật, Vercel/Supabase guide)
+- [x] **Guide deploy Vercel + Supabase + CI/CD** (post-WBS, chi tiết dưới): `docs/deploy-vercel.md` 5 phase + file deploy sẵn trong repo
 
 ### Chi tiết Polish WBS 10 — nhóm theo ngày + edit khoản
 - **`core/expenseGroups.ts`** (mới) — `groupByDay(expenses) → DayGroup[]` (`{ date, label, total, expenses }`, giữ thứ tự input = date desc của API) + `dayLabel(date)` = "Hôm nay" / "Hôm qua" / `shortDate` ("22/09", kèm năm nếu khác năm). Dùng chung 2 màn
@@ -62,6 +63,12 @@
   - **tsc vẫn emit khi có lỗi type** → `apps/api/dist/` tồn tại → Vitest API nạp trùng `dist/__tests__/*.test.js` (test 60 biến 60+60, P2002 trùng email trên test.db chung). Fix: xoá dist + `apps/api/vitest.config.ts` thêm `include: ["src/**/*.{test,spec}.{ts,tsx}"]` (guard tương tự web)
 - **Kết quả: unit 169/169 (api 60, web 105, shared 4) · tsc + lint + build OK · E2E 8/8 (16.8s) · Docker smoke PASS**
 - **Toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**
+
+### Chi tiết Guide deploy Vercel + Supabase + CI/CD (post-WBS)
+- **`docs/deploy-vercel.md`** (mới) — guide 5 phase: (1) chuyển project sang PostgreSQL (bắt buộc — Prisma không cho schema SQLite chạy trên PG; dev DB = Postgres qua `docker-compose.dev.yml`, migrations tạo lại, test/e2e chỉ sang PG) · (2) Supabase — 2 connection string (direct :5432 cho migration + session pooler :6543 cho runtime, schema có `directUrl`) · (3) Vercel monorepo **cùng domain** (refresh cookie same-origin; cấu hình **Production Branch để trống** → không auto-deploy prod) · (4) GitHub Actions: PR → CI + preview; push `main` → test → `migrate deploy` → `vercel deploy --prod` (thứ tự bắt buộc qua `needs`) · (5) checklist verify + bảng troubleshooting + chi phí free tier
+- **File deploy đã commit sẵn** (chờ Phase 1 + secrets): `vercel.json` (root: buildCommand web + 2 builds + routes `/api/*` → function, SPA fallback) · `apps/api/src/vercel.ts` (entry serverless — export Express app, không `.listen()`) · `.github/workflows/ci.yml` (lint+test+build, Postgres service) · `.github/workflows/deploy.yml` (test → migrate → deploy)
+- **Code**: `app.ts` CORS đổi từ hardcode `http://localhost:5173` sang env `CORS_ORIGIN` (default giữ nguyên — prod same domain không cần CORS)
+- **Chưa chạy thật** trên Vercel/Supabase (cần tài khoản user) — Phase 1 (PG) làm được trong repo; Phase 2–5 theo guide
 
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
@@ -127,13 +134,14 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 23/09/2026)
-- 6 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
+- 7 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
   - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
   - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
   - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
   - (WBS 10) — `feat: WBS 10 — Home/History nhóm theo ngày có tiểu kết + màn sửa khoản chi` — xem `git log --oneline`
   - (WBS 13) — `feat: WBS 13 — E2E Playwright (auth, khoản chi, offline) + fix sync lúc khởi động` — xem `git log --oneline`
   - (WBS 14) — `feat: WBS 14 — Polish (lazy StatsPage) + README hướng dẫn local + deploy guide (Docker self-host đã test, Vercel/Supabase)` — xem `git log --oneline`
+  - (post-WBS) — `feat: chuẩn bị deploy Vercel + Supabase — vercel.json + entry serverless + workflows CI/CD + hướng dẫn 5 phase` — xem `git log --oneline`
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 

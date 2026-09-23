@@ -1,0 +1,51 @@
+# CI — chạy trên mọi PR + push vào develop/main.
+# Postgres service: bắt buộc sau Phase 1 (schema postgresql). Trước Phase 1
+# (schema còn sqlite) service nằm idle — CI vẫn xanh vì test chạy trên test.db.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint + Unit test + Build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: etracker
+          POSTGRES_PASSWORD: etracker
+          POSTGRES_DB: et_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U etracker"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://etracker:etracker@localhost:5432/et_test
+      DIRECT_URL: postgresql://etracker:etracker@localhost:5432/et_test
+      JWT_SECRET: ci-only-secret-khong-dung-san-sanh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Unit + integration tests
+        run: pnpm -r test
+      - name: Build (tsc + vite)
+        run: pnpm -r build

@@ -102,64 +102,14 @@ Chạy `docker compose up -d --build` trên máy dev (Docker Desktop, Windows):
 
 ## Tuỳ chọn B — Vercel + Supabase (PostgreSQL)
 
-> ⚠️ Mục này là **hướng dẫn tham khảo, chưa được chạy thử** trong project — kiểm chứng từng bước trước khi áp dụng chính thức.
+📖 **Guide chi tiết (kèm CI/CD GitHub Actions): [`docs/deploy-vercel.md`](deploy-vercel.md)** — 5 phase:
 
-### 1. Database — Supabase
+1. **Chuyển project sang PostgreSQL** (bắt buộc — Prisma không cho schema SQLite chạy trên Postgres; dev local chạy Postgres qua Docker)
+2. Tạo project Supabase (lấy 2 connection string: direct `:5432` cho migration + session pooler `:6543` cho runtime)
+3. Tạo project Vercel (monorepo — FE + API **cùng domain** để refresh cookie hoạt động; cấu hình không auto-deploy production)
+4. GitHub Actions: PR → CI + preview · push `main` → test → `prisma migrate deploy` → `vercel deploy --prod`
+5. Verify + go-live (checklist + troubleshooting)
 
-1. Tạo project trên [supabase.com](https://supabase.com) → **Database → Connection string** → lấy **Session pooling** (port `6543`) — serverless nên phải dùng pooling, không dùng direct connection (port `5432`).
-2. Giá trị `DATABASE_URL`:
-   ```
-   postgresql://postgres.<ref-project>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres
-   ```
+File đã sẵn trong repo: `vercel.json` · `apps/api/src/vercel.ts` · `.github/workflows/ci.yml` + `deploy.yml`.
 
-### 2. Schema sang PostgreSQL
-
-Như mục "Nâng cấp PostgreSQL" ở Tuỳ chọn A (đổi `provider` trong `schema.prisma` + migration PG).
-
-### 3. Deploy monorepo lên Vercel
-
-**Nguyên tắc quan trọng**: frontend và API **phải cùng domain** (refresh cookie `httpOnly` không chia sẻ giữa 2 domain) → deploy **cả repo làm 1 Vercel project** với `vercel.json` kiểu monorepo (API là serverless function + web là static):
-
-```jsonc
-// vercel.json (đặt ở ROOT repo)
-{
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "builds": [
-    { "src": "apps/api/src/index.ts", "use": "@vercel/node" },
-    { "src": "apps/web/index.html", "use": "@vercel/static" }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "apps/api/src/index.ts" },
-    { "src": "/(.*)", "dest": "apps/web/index.html" }
-  ]
-}
-```
-
-Cài đặt: Vercel → **Add New Project → Import** repo này (root = root repo, KHÔNG chọn `apps/web` riêng).
-
-Các bước kèm theo:
-
-1. **Prisma Client** — function build cần `prisma generate` trước khi bundle. Thêm vào `apps/api/package.json`:
-   ```json
-   "postinstall": "prisma generate"
-   ```
-2. **Migrations** — Vercel không tự chạy migration; chạy 1 lần thủ công bằng `prisma migrate deploy` (trên máy local trỏ `DATABASE_URL` sang Supabase) hoặc thêm CI step.
-3. **Environment variables** (Vercel project settings):
-   - `DATABASE_URL` — connection string Supabase (pooling)
-   - `JWT_SECRET` — chuỗi ngẫu nhiên (khác secret dev)
-4. **Build web** — Vite auto-detect trong `apps/web` (build command `pnpm --filter @expense-tracker/web build` hoặc cấu hình theo hướng dẫn của Vercel cho monorepo).
-
-### 4. Lưu ý đặc thù serverless
-
-- API **stateless** (không giữ state giữa các request — token JWT + cookie) → phù hợp serverless.
-- Không có cron/worker phía server (sync 30s + queue nằm trong browser) → không bị ảnh hưởng.
-- Prisma trên Supabase: ưu tiên connection **pooling**; nếu gặp lỗi connection khi traffic cao → cân nhắc Prisma Accelerate (proxy connection pooling) — cần trả phí từ mức cao.
-- PWA (service worker + IndexedDB) chạy nguyên vẹn ở chế độ static — không thay đổi.
-
-### 5. Khi nào chọn B thay vì A
-
-- Không muốn quản lý server (VPS, backup, HTTPS).
-- Muốn CI/CD tự động theo Git push.
-- Nhiều người dùng ngoài gia đình, cần DB managed (Postgres) từ đầu.
-
-Ngược lại, gia đình 2–5 người dùng → **Tuỳ chọn A rẻ và ít rủi ro hơn** (0 cost, dữ liệu tự nắm trong tay).
+> Trạng thái: hướng dẫn đã viết đủ chi tiết; **chưa chạy thử** trên Vercel/Supabase thật — Phase 1 làm trong repo, Phase 2–5 làm theo guide (tổng ~30 phút click dashboard).
