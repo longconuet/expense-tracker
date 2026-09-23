@@ -3,7 +3,7 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 23/09/2026 — sau **WBS 10** (HOÀN TẤT): Home/History nhóm theo ngày + edit khoản
+## Cập nhật: 23/09/2026 — sau **WBS 13** (HOÀN TẤT): E2E Playwright
 
 ## Đã xong
 - [x] **Task 1**: Scaffold monorepo (web + api + shared)
@@ -21,6 +21,7 @@
 - [x] **Task 12**: PWA — manifest + icons + offline queue (chi tiết dưới)
 - [x] **Polish WBS 9** (chi tiết dưới): `/add` nâng cấp thành màn keypad full-screen
 - [x] **Polish WBS 10** (chi tiết dưới): Home/History nhóm theo ngày có tiểu kết + màn sửa khoản
+- [x] **WBS 13** (chi tiết dưới): E2E Playwright 8 test (auth, khoản chi, offline)
 
 ### Chi tiết Polish WBS 10 — nhóm theo ngày + edit khoản
 - **`core/expenseGroups.ts`** (mới) — `groupByDay(expenses) → DayGroup[]` (`{ date, label, total, expenses }`, giữ thứ tự input = date desc của API) + `dayLabel(date)` = "Hôm nay" / "Hôm qua" / `shortDate` ("22/09", kèm năm nếu khác năm). Dùng chung 2 màn
@@ -33,6 +34,20 @@
 - Test mới (14): `expenseGroups`(4) · `EditPage`(5: pre-fill, payload PUT, disable khi 0, 403, 404) · `HistoryPage`(+2: nav sang edit, member không phải link) · `HomePage`(+1: 2 nhóm + tiểu kết) · `dataApi`(+2: GET/PUT)
 - **Verified build thật** (preview :4173, SW unregister + xoá cache trước): tạo 2 khoản (hôm nay 32.500 Ăn uống, hôm qua 45.000 Đi lại) → home + history hiện đúng 2 nhóm "Hôm nay/Hôm qua" với tiểu kết; chạm khoản → edit pre-fill đủ; sửa 32.500 → 30.000 → Lưu → về history, nhóm "Hôm nay" = 30.000₫; xoá 2 khoản smoke → 0 khoản
 - **Tổng repo: 169/169 test pass (api 60, web 105, shared 4), tsc + lint sạch, build OK**
+
+### Chi tiết WBS 13 — E2E Playwright
+- **Môi trường tách biệt** (không đụng dev server/DB): API :3101 + SQLite `prisma/e2e.db` (tạo mới bằng `db push --force-reset` mỗi lần chạy) · web vite dev :5199 (strictPort) · proxy `/api` → :3101 qua env **`VITE_API_PROXY_TARGET`** (mới — `vite.config.ts`, default vẫn :3001)
+- `apps/web/playwright.config.ts` — 2 `webServer` (API: db push + `tsx watch` · web: vite :5199), chromium, `workers: 1` + `fullyParallel: false` (1 DB e2e dùng chung — chạy tuần tự), `baseURL :5199`
+- `apps/web/e2e/` — **8 test / 3 spec** + `helpers.ts` (registerAndCreateFamily, typeKeypad, backspace, pickCategory, addExpense, anotherDayInCurrentMonth, newAccount):
+  - `auth.spec.ts` (3): đăng ký → tạo family → home · reload → phiên khôi phục (refresh cookie) · sai mật khẩu → lỗi "Email hoặc mật khẩu không đúng"
+  - `expense-flow.spec.ts` (4): nhập chi keypad → nhóm "Hôm nay" + tiểu kết · 2 khoản 2 ngày → nhóm theo ngày · chạm khoản → edit pre-fill → đổi số tiền → lưu → lịch sử cập nhật · xoá có confirm
+  - `offline.spec.ts` (1): chặn POST `/api/expenses` (route.abort) → khoản vào queue + banner "chờ đồng bộ"; unblock + reload → **tự sync lúc khởi động**, banner mất, khoản hiện ở home
+- **Bug app phát hiện + fix nhờ E2E**: `App.tsx` gọi `initSync()` → `flushQueue()` **trước** `bootstrap()` xong → access token in-memory trống → `doFlush` skip (guard `!getAccessToken()`) → khoản offline phải đợi tới **interval 30s** mới sync (spec: sync ngay khi khởi động). Fix: `bootstrap().then(() => flushQueue())` — listener online/interval vẫn đăng ký ngay (doFlush tự guard)
+- `vitest.config.ts`: thêm `include: ["src/**/*.{test,spec}.{ts,tsx}"]` — tránh Vitest nạp luôn `e2e/*.spec.ts`
+- Scripts: `pnpm --filter @expense-tracker/web e2e` · root: `pnpm test:e2e`
+- `.gitignore`: + `playwright-report/`, `test-results/`
+- **Kết quả: E2E 8/8 pass (~16s) · unit 169/169 · tsc + lint + build OK**
+- Chromium Playwright đã cài máy (`%USERPROFILE%\AppData\Local\ms-playwright`) — chạy lại E2E không cần cài
 
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
@@ -98,20 +113,20 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 23/09/2026)
-- 4 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
+- 5 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
   - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
   - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
   - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
   - (WBS 10) — `feat: WBS 10 — Home/History nhóm theo ngày có tiểu kết + màn sửa khoản chi` — xem `git log --oneline`
+  - (WBS 13) — `feat: WBS 13 — E2E Playwright (auth, khoản chi, offline) + fix sync lúc khởi động` — xem `git log --oneline`
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 
 ## Đang làm
 - (không) — chờ user chọn bước kế
 
-## Task kế tiếp: **WBS 13** (E2E Playwright) hoặc **WBS 14** (Polish + guide)
-1. **WBS 13** — Test: unit + integration đã có (169 tests pass); còn E2E Playwright (login → nhập chi → xem → sửa → xoá, flow PWA offline)
-2. **WBS 14** — Polish + hướng dẫn chạy local + guide deploy (Vercel/Supabase hoặc self-host)
+## Task kế tiếp: **WBS 14** (Polish + hướng dẫn chạy local + guide deploy)
+1. **WBS 14** — Polish + hướng dẫn chạy local + guide deploy (Vercel/Supabase hoặc self-host)
 
 ## Quyết định đã chốt
 - Màu chính: teal — light `#0D9488` / dark `#2DD4BF`; dark mode theo class, toggle màn "Tôi", lưu localStorage (key `etracker-theme`)
@@ -137,6 +152,7 @@
 - **jsdom chặn form submit** khi có input `required` rỗng → field validate bằng JS thì không dùng `required`
 - **recharts 3 + tab ẩn**: shape (sector/bar) rỗng do rAF không chạy trong tab hidden (Review pane) — **artifact môi trường, không phải bug**; shim `requestAnimationFrame = setTimeout(cb,16)` để verify; tab visible render bình thường
 - **Dev server** (đang chạy background): api :3001 · web dev :5174 (5173 bị zombie chiếm → vite tự nhảy 5174) · **preview PWA :4173** (build + SW + proxy API)
+- **E2E (Playwright)**: `pnpm test:e2e` (root) — tự bật API :3101 + `e2e.db` (reset mỗi lần) + web :5199 (proxy qua `VITE_API_PROXY_TARGET`), không đụng dev :3001/dev.db. Chromium đã cài sẵn máy
 - **Test account dev DB**: final@test.com / `MatKhau123!` (family "Nhà Final", owner, name "User Final"); còn smoke@test.com, smoke2, smoke3 (cùng mật khẩu). Nhà Final hiện **0 khoản chi**
 - **Windows**: `del`/`node -e` path absolute hay lỗi quote (cmd) → viết file `.cjs` tạm rồi `node <file>`; findstr quote cũng hay hỏng → để output nguyên, grep tay
 - **Browser tool**: gọi qua Code Mode (`tools.browser["tabs.open"]`...), không gọi trực tiếp; `browser.screenshot` fail "needs a visible tab" → verify bằng `browser.evaluate`; input id tiếng Việt (VD `input-số-tiền`) hay lệch normalization khi truyền qua script → chọn input bằng `inputMode`/vị trí; click `a[href="/add"]` để SPA nav (giữ state page)

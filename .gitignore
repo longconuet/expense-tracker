@@ -2,6 +2,8 @@ node_modules/
 dist/
 coverage/
 dev-dist/
+playwright-report/
+test-results/
 *.log
 .env
 .env.*

@@ -3,6 +3,10 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Default: API dev :3001. E2E (Playwright) override qua env VITE_API_PROXY_TARGET
+// chỉ vào API test :3101 (DB riêng, không đụng dev DB).
+const API_PROXY_TARGET = process.env.VITE_API_PROXY_TARGET || "http://localhost:3001";
+
 export default defineConfig({
   plugins: [
     react(),
@@ -34,14 +38,14 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://localhost:3001",
+      "/api": API_PROXY_TARGET,
     },
   },
   // `vite preview` — build production (kèm SW/manifest) + proxy API để test PWA thật
   preview: {
     port: 4173,
     proxy: {
-      "/api": "http://localhost:3001",
+      "/api": API_PROXY_TARGET,
     },
   },
 });
