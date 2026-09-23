@@ -249,7 +249,7 @@ Vercel project → **Settings → Git → Connect to Git** (nếu import lúc t�
 
 1. Push `develop` lên GitHub → xem **CI chạy xanh** (Actions tab).
 2. Mở PR `develop → main` → merge → **deploy.yml chạy**: test → migrate → deploy (xem log từng job).
-3. Mở URL production `https://expense-tracker.vercel.app` (hoặc custom domain nếu có) — checklist:
+3. Mở URL production `https://expense-tracker-long-7bf1.vercel.app` (alias team ổn định; URL per-deployment `expense-tracker-<hash>-long-7bf1.vercel.app` đổi mỗi lần CD) — checklist:
 
    - [ ] `GET /api/health` → `{ "success": true, "data": { "status": "ok" } }`
    - [ ] **Đăng ký** tài khoản mới → tạo gia đình → 7 preset categories hiện
@@ -266,7 +266,7 @@ Vercel project → **Settings → Git → Connect to Git** (nếu import lúc t�
 - **Tạo `main` + PR #1** (`develop → main`, 13 commits — release v1.0): merge commit `b6159c4`.
 - **CD run 1 fail ở job `migrate`**: `P1012: Environment variable not found: DIRECT_URL` — job migrate chỉ set `DATABASE_URL` trong khi schema khai báo `directUrl = env("DIRECT_URL")` và runner không có `.env`. Fix: thêm `DIRECT_URL` vào env bước migrate (commit `123aa4a`, **PR #2**, merge `f6bae94`).
 - **CD run 2 xanh 3 job** (~3,5 phút): test (lint+build+unit, PG service) → `prisma migrate deploy` vào Supabase `:5432` → `vercel deploy --prod`.
-- **Production sau CD**: `https://expense-tracker-py2qaofkm-long-7bf1.vercel.app` — checklist verify qua API **9/9** (health, register, login + cookie `httpOnly+Secure+SameSite` trên https, tạo family, 7 preset, tạo khoản chi, list tháng, stats tổng/byCategory/byDay, **refresh bằng cookie không Bearer**, logout). PWA assets (sw.js/manifest/icons) + alias production verify OK.
+- **Production sau CD** (alias ổn định: `https://expense-tracker-long-7bf1.vercel.app` — URL per-deployment `expense-tracker-<hash>-long-7bf1.vercel.app` đổi mỗi lần CD): checklist verify qua API **9/9** (health, register, login + cookie `httpOnly+Secure+SameSite` trên https, tạo family, 7 preset, tạo khoản chi, list tháng, stats tổng/byCategory/byDay, **refresh bằng cookie không Bearer**, logout). PWA assets (sw.js/manifest/icons) + alias production verify OK.
 - Kiểm tra PWA offline + dark mode + mobile 390px: xem trực tiếp trên trình duyệt (không tự động hoá được).
 
 ---
