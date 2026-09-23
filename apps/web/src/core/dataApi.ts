@@ -1,0 +1,142 @@
+import type {
+  ApiMeta,
+  Category,
+  Expense,
+  Family,
+  FamilyMemberDto,
+  MonthlyStats,
+} from "@expense-tracker/shared";
+import { apiFetch, apiFetchWithMeta } from "./api";
+import { withReadCache } from "./readCache";
+import { enqueueExpense, isServerUnavailable } from "./syncQueue";
+
+/**
+ * Lớp endpoint API cho FE — 1 nơi duy nhất map path + shape,
+ * feature chỉ import từ đây (không gọi apiFetch trực tiếp).
+ */
+
+// ---------------------------------------------------------------------------
+// Categories
+// ---------------------------------------------------------------------------
+
+interface CategoriesData {
+  categories: Category[];
+}
+
+export async function fetchCategories(familyId: string): Promise<Category[]> {
+  const path = `/api/families/${familyId}/categories`;
+  const data = await withReadCache<CategoriesData>(`GET ${path}`, () =>
+    apiFetch<CategoriesData>(path),
+  );
+  return data.categories;
+}
+
+// ---------------------------------------------------------------------------
+// Expenses
+// ---------------------------------------------------------------------------
+
+export interface ExpenseListParams {
+  month?: string;
+  categoryId?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ExpenseListResult {
+  expenses: Expense[];
+  meta: ApiMeta;
+}
+
+export async function fetchExpenses(
+  familyId: string,
+  params: ExpenseListParams = {},
+): Promise<ExpenseListResult> {
+  const query = new URLSearchParams();
+  if (params.month) query.set("month", params.month);
+  if (params.categoryId) query.set("categoryId", params.categoryId);
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  const qs = query.toString();
+  const path = `/api/families/${familyId}/expenses${qs ? `?${qs}` : ""}`;
+
+  return withReadCache<ExpenseListResult>(`GET ${path}`, async () => {
+    const { data, meta } = await apiFetchWithMeta<{ expenses: Expense[] }>(path);
+    return {
+      expenses: data.expenses,
+      meta: meta ?? { page: 1, pageSize: data.expenses.length, total: data.expenses.length },
+    };
+  });
+}
+
+export interface CreateExpenseInput {
+  familyId: string;
+  /** Danh mục đầy đủ — name/icon lưu kèm khoản khi ghi hàng đợi offline. */
+  category: Category;
+  amount: number;
+  date: string;
+  note?: string;
+}
+
+export interface CreateExpenseResult {
+  expense: Expense | null;
+  /** True khi server không đạt được — khoản đã lưu hàng đợi offline, tự sync sau. */
+  savedOffline: boolean;
+}
+
+/**
+ * Tạo khoản chi. Server không đạt được (lỗi mạng/5xx) → lưu hàng đợi offline
+ * (IndexedDB) và trả về savedOffline = true. Lỗi API (4xx) ném như cũ.
+ */
+export async function createExpense(input: CreateExpenseInput): Promise<CreateExpenseResult> {
+  const body = {
+    familyId: input.familyId,
+    categoryId: input.category.id,
+    amount: input.amount,
+    date: input.date,
+    note: input.note || undefined,
+  };
+  try {
+    const data = await apiFetch<{ expense: Expense }>("/api/expenses", {
+      method: "POST",
+      body,
+    });
+    return { expense: data.expense, savedOffline: false };
+  } catch (err) {
+    if (isServerUnavailable(err)) {
+      await enqueueExpense({
+        familyId: input.familyId,
+        categoryId: input.category.id,
+        category: { name: input.category.name, icon: input.category.icon },
+        amount: input.amount,
+        date: input.date,
+        note: input.note ? input.note.trim() : null,
+      });
+      return { expense: null, savedOffline: true };
+    }
+    throw err;
+  }
+}
+
+export async function deleteExpense(expenseId: string): Promise<void> {
+  await apiFetch(`/api/expenses/${expenseId}`, { method: "DELETE" });
+}
+
+// ---------------------------------------------------------------------------
+// Family
+// ---------------------------------------------------------------------------
+
+export type FamilyDetail = Family & { members: FamilyMemberDto[] };
+
+export async function fetchFamilyDetail(familyId: string): Promise<FamilyDetail> {
+  const data = await apiFetch<{ family: FamilyDetail }>(`/api/families/${familyId}`);
+  return data.family;
+}
+
+// ---------------------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------------------
+
+export async function fetchStats(familyId: string, month?: string): Promise<MonthlyStats> {
+  const path = `/api/families/${familyId}/stats${month ? `?month=${month}` : ""}`;
+  return withReadCache<MonthlyStats>(`GET ${path}`, () => apiFetch<MonthlyStats>(path));
+}
