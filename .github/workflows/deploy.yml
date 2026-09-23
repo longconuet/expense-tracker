@@ -1,0 +1,99 @@
+# CD — chỉ chạy khi push vào main (sau khi PR merge).
+# Thứ tự bắt buộc: test → migrate deploy (Supabase) → vercel deploy --prod.
+# Migrations phải xong TRƯỚC khi code mới lên production.
+name: Deploy (production)
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  test:
+    name: Lint + Unit test + Build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: etracker
+          POSTGRES_PASSWORD: etracker
+          POSTGRES_DB: et_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U etracker"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://etracker:etracker@localhost:5432/et_test
+      DIRECT_URL: postgresql://etracker:etracker@localhost:5432/et_test
+      # Unit test đọc DB này qua apps/api/test/dbUrl.ts (override default local docker)
+      TEST_DATABASE_URL: postgresql://etracker:etracker@localhost:5432/et_test
+      JWT_SECRET: ci-only-secret-khong-dung-san-sanh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      # Build TRƯỚC test: @expense-tracker/shared phải có dist (JS + d.ts)
+      # để api/web resolve được khi type-check + chạy test
+      - name: Build (tsc shared + typecheck + vite)
+        run: pnpm -r build
+      - name: Unit + integration tests
+        run: pnpm -r test
+
+  migrate:
+    name: Prisma migrate deploy (Supabase)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # Dùng DIRECT URL (port 5432) — migrations không chạy được qua pooler
+      - name: Apply migrations
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DIRECT_URL }}
+        run: pnpm --filter @expense-tracker/api exec prisma migrate deploy
+
+  deploy:
+    name: Vercel deploy --prod
+    needs: migrate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # Build chạy trên hạ tầng Vercel (dựa theo vercel.json ở root repo)
+      - name: Deploy to production
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npx vercel pull --yes
+          npx vercel deploy --prod --yes

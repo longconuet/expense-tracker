@@ -1,0 +1,53 @@
+# Self-host MVP: Postgres + API (Express + Prisma) + Web (nginx) — 1 server.
+# (Phase 1: schema dùng PostgreSQL cho mọi môi trường — không còn bản SQLite.)
+#
+# Chạy:
+#   cd docker
+#   copy .env.example .env   (Windows) / cp .env.example .env (macOS/Linux) — điền JWT_SECRET
+#   docker compose up -d --build
+#   # App: http://localhost:8080
+services:
+  postgres:
+    # User/pass nội bộ trong network compose (không expose port ra host)
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: etracker
+      POSTGRES_PASSWORD: etracker
+      POSTGRES_DB: expense_tracker
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etracker -d expense_tracker"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      # PostgreSQL service trong cùng network compose
+      DATABASE_URL: "postgresql://etracker:etracker@postgres:5432/expense_tracker"
+      DIRECT_URL: "postgresql://etracker:etracker@postgres:5432/expense_tracker"
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET trong docker/.env — chuỗi ngẫu nhiên dài}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,141 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useAuthStore } from "../core/authStore";
+import { useThemeStore } from "../core/themeStore";
+import MePage from "../features/me/MePage";
+
+const USER = { id: "u1", name: "An", email: "an@test.com" };
+const FAMILY = {
+  id: "f1",
+  name: "Nhà An",
+  inviteCode: "ABC123",
+  ownerName: "An",
+  memberCount: 2,
+  myRole: "OWNER",
+} as const;
+
+function renderMe() {
+  return render(
+    <MemoryRouter initialEntries={["/me"]}>
+      <Routes>
+        <Route path="/me" element={<MePage />} />
+        <Route path="/login" element={<div>LOGIN MARKER</div>} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+describe("Màn Tôi", () => {
+  const writeTextMock = vi.fn().mockResolvedValue(undefined);
+
+  beforeEach(() => {
+    document.documentElement.classList.remove("dark");
+    useThemeStore.setState({ theme: "light" });
+    useAuthStore.setState({
+      user: USER,
+      families: [FAMILY],
+      activeFamilyId: FAMILY.id,
+      status: "authenticated",
+      logout: vi.fn(async () => undefined),
+    });
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: writeTextMock },
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    writeTextMock.mockClear();
+  });
+
+  it("hiện thông tin user + family + mã mời", () => {
+    // Arrange + Act
+    renderMe();
+
+    // Assert
+    expect(screen.getByText("An")).toBeInTheDocument();
+    expect(screen.getByText("an@test.com")).toBeInTheDocument();
+    expect(screen.getByText("Nhà An")).toBeInTheDocument();
+    expect(screen.getByText("ABC123")).toBeInTheDocument();
+    expect(screen.getByText("Chủ gia đình")).toBeInTheDocument();
+  });
+
+  it("bật/tắt giao diện tối → theme store đổi + class .dark trên <html>", () => {
+    // Arrange + Act
+    renderMe();
+    const toggle = screen.getByRole("switch");
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+
+    fireEvent.click(toggle);
+
+    // Assert
+    expect(useThemeStore.getState().theme).toBe("dark");
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText("Đang bật")).toBeInTheDocument();
+
+    // Bật lại về light
+    fireEvent.click(screen.getByRole("switch"));
+    expect(useThemeStore.getState().theme).toBe("light");
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
+  it("bấm Copy mã mời → ghi inviteCode vào clipboard", async () => {
+    // Arrange + Act
+    renderMe();
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+
+    // Assert
+    expect(await screen.findByText("Đã copy")).toBeInTheDocument();
+    expect(writeTextMock).toHaveBeenCalledWith("ABC123");
+  });
+
+  it("đăng xuất có xác nhận → gọi logout + chuyển về /login", async () => {
+    // Arrange
+    const logoutMock = vi.fn(async () => undefined);
+    useAuthStore.setState({ logout: logoutMock });
+    renderMe();
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: /Đăng xuất/ }));
+
+    // Assert
+    expect(confirm).toHaveBeenCalledWith("Đăng xuất khỏi ứng dụng?");
+    expect(logoutMock).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("LOGIN MARKER")).toBeInTheDocument();
+  });
+
+  it("hiện nút cài ứng dụng khi trình duyệt gửi beforeinstallprompt", async () => {
+    // Arrange + Act
+    renderMe();
+    fireEvent(
+      window,
+      Object.assign(new Event("beforeinstallprompt"), {
+        prompt: vi.fn().mockResolvedValue(undefined),
+        userChoice: Promise.resolve({ outcome: "accepted", platform: "web" }),
+      }),
+    );
+
+    // Assert
+    expect(await screen.findByRole("button", { name: /Cài ứng dụng/ })).toBeInTheDocument();
+  });
+
+  it("huy xác nhận đăng xuất → không gọi logout", () => {
+    // Arrange
+    vi.stubGlobal("confirm", vi.fn(() => false));
+    const logoutMock = vi.fn(async () => undefined);
+    useAuthStore.setState({ logout: logoutMock });
+    renderMe();
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: /Đăng xuất/ }));
+
+    // Assert
+    expect(logoutMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("LOGIN MARKER")).not.toBeInTheDocument();
+  });
+});

@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens — tập trung 1 chỗ duy nhất (Tailwind v4 @theme).
+ * Dark mode theo class `.dark` trên <html>: override biến màu, component
+ * chỉ dùng token (bg-surface, text-ink...) nên đổi theme không sửa CSS rải rác.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: #0d9488;
+  --color-primary-soft: #ccfbf1;
+  --color-surface: #f8fafa;
+  --color-card: #ffffff;
+  --color-ink: #0f172a;
+  --color-ink-muted: #64748b;
+  --color-danger: #ef4444;
+  --color-border: #e2e8f0;
+}
+
+.dark {
+  --color-primary: #2dd4bf;
+  --color-primary-soft: #134e4a;
+  --color-surface: #0f172a;
+  --color-card: #1e293b;
+  --color-ink: #f1f5f9;
+  --color-ink-muted: #94a3b8;
+  --color-danger: #f87171;
+  --color-border: #334155;
+}
+
+@layer base {
+  body {
+    @apply antialiased bg-surface text-ink;
+  }
+}

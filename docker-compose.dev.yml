@@ -1,0 +1,31 @@
+# Postgres LOCAL cho DEV + UNIT TEST + E2E (Phase 1 — thay SQLite zero-setup cũ).
+#
+# Chạy:  docker compose -f docker-compose.dev.yml up -d
+# Dừng:  docker compose -f docker-compose.dev.yml down       (giữ data)
+#        docker compose -f docker-compose.dev.yml down -v    (xoá luôn data)
+#
+# 3 database được tạo tự động (POSTGRES_DB + dev-db.init.sql, chạy 1 lần
+# khi volume khởi tạo lần đầu):
+#   expense_tracker       — dev (pnpm dev, db:seed)
+#   expense_tracker_test  — unit/integration (pnpm test)
+#   expense_tracker_e2e   — E2E Playwright (pnpm test:e2e)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: etracker
+      POSTGRES_PASSWORD: etracker
+      POSTGRES_DB: expense_tracker
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./dev-db.init.sql:/docker-entrypoint-initdb.d/01-create-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etracker -d expense_tracker"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  pgdata:

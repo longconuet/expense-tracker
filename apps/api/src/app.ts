@@ -12,7 +12,10 @@ import { statsRouter } from "./routes/stats.routes.js";
 export function createApp(): express.Express {
   const app = express();
 
-  app.use(cors({ origin: "http://localhost:5173" }));
+  // CORS: dev mặc định :5173; prod Vercel FE + API cùng domain (không cần CORS) —
+  // vẫn giữ cấu hình qua env cho các trường hợp deploy khác domain.
+  const corsOrigin = process.env.CORS_ORIGIN ?? "http://localhost:5173";
+  app.use(cors({ origin: corsOrigin }));
   app.use(express.json());
   app.use(cookieParser());
 

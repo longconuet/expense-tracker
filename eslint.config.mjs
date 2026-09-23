@@ -9,6 +9,7 @@ export default tseslint.config(
       "**/dist/**",
       "**/coverage/**",
       "apps/web/dev-dist/**",
+      ".vercel/**",
       "pnpm-lock.yaml",
     ],
   },
