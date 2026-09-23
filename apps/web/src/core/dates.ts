@@ -20,6 +20,12 @@ export function today(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+export function yesterday(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 /** "2026-09" -> "Tháng 9/2026" — tiêu đề thân thiện. */
 export function monthLabel(month: string): string {
   const [year, mon] = month.split("-").map(Number);

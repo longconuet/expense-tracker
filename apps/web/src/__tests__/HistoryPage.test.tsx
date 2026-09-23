@@ -1,9 +1,9 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchCategories, fetchExpenses, deleteExpense } from "../core/dataApi";
 import { useAuthStore } from "../core/authStore";
-import { addMonths, currentMonth } from "../core/dates";
+import { addMonths, currentMonth, today, yesterday } from "../core/dates";
 import HistoryPage from "../features/history/HistoryPage";
 
 vi.mock("../core/dataApi", () => ({
@@ -28,25 +28,46 @@ const FAMILY = {
 
 const CAT = { id: "c1", name: "Ăn uống", icon: "🍜", isPreset: true, order: 0 };
 
-function expense(id: string, note: string, amount: number, createdByName = "An") {
+function expense(
+  id: string,
+  note: string,
+  amount: number,
+  createdByName = "An",
+  date = today(),
+) {
   return {
     id,
     amount,
-    date: "2026-09-20",
+    date,
     note,
     category: CAT,
     createdByName,
-    createdAt: "2026-09-20T06:00:00.000Z",
+    createdAt: `${date}T06:00:00.000Z`,
   };
 }
 
-const PAGE1 = [expense("e1", "cơm trưa", 50_000), expense("e2", "xăng", 200_000)];
-const PAGE2 = [expense("e3", "thuốc", 80_000, "Bình")];
+const PAGE1 = [
+  expense("e1", "cơm trưa", 50_000),
+  expense("e2", "xăng", 200_000, "An", yesterday()),
+];
+const PAGE2 = [expense("e3", "thuốc", 80_000, "Bình", yesterday())];
 
 function renderHistory() {
   return render(
     <MemoryRouter initialEntries={["/history"]}>
       <HistoryPage />
+    </MemoryRouter>,
+  );
+}
+
+/** Render kèm route màn sửa để verify điều hướng khi chạm khoản. */
+function renderHistoryWithEditRoute() {
+  return render(
+    <MemoryRouter initialEntries={["/history"]}>
+      <Routes>
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/expenses/:id/edit" element={<div>EDIT SCREEN MARKER</div>} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -78,7 +99,10 @@ describe("Lịch sử chi tiêu", () => {
 
     // Assert
     expect(await screen.findByText("cơm trưa")).toBeInTheDocument();
-    expect(screen.getByText("50.000 ₫")).toBeInTheDocument();
+    // Nhóm theo ngày: "50.000 ₫" hiện 2 lần (dòng khoản + tiểu kết ngày)
+    expect(screen.getByRole("heading", { name: "Hôm nay" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Hôm qua" })).toBeInTheDocument();
+    expect(screen.getAllByText("50.000 ₫")).toHaveLength(2);
     const loadMore = screen.getByRole("button", { name: /Tải thêm \(2\/5\)/ });
     fireEvent.click(loadMore);
 
@@ -165,5 +189,41 @@ describe("Lịch sử chi tiêu", () => {
     // Assert
     expect(deleteExpenseMock).not.toHaveBeenCalled();
     expect(screen.getByText("cơm trưa")).toBeInTheDocument();
+  });
+
+  it("chạm khoản (owner) → điều hướng sang màn sửa /expenses/:id/edit", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [expense("e1", "cơm trưa", 50_000)],
+      meta: { page: 1, pageSize: 20, total: 1 },
+    });
+    renderHistoryWithEditRoute();
+
+    // Act
+    const link = await screen.findByRole("link", { name: /cơm trưa/ });
+    expect(link).toHaveAttribute("href", "/expenses/e1/edit");
+    fireEvent.click(link);
+
+    // Assert
+    expect(await screen.findByText("EDIT SCREEN MARKER")).toBeInTheDocument();
+  });
+
+  it("member không phải người tạo → khoản không phải link, không có nút xoá", async () => {
+    // Arrange
+    useAuthStore.setState({
+      user: { id: "u2", name: "Bình", email: "binh@test.com" },
+      families: [{ ...FAMILY, myRole: "MEMBER" }],
+      activeFamilyId: FAMILY.id,
+    });
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [expense("e1", "cơm trưa", 50_000, "An")],
+      meta: { page: 1, pageSize: 20, total: 1 },
+    });
+    renderHistory();
+
+    // Act + Assert
+    expect(await screen.findByText("cơm trưa")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Xoá khoản/ })).not.toBeInTheDocument();
   });
 });

@@ -24,8 +24,10 @@ vi.mock("../core/db", () => ({
 import {
   createExpense,
   fetchCategories,
+  fetchExpense,
   fetchExpenses,
   fetchStats,
+  updateExpense,
 } from "../core/dataApi";
 
 function envelope(data: unknown, meta?: { page: number; pageSize: number; total: number }) {
@@ -188,6 +190,43 @@ describe("core/dataApi", () => {
       createExpense({ familyId: "f1", category: CAT, amount: -1, date: "2026-09-01" }),
     ).rejects.toThrow("amount phải > 0");
     expect(mem.expenses.size).toBe(0);
+  });
+
+  it("fetchExpense gọi GET /api/expenses/:id và trả expense", async () => {
+    // Arrange
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ expense: EXPENSE })));
+
+    // Act
+    const expense = await fetchExpense("e1");
+
+    // Assert
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/expenses/e1");
+    expect(expense).toEqual(EXPENSE);
+  });
+
+  it("updateExpense gửi PUT đúng payload (note null = xoá ghi chú)", async () => {
+    // Arrange
+    const updated = { ...EXPENSE, amount: 45_000, date: "2026-09-02", note: null };
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ expense: updated })));
+
+    // Act
+    const expense = await updateExpense("e1", {
+      amount: 45_000,
+      categoryId: "c2",
+      date: "2026-09-02",
+      note: null,
+    });
+
+    // Assert
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/expenses/e1");
+    expect(fetchMock.mock.calls[0][1].method).toBe("PUT");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      amount: 45_000,
+      categoryId: "c2",
+      date: "2026-09-02",
+      note: null,
+    });
+    expect(expense).toEqual(updated);
   });
 
   it("fetchCategories trả list categories của family", async () => {

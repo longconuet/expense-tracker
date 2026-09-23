@@ -3,7 +3,7 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 23/09/2026 — sau **Polish WBS 9** (HOÀN TẤT): keypad số to cho `/add`
+## Cập nhật: 23/09/2026 — sau **WBS 10** (HOÀN TẤT): Home/History nhóm theo ngày + edit khoản
 
 ## Đã xong
 - [x] **Task 1**: Scaffold monorepo (web + api + shared)
@@ -20,6 +20,19 @@
   - Data layer `dataApi.ts` (1 nơi map path + shape) + `api.ts` (envelope, `fetchWithRetry` 401→refresh, `apiFetchWithMeta`)
 - [x] **Task 12**: PWA — manifest + icons + offline queue (chi tiết dưới)
 - [x] **Polish WBS 9** (chi tiết dưới): `/add` nâng cấp thành màn keypad full-screen
+- [x] **Polish WBS 10** (chi tiết dưới): Home/History nhóm theo ngày có tiểu kết + màn sửa khoản
+
+### Chi tiết Polish WBS 10 — nhóm theo ngày + edit khoản
+- **`core/expenseGroups.ts`** (mới) — `groupByDay(expenses) → DayGroup[]` (`{ date, label, total, expenses }`, giữ thứ tự input = date desc của API) + `dayLabel(date)` = "Hôm nay" / "Hôm qua" / `shortDate` ("22/09", kèm năm nếu khác năm). Dùng chung 2 màn
+- **`core/dates.ts`** — thêm `yesterday()`
+- **`dataApi.ts`** — thêm `fetchExpense(id)` (GET) + `updateExpense(id, { categoryId, amount, date, note })` (PUT; `note: null` = xoá ghi chú)
+- **HomePage** — khối "Gần đây" (5 khoản) nhóm theo ngày: header nhóm (label + tiểu kết tổng ngày), dòng khoản bỏ `shortDate` (đã có ở header)
+- **HistoryPage** — list nhóm theo ngày có tiểu kết; **chạm khoản → điều hướng `/expenses/:id/edit`** (chỉ owner hoặc người tạo — rule khớp API); nút xoá giữ nguyên (sibling của link, không nest button trong anchor)
+- **`features/expenses/EditPage.tsx`** (mới) — cùng bố cục AddPage (display 5xl + keypad + danh mục cuộn ngang + ngày + ghi chú), pre-fill từ `GET /expenses/:id`, lưu `PUT /expenses/:id` → về `/history`; 404 → thông báo + link "Quay lại lịch sử"; 403 → hiện message API; **offline: PUT fail → hiện lỗi** (chưa queue cho edit — MVP)
+- **`router.tsx`** — thêm route `/expenses/:id/edit` trong AppShell
+- Test mới (14): `expenseGroups`(4) · `EditPage`(5: pre-fill, payload PUT, disable khi 0, 403, 404) · `HistoryPage`(+2: nav sang edit, member không phải link) · `HomePage`(+1: 2 nhóm + tiểu kết) · `dataApi`(+2: GET/PUT)
+- **Verified build thật** (preview :4173, SW unregister + xoá cache trước): tạo 2 khoản (hôm nay 32.500 Ăn uống, hôm qua 45.000 Đi lại) → home + history hiện đúng 2 nhóm "Hôm nay/Hôm qua" với tiểu kết; chạm khoản → edit pre-fill đủ; sửa 32.500 → 30.000 → Lưu → về history, nhóm "Hôm nay" = 30.000₫; xoá 2 khoản smoke → 0 khoản
+- **Tổng repo: 169/169 test pass (api 60, web 105, shared 4), tsc + lint sạch, build OK**
 
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
@@ -80,24 +93,25 @@
 - Vite tự đổi port khi port đang chiếm (5173 in use → chạy trên 5174) — đừng giả định port cứng
 
 ### Chênh với spec đầy đủ plan.md §6 (còn để polish — chưa làm)
-- **WBS 10 Home/History**: Home hiện 5 khoản gần nhất **flat** (plan: nhóm theo ngày); History **flat list** + xoá (plan: **nhóm theo ngày có tiểu kết**, chạm món để **sửa**). Sửa khoản (edit) chưa có UI (API `PUT /expenses/:id` đã sẵn).
 - Offline: khoản chờ sync **không hiển thị** trong list (chỉ có banner đếm) — đủ cho MVP; muốn hiển thị thì merge queue vào list ở UI
+- **Sửa khoản offline**: `PUT /expenses/:id` khi server không đạt → hiện lỗi (chưa có queue cho edit — queue chỉ support create)
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 23/09/2026)
-- 2 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
+- 4 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
   - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
   - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
+  - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
+  - (WBS 10) — `feat: WBS 10 — Home/History nhóm theo ngày có tiểu kết + màn sửa khoản chi` — xem `git log --oneline`
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 
 ## Đang làm
 - (không) — chờ user chọn bước kế
 
-## Task kế tiếp: **Polish WBS 10**
-1. **WBS 10**:
-   - Home + History: **nhóm khoản theo ngày có tiểu kết** (tiêu đề ngày "Hôm nay / Hôm qua / 23/09" + tổng ngày)
-   - **Edit khoản**: chạm món → màn sửa (keypad + danh mục + ngày + note, `PUT /expenses/:id` đã sẵn) — route `/expenses/:id/edit` trong shell
+## Task kế tiếp: **WBS 13** (E2E Playwright) hoặc **WBS 14** (Polish + guide)
+1. **WBS 13** — Test: unit + integration đã có (169 tests pass); còn E2E Playwright (login → nhập chi → xem → sửa → xoá, flow PWA offline)
+2. **WBS 14** — Polish + hướng dẫn chạy local + guide deploy (Vercel/Supabase hoặc self-host)
 
 ## Quyết định đã chốt
 - Màu chính: teal — light `#0D9488` / dark `#2DD4BF`; dark mode theo class, toggle màn "Tôi", lưu localStorage (key `etracker-theme`)

@@ -10,6 +10,7 @@ vi.mock("../core/dataApi", () => ({
 import { fetchExpenses, fetchStats } from "../core/dataApi";
 import { useAuthStore } from "../core/authStore";
 import { ApiError } from "../core/api";
+import { today, yesterday } from "../core/dates";
 import HomePage from "../features/home/HomePage";
 
 const fetchStatsMock = vi.mocked(fetchStats);
@@ -19,11 +20,11 @@ const CAT = { id: "c1", name: "Ăn uống", icon: "🍜", isPreset: true, order:
 const EXPENSE = {
   id: "e1",
   amount: 50000,
-  date: "2026-09-22",
+  date: yesterday(),
   note: "cơm trưa",
   category: CAT,
   createdByName: "An",
-  createdAt: "2026-09-22T06:00:00.000Z",
+  createdAt: `${yesterday()}T06:00:00.000Z`,
 };
 
 function renderHome() {
@@ -64,9 +65,46 @@ describe("Trang chủ", () => {
     expect(screen.getByText("600.000 ₫")).toBeInTheDocument();
     expect(screen.getByText("60%")).toBeInTheDocument();
     expect(screen.getByText("cơm trưa")).toBeInTheDocument();
-    expect(screen.getByText(/22\/09 · An/)).toBeInTheDocument();
+    // Khoản gần đây nhóm theo ngày: tiêu đề "Hôm qua" + tên người tạo
+    expect(screen.getByRole("heading", { name: "Hôm qua" })).toBeInTheDocument();
+    expect(screen.getByText("An")).toBeInTheDocument();
     expect(fetchStatsMock).toHaveBeenCalledWith("f1", expect.any(String));
     expect(fetchExpensesMock).toHaveBeenCalledWith("f1", expect.objectContaining({ pageSize: 5 }));
+  });
+
+  it("gần đây nhóm theo ngày, tiểu kết tổng ngày đúng", async () => {
+    // Arrange
+    fetchStatsMock.mockResolvedValue({
+      month: "2026-09",
+      total: 140_000,
+      previousMonthTotal: 0,
+      byCategory: [{ category: CAT, total: 140_000, percent: 100 }],
+      byDay: [],
+    });
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [
+        { id: "e1", amount: 30_000, date: today(), note: "cafe", category: CAT, createdByName: "An", createdAt: `${today()}T05:00:00.000Z` },
+        { id: "e2", amount: 50_000, date: today(), note: null, category: CAT, createdByName: "An", createdAt: `${today()}T04:00:00.000Z` },
+        { id: "e3", amount: 20_000, date: yesterday(), note: null, category: CAT, createdByName: "An", createdAt: `${yesterday()}T05:00:00.000Z` },
+        { id: "e4", amount: 40_000, date: yesterday(), note: null, category: CAT, createdByName: "An", createdAt: `${yesterday()}T04:00:00.000Z` },
+      ],
+      meta: { page: 1, pageSize: 5, total: 4 },
+    });
+    renderHome();
+
+    // Assert
+    const todayHeader = await screen.findByRole("heading", { name: "Hôm nay" });
+    expect(todayHeader).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Hôm qua" })).toBeInTheDocument();
+    // Tiểu kết: hôm nay 30k + 50k = 80.000 ₫; hôm qua 20k + 40k = 60.000 ₫
+    expect(screen.getByText("80.000 ₫")).toBeInTheDocument();
+    expect(screen.getByText("60.000 ₫")).toBeInTheDocument();
+    // Ngày mới nằm trước
+    expect(
+      todayHeader.compareDocumentPosition(
+        screen.getByRole("heading", { name: "Hôm qua" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("tháng chưa có chi tiêu → hiện empty state + nút gọi thêm khoản", async () => {

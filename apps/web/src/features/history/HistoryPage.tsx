@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import type { ApiMeta, Category, Expense } from "@expense-tracker/shared";
 import { formatVnd } from "@expense-tracker/shared";
 import { ApiError } from "../../core/api";
 import { useAuthStore } from "../../core/authStore";
 import { deleteExpense, fetchCategories, fetchExpenses } from "../../core/dataApi";
-import { addMonths, currentMonth, monthLabel, shortDate } from "../../core/dates";
+import { addMonths, currentMonth, monthLabel } from "../../core/dates";
+import { groupByDay } from "../../core/expenseGroups";
 import { useRefetchOnSync } from "../../core/useRefetchOnSync";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
@@ -115,8 +117,26 @@ export default function HistoryPage() {
     }
   }
 
-  function canDelete(expense: Expense): boolean {
+  /** Quyền sửa/xoá (API enforce): owner family hoặc người tạo khoản. */
+  function canModify(expense: Expense): boolean {
     return isOwner || expense.createdByName === user?.name;
+  }
+
+  function renderRowContent(expense: Expense) {
+    return (
+      <>
+        <span className="text-2xl" aria-hidden>
+          {expense.category.icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-ink">{expense.note || expense.category.name}</p>
+          <p className="text-xs text-ink-muted">
+            {expense.category.name} · {expense.createdByName}
+          </p>
+        </div>
+        <span className="font-semibold text-ink">{formatVnd(expense.amount)}</span>
+      </>
+    );
   }
 
   async function handleDelete(expense: Expense) {
@@ -218,37 +238,54 @@ export default function HistoryPage() {
         </Card>
       ) : (
         <>
-          <ul className="mt-4 space-y-2">
-            {expenses.map((expense) => (
-              <li key={expense.id}>
-                <Card className="flex items-center gap-3 p-4">
-                  <span className="text-2xl" aria-hidden>
-                    {expense.category.icon}
+          <div className="mt-4 space-y-4">
+            {groupByDay(expenses).map((group) => (
+              <section key={group.date} aria-label={group.label}>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-semibold tracking-wide text-ink-muted uppercase">
+                    {group.label}
+                  </h2>
+                  <span className="text-xs font-semibold text-ink-muted">
+                    {formatVnd(group.total)}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-ink">
-                      {expense.note || expense.category.name}
-                    </p>
-                    <p className="text-xs text-ink-muted">
-                      {expense.category.name} · {shortDate(expense.date)} · {expense.createdByName}
-                    </p>
-                  </div>
-                  <span className="font-semibold text-ink">{formatVnd(expense.amount)}</span>
-                  {canDelete(expense) && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(expense)}
-                      disabled={deletingId === expense.id}
-                      aria-label={`Xoá khoản ${expense.note || expense.category.name}`}
-                      className="rounded-lg p-1.5 text-ink-muted transition hover:bg-danger/10 hover:text-danger disabled:opacity-40"
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  )}
-                </Card>
-              </li>
+                </div>
+                <ul className="mt-2 space-y-2">
+                  {group.expenses.map((expense) => {
+                    const modifiable = canModify(expense);
+                    return (
+                      <li key={expense.id}>
+                        <Card className="flex items-center gap-3 p-4">
+                          {modifiable ? (
+                            <Link
+                              to={`/expenses/${expense.id}/edit`}
+                              className="flex min-w-0 flex-1 items-center gap-3"
+                            >
+                              {renderRowContent(expense)}
+                            </Link>
+                          ) : (
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                              {renderRowContent(expense)}
+                            </div>
+                          )}
+                          {modifiable && (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(expense)}
+                              disabled={deletingId === expense.id}
+                              aria-label={`Xoá khoản ${expense.note || expense.category.name}`}
+                              className="rounded-lg p-1.5 text-ink-muted transition hover:bg-danger/10 hover:text-danger disabled:opacity-40"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          )}
+                        </Card>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
 
           {meta && expenses.length < meta.total && (
             <div className="mt-4">

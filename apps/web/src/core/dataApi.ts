@@ -121,6 +121,34 @@ export async function deleteExpense(expenseId: string): Promise<void> {
   await apiFetch(`/api/expenses/${expenseId}`, { method: "DELETE" });
 }
 
+export async function fetchExpense(expenseId: string): Promise<Expense> {
+  const data = await apiFetch<{ expense: Expense }>(`/api/expenses/${expenseId}`);
+  return data.expense;
+}
+
+export interface UpdateExpenseInput {
+  categoryId?: string;
+  amount?: number;
+  date?: string;
+  /** `null` = xoá ghi chú. */
+  note?: string | null;
+}
+
+/**
+ * Sửa khoản chi (PUT /api/expenses/:id). Chỉ người tạo hoặc owner —
+ * API enforce, FE chỉ mở màn sửa khi có quyền.
+ */
+export async function updateExpense(
+  expenseId: string,
+  input: UpdateExpenseInput,
+): Promise<Expense> {
+  const data = await apiFetch<{ expense: Expense }>(`/api/expenses/${expenseId}`, {
+    method: "PUT",
+    body: input,
+  });
+  return data.expense;
+}
+
 // ---------------------------------------------------------------------------
 // Family
 // ---------------------------------------------------------------------------
