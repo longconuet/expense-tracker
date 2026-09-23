@@ -281,6 +281,7 @@ Vercel project → **Settings → Git → Connect to Git** (nếu import lúc t�
 | API 500, log `@prisma/client did not initialize yet. Please run "prisma generate"` | Builder chạy `pnpm install` lần 2 → postinstall ghi đè client bằng stub | Root `package.json` có script `postinstall` chạy `prisma generate` (bẫy §3.2 Phase 3) |
 | `/api/*` trả về HTML của web thay vì JSON | SPA rewrite `/(.*) → /index.html` khớp trước function | Rewrite `/api/(.*) → /api` phải đứng **trước** trong `vercel.json` (bẫy §3.2 Phase 3) |
 | API 500, log `prepared statement "s0" already exists` (query đầu OK, query sau fail) | `DATABASE_URL` trỏ pooler **transaction mode** (`:6543`) mà thiếu `?pgbouncer=true` | Thêm `?pgbouncer=true` vào cuối `DATABASE_URL` trong Vercel + redeploy (bẫy §3.2 Phase 3) |
+| Job `migrate` fail `P1012: Environment variable not found: DIRECT_URL` | Schema khai báo `directUrl = env("DIRECT_URL")` mà job migrate chỉ set `DATABASE_URL`; `prisma.config.ts` (dotenv) không có `.env` trên runner | Thêm `DIRECT_URL` (trùng `SUPABASE_DIRECT_URL`) vào `env:` của bước migrate trong `deploy.yml` (bẫy Phase 5) |
 
 ---
 
