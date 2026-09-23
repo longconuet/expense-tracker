@@ -49,10 +49,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Lint
         run: pnpm lint
+      # Build TRƯỚC test: @expense-tracker/shared phải có dist (JS + d.ts)
+      # để api/web resolve được khi type-check + chạy test
+      - name: Build (tsc shared + typecheck + vite)
+        run: pnpm -r build
       - name: Unit + integration tests
         run: pnpm -r test
-      - name: Build (tsc + vite)
-        run: pnpm -r build
 
   migrate:
     name: Prisma migrate deploy (Supabase)

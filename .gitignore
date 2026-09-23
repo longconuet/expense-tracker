@@ -13,3 +13,5 @@ test-results/
 *.sqlite
 .DS_Store
 Thumbs.db
+
+.vercel

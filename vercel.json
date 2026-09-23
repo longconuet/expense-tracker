@@ -1,12 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @expense-tracker/web build",
-  "builds": [
-    { "src": "apps/api/src/vercel.ts", "use": "@vercel/node" },
-    { "src": "apps/web/dist/index.html", "use": "@vercel/static" }
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "apps/api/src/vercel.ts" },
-    { "src": "/(.*)", "dest": "/index.html" }
+  "buildCommand": "pnpm -r build",
+  "outputDirectory": "apps/web/dist",
+  "functions": {
+    "api/index.ts": { "maxDuration": 300 }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

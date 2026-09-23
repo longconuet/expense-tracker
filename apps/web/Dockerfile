@@ -8,6 +8,8 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
 COPY packages ./packages
 COPY apps/web ./apps/web
 RUN pnpm install --frozen-lockfile
+# Build shared sang dist (JS + d.ts) trước — web tsc/vite resolve @expense-tracker/shared qua dist
+RUN pnpm --filter @expense-tracker/shared build
 RUN pnpm --filter @expense-tracker/web build
 
 FROM nginx:alpine

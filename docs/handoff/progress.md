@@ -3,7 +3,7 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 23/09/2026 — sau **Phase 2** (HOÀN TẤT): Supabase project + connection string đã verify — **14/14 WBS + Phase 1 + 2 đã xong, đang chờ Phase 3 (Vercel)**
+## Cập nhật: 23/09/2026 — **Phase 3** (gần xong): Vercel project đã tạo — deployment đầu hỏng đã **chẩn đoán + fix** (shared → dist + vercel.json modern), verified local đủ bộ — **đang chờ deploy production + smoke thật**
 
 > Trước đó (cùng ngày): WBS 14 hoàn tất (Polish + hướng dẫn local + guide deploy) — toàn bộ 14 WBS xong.
 
@@ -28,6 +28,7 @@
 - [x] **Guide deploy Vercel + Supabase + CI/CD** (post-WBS, chi tiết dưới): `docs/deploy-vercel.md` 5 phase + file deploy sẵn trong repo
 - [x] **Phase 1** (post-WBS, chi tiết dưới): chuyển toàn bộ project từ SQLite → PostgreSQL (điều kiện deploy Vercel+Supabase)
 - [x] **Phase 2** (post-WBS): tạo Supabase project + verify 2 connection string (chi tiết dưới)
+- [x] **Phase 3 — Fix deployment Vercel** (post-WBS, chi tiết dưới): chẩn đoán + sửa 2 lỗi deployment (API 500 + web 404) — verified local đủ bộ
 
 ### Chi tiết Polish WBS 10 — nhóm theo ngày + edit khoản
 - **`core/expenseGroups.ts`** (mới) — `groupByDay(expenses) → DayGroup[]` (`{ date, label, total, expenses }`, giữ thứ tự input = date desc của API) + `dayLabel(date)` = "Hôm nay" / "Hôm qua" / `shortDate` ("22/09", kèm năm nếu khác năm). Dùng chung 2 màn
@@ -70,7 +71,7 @@
 
 ### Chi tiết Guide deploy Vercel + Supabase + CI/CD (post-WBS)
 - **`docs/deploy-vercel.md`** (mới) — guide 5 phase: (1) chuyển project sang PostgreSQL (bắt buộc — Prisma không cho schema SQLite chạy trên PG; dev DB = Postgres qua `docker-compose.dev.yml`, migrations tạo lại, test/e2e chỉ sang PG) · (2) Supabase — 2 connection string (direct :5432 cho migration + session pooler :6543 cho runtime, schema có `directUrl`) · (3) Vercel monorepo **cùng domain** (refresh cookie same-origin; cấu hình **Production Branch để trống** → không auto-deploy prod) · (4) GitHub Actions: PR → CI + preview; push `main` → test → `migrate deploy` → `vercel deploy --prod` (thứ tự bắt buộc qua `needs`) · (5) checklist verify + bảng troubleshooting + chi phí free tier
-- **File deploy đã commit sẵn** (chờ Phase 1 + secrets): `vercel.json` (root: buildCommand web + 2 builds + routes `/api/*` → function, SPA fallback) · `apps/api/src/vercel.ts` (entry serverless — export Express app, không `.listen()`) · `.github/workflows/ci.yml` (lint+test+build, Postgres service) · `.github/workflows/deploy.yml` (test → migrate → deploy)
+- **File deploy đã commit sẵn** (chờ Phase 1 + secrets): `vercel.json` (root: buildCommand `pnpm -r build` + `outputDirectory` web + function `api/index.ts` + SPA fallback — đã đổi sang config modern Phase 3) · `api/index.ts` (entry serverless mỏng — re-export app Express) · `apps/api/src/vercel.ts` (app Express, không `.listen()`) · `.github/workflows/ci.yml` (lint+build+test, Postgres service) · `.github/workflows/deploy.yml` (test → migrate → deploy)
 - **Code**: `app.ts` CORS đổi từ hardcode `http://localhost:5173` sang env `CORS_ORIGIN` (default giữ nguyên — prod same domain không cần CORS)
 - **Chưa chạy thật** trên Vercel/Supabase (cần tài khoản user) — Phase 1 (PG) đã xong, Phase 2–5 theo guide
 
@@ -92,6 +93,21 @@
 - **Bẫy (đã ghi vào docs/deploy-vercel.md)**: host UI mới `db.<ref>.supabase.co` **không có DNS** (verify qua DoH CF+Google) → P1001; shared host bắt buộc user `postgres.<ref>` làm tenant identifier (user `postgres` → `ENOIDENTIFIER`); `migrate deploy` **hang** trên `:6543` (schema engine + pgbouncer) → migration luôn qua `:5432`
 - **Giá trị dùng tiếp**: Vercel `DATABASE_URL` = URL `:6543` · Vercel `DIRECT_URL` + GH secret `SUPABASE_DIRECT_URL` = URL `:5432` (URL đầy đủ có password — chỉ nằm trong chat local, **không commit vào repo**)
 - **Tiếp theo: Phase 3** — tạo Vercel project (import repo, 3 env vars, Production Branch để trống, Node 22) + Vercel token + Org/Project ID
+
+### Chi tiết Phase 3 — Fix deployment Vercel (23/09/2026)
+- **Context**: user đã tạo Vercel project (import GitHub `longconuet/expense-tracker`, 3 env vars Production+Preview, tắt Deployment Protection, Production Branch để trống) — deployment đầu (`dpl_33MDeQr2n5ct6hZWcWxqHzJNTVHF`): API 500 `FUNCTION_INVOCATION_FAILED` + web 404 toàn bộ (kể cả `/index.html`)
+- **Chẩn đoán** (Vercel API + CLI với token user — endpoint log cũ đã deprecated, dùng `npx vercel logs <url>`):
+  - API 500: log function `ERR_MODULE_NOT_FOUND ... node_modules/@expense-tracker/shared/src/index.ts` — builder copy package workspace + transpile `.ts` → `.js` vào output, nhưng `main` của shared vẫn trỏ `src/index.ts` (file `.ts` không có trong output)
+  - Web 404: config `builds` (legacy) + `@vercel/static` — trỏ **file** `index.html` → output static chỉ có đúng 1 file (mất `assets/`, manifest, SW); trỏ **thư mục** → static build bị **skip lặng lẽ**
+- **Fix 1 — shared build sang `dist` (JS + d.ts)**: `packages/shared/tsconfig.build.json` (tsc NodeNext → `dist/` + declaration), package.json `main`/`types`/`exports` → `dist/`, import nội bộ đổi extension `.js`; script `dev` (tsc --watch). Cập nhật theo: scripts root (`dev` = build + watch shared, `test`/`test:e2e` = build shared trước), `ci.yml`/`deploy.yml` (**build trước test**), 2 Dockerfile (`pnpm --filter @expense-tracker/shared build`)
+- **Fix 2 — `vercel.json` đổi sang config modern** (kiểm chứng bằng `npx vercel build` local + đọc `.vercel/output`):
+  - `"buildCommand": "pnpm -r build"` · `"outputDirectory": "apps/web/dist"` (static serve ở root domain) · `"functions": { "api/index.ts": { "maxDuration": 300 } }` · `rewrites` SPA fallback
+  - `api/index.ts` (root, MỚI) — entry mỏng re-export app Express từ `apps/api/src/vercel.ts` (convention Vercel: file trong `api/` = function tại route `/api` + `/api/*`)
+  - Output local đúng: static full ở root (index.html + assets + sw + manifest + icons) + function `api/index.func` runtime nodejs24.x chứa `packages/shared/dist/index.js`
+- **Verified local**: unit **169/169** · E2E **8/8 (17.1s)** · lint sạch (thêm `.vercel/**` vào eslint ignores; `.gitignore` + `.vercel` do CLI tự thêm) · docker self-host rebuild + `DOCKER_SMOKE_ALL_PASS` (health + web + register + /me) rồi `down -v`
+- **Docs**: `docs/deploy-vercel.md` §3.2 (config final + 3 bẫy thật) + 4 dòng Troubleshooting mới (shared `.ts`, static legacy, Deployment Protection, ...)
+- **Vercel IDs (đã lấy bằng token)**: Org/Team `team_XlBNRntktz7iEVVFH0VXw1ud` · Project `prj_tcIH0xdkBCaB6ubaxQyXeAUza3GL` · Node version project = 24.x
+- **Còn lại**: deploy production (push + `npx vercel deploy --prod` từ CLI/token) + smoke trên deployment thật → **Phase 4** (4 GitHub Secrets: `SUPABASE_DIRECT_URL` URL :5432, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`) → **Phase 5** (merge `develop → main`, CI/CD chạy lần đầu)
 
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
@@ -157,7 +173,7 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 23/09/2026)
-- 9 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
+- 10 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
   - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
   - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
   - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
@@ -167,6 +183,7 @@
   - (post-WBS) — `feat: chuẩn bị deploy Vercel + Supabase — vercel.json + entry serverless + workflows CI/CD + hướng dẫn 5 phase`
   - (post-WBS) — `refactor: Phase 1 — chuyển toàn bộ project từ SQLite sang PostgreSQL (schema, dev/test/e2e DB, self-host compose) + docs`
   - (post-WBS) — `docs: Phase 2 — verify kết nối Supabase (connection string working + bẫy DNS/pgbouncer)` — xem `git log --oneline`
+  - (post-WBS) — `fix: Phase 3 — Vercel deployment (shared build sang dist + vercel.json outputDirectory/functions)`
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 

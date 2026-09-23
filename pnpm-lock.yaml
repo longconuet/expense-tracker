@@ -315,6 +315,9 @@ importers:
 
   packages/shared:
     devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
       vitest:
         specifier: ^5.0.1
         version: 5.0.1(vite@8.3.0)

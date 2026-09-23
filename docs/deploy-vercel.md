@@ -169,19 +169,23 @@ Lưu ý free tier: DB **tự pause sau 1 tuần không hoạt động** → app 
 
 ```jsonc
 {
-  "buildCommand": "pnpm --filter @expense-tracker/web build", // build Vite + PWA
-  "builds": [
-    { "src": "apps/api/src/vercel.ts", "use": "@vercel/node" },  // API → serverless function (esbuild compile TS)
-    { "src": "apps/web/dist/index.html", "use": "@vercel/static" } // web → static + PWA SW
-  ],
-  "routes": [
-    { "src": "/api/(.*)", "dest": "apps/api/src/vercel.ts" },     // /api/* → function
-    { "src": "/(.*)", "dest": "/index.html" }                      // SPA fallback
+  "buildCommand": "pnpm -r build",               // build shared (dist JS) + typecheck + Vite/PWA
+  "outputDirectory": "apps/web/dist",             // static web → serve từ ROOT domain
+  "functions": {
+    "api/index.ts": { "maxDuration": 300 }        // API → serverless function (route /api + /api/*)
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" } // SPA fallback (chỉ path không có file thật)
   ]
 }
 ```
 
-`apps/api/src/vercel.ts` export thẳng Express app (không `.listen()`) — runtime `@vercel/node` tự bọc thành handler. Dev không dùng file này.
+`api/index.ts` (root repo) là entry mỏng re-export app Express từ `apps/api/src/vercel.ts` — theo convention Vercel: file trong thư mục `api/` = serverless function tại route `/api` (và `/api/*`). `apps/api/src/vercel.ts` export thẳng Express app (không `.listen()`). Dev không dùng 2 file này.
+
+> ⚠️ **Bẫy đã gặp thật (verify 23/09/2026):**
+> - **Package workspace phải build ra `dist` (JS + d.ts)** — nếu `@expense-tracker/shared` export source TS (`main: src/index.ts`), function Vercel chết runtime `ERR_MODULE_NOT_FOUND ... shared/src/index.ts` (builder có copy package + transpile sang `.js`, nhưng `package.json` vẫn trỏ file `.ts` không tồn tại trong output). Fix: `packages/shared` có script `build` (tsc → `dist/`), mọi flow (dev/test/e2e/CI/Docker/Vercel) build shared **trước** — xem scripts root `package.json` + CI.
+> - **KHÔNG dùng config `builds` (legacy) cho static** — Vercel mới (2026): trỏ `@vercel/static` vào file `index.html` riêng lẻ → output chỉ có đúng file đó (mất `assets/`, manifest, SW); trỏ **thư mục** → bị **skip lặng lẽ** → toàn bộ web 404. Dùng `outputDirectory` + `functions` (kiểm chứng bằng `npx vercel build` local + đọc `.vercel/output`).
+> - **Deployment Protection (Vercel Authentication)**: nếu đang bật (Vercel có thể gợi ý bật khi tạo project), MỌI request bị chuyển hướng sang trang đăng nhập Vercel (API 401 + `vercel_auth_enabled` trong body). Tắt: **Project → Settings → Security → Deployment Protection → Off**.
 
 ### 3.3. Lấy Org ID + Project ID (cho Phase 4)
 
@@ -266,6 +270,9 @@ Vercel project → **Settings → Git → Connect to Git** (nếu import lúc t�
 | Cookie refresh không gửi (login lại liên tục) | FE và API **khác domain** | Đảm bảo deploy 1 project monorepo (same domain) theo Phase 3 |
 | `P2024: No operations allowed` / `pgbouncer` errors | App runtime trỏ sang **direct** thay vì pooler | `DATABASE_URL` (Vercel) phải là URL `:6543` |
 | GitHub Actions job `vercel deploy` báo 401 | Token thiếu scope / sai org | Tạo lại token scope **Projects: Full**, đúng team |
+| API 500 `FUNCTION_INVOCATION_FAILED`, log `ERR_MODULE_NOT_FOUND ... @expense-tracker/shared/src/index.ts` | Package workspace export source TS (không có `dist`) | Build shared ra `dist` (bẫy §3.2 Phase 3); verify bằng `npx vercel build` local + đọc `.vercel/output` |
+| Toàn bộ web 404 (kể cả `/index.html`, assets) | Config `builds` (legacy) + `@vercel/static` (file → chỉ copy file đó; thư mục → bị skip) | Dùng `outputDirectory` + `functions` (bẫy §3.2 Phase 3) |
+| Mọi request bị redirect trang login Vercel (API 401, body có `vercel_auth_enabled`) | **Deployment Protection** đang bật | Project → Settings → Security → Deployment Protection → **Off** |
 
 ---
 

@@ -1,7 +1,7 @@
 # API — Express + Prisma (SQLite hoặc PostgreSQL qua DATABASE_URL)
 # Context build: ROOT THƯ MỤC REPO (chạy từ docker/, xem docker-compose.yml).
-# Server chạy qua tsx (esbuild compile in-memory) — không có bước biên dịch riêng,
-# vì packages/shared export thẳng source TS (pattern monorepo nội bộ).
+# Server chạy qua tsx (esbuild compile in-memory) cho apps/api.
+# packages/shared được build sang dist (JS + d.ts) — runtime Node không chạy file .ts.
 FROM node:24-alpine
 RUN corepack enable
 WORKDIR /app
@@ -11,6 +11,9 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.base.json ./
 COPY packages ./packages
 COPY apps/api ./apps/api
 RUN pnpm install --frozen-lockfile
+
+# Build shared sang dist (JS) — api import runtime qua dist/index.js
+RUN pnpm --filter @expense-tracker/shared build
 
 # Sinh Prisma Client + engine cho đúng platform container (linux-musl)
 RUN pnpm --filter @expense-tracker/api exec prisma generate
