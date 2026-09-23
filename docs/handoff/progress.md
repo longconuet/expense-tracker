@@ -3,7 +3,7 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 23/09/2026 — **Phase 3** (gần xong): Vercel project đã tạo — deployment đầu hỏng đã **chẩn đoán + fix** (shared → dist + vercel.json modern), verified local đủ bộ — **đang chờ deploy production + smoke thật**
+## Cập nhật: 23/09/2026 — **Phase 3 XONG**: Vercel production deployment xanh — API + web + PWA + Supabase **verify thật** (`VERCEL_SMOKE_ALL_PASS` + `PHASE3_VERIFY_ALL_PASS`) — **sẵn Phase 4 (GitHub Secrets)**
 
 > Trước đó (cùng ngày): WBS 14 hoàn tất (Polish + hướng dẫn local + guide deploy) — toàn bộ 14 WBS xong.
 
@@ -113,7 +113,8 @@
 - **Verified local**: unit **169/169** · E2E **8/8 (17.1s)** · lint sạch (thêm `.vercel/**` vào eslint ignores; `.gitignore` + `.vercel` do CLI tự thêm) · docker self-host rebuild + `DOCKER_SMOKE_ALL_PASS` (health + web + register + /me) rồi `down -v`
 - **Docs**: `docs/deploy-vercel.md` §3.2 (config final + 3 bẫy thật) + 4 dòng Troubleshooting mới (shared `.ts`, static legacy, Deployment Protection, ...)
 - **Vercel IDs (đã lấy bằng token)**: Org/Team `team_XlBNRntktz7iEVVFH0VXw1ud` · Project `prj_tcIH0xdkBCaB6ubaxQyXeAUza3GL` · Node version project = 24.x
-- **Còn lại**: deploy production (push + `npx vercel deploy --prod` từ CLI/token) + smoke trên deployment thật → **Phase 4** (4 GitHub Secrets: `SUPABASE_DIRECT_URL` URL :5432, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`) → **Phase 5** (merge `develop → main`, CI/CD chạy lần đầu)
+- **Phase 3 XONG — verify production (23/09/2026 ~17:0x)**: deployment production `dpl_` (URL `expense-tracker-qelno8klx-long-7bf1.vercel.app`, alias `expense-tracker-seven-plum-41.vercel.app`) — `VERCEL_SMOKE_ALL_PASS` (health + register 201 ghi Supabase + web) + `PHASE3_VERIFY_ALL_PASS` (alias, sw.js/manifest/icons/assets JS, register→login→/me→family 201)
+- **Tiếp theo: Phase 4** — user thêm 4 GitHub Secrets (repo → Settings → Secrets and variables → Actions): `SUPABASE_DIRECT_URL` (URL `:5432` pooler session — giá trị có password chỉ nằm trong chat) · `VERCEL_TOKEN` (token `gh-actions-deploy`) · `VERCEL_ORG_ID` = `team_XlBNRntktz7iEVVFH0VXw1ud` · `VERCEL_PROJECT_ID` = `prj_tcIH0xdkBCaB6ubaxQyXeAUza3GL` → **Phase 5** (merge `develop → main` lần đầu, CI/CD chạy)
 
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
@@ -179,7 +180,7 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 23/09/2026)
-- 12 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
+- 14 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
   - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
   - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
   - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
@@ -192,6 +193,8 @@
   - (post-WBS) — `fix: Phase 3 — Vercel deployment (shared build sang dist + vercel.json outputDirectory/functions)`
   - (post-WBS) — `fix: Phase 3 — prisma generate trước tsc trong build API (cloud build không có client sẵn)`
   - (post-WBS) — `fix: Phase 3 — deploy Vercel xanh: rewrite /api/* + api/package.json ESM + postinstall prisma generate`
+  - (post-WBS) — `fix: Phase 3 — DATABASE_URL thêm ?pgbouncer=true (pooler transaction mode)`
+  - (post-WBS) — `docs: Phase 3 XONG — guide đánh dấu ✅ + checkpoint verify production`
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 

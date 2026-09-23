@@ -43,11 +43,11 @@ flowchart LR
 |---|---|---|---|
 | **1** ✅ | Chuyển project sang PostgreSQL (schema, dev DB qua Docker, test, e2e, migrations mới) | **XONG** (23/09/2026 — chi tiết dưới) | ~1 task |
 | **2** ✅ | Tạo project Supabase + lấy 2 connection string | **XONG** (23/09/2026 — đã verify thật) | ~5 phút |
-| **3** | Tạo project Vercel + env + cấu hình không auto-deploy prod | Bạn (dashboard) | ~10 phút |
+| **3** ✅ | Tạo project Vercel + env + cấu hình không auto-deploy prod + fix deployment (shared dist, vercel.json modern, pgbouncer) | **XONG** (23/09/2026 — deployment production đã verify thật) | ~1 task |
 | **4** | Thêm GitHub Secrets + bật workflows | Bạn (GitHub) | ~5 phút |
 | **5** | Merge `develop → main` lần đầu → CI/CD chạy → verify | Bạn (chạy) + tôi (hỗ trợ) | ~15 phút |
 
-Các file **đã sẵn trong repo** (commit kèm guide này): `vercel.json` (root) · `apps/api/src/vercel.ts` (entry serverless) · `.github/workflows/ci.yml` · `.github/workflows/deploy.yml`. Phase 1 + 2 + 3 + 4 là các bước config bên ngoài repo.
+Các file **đã sẵn trong repo** (cập nhật trong Phase 3): `vercel.json` (root — config modern: `outputDirectory` + `functions`) · `api/index.ts` + `api/package.json` (entry serverless mỏng + ESM) · `apps/api/src/vercel.ts` (app Express) · `packages/shared/` (build sang `dist`) · `.github/workflows/ci.yml` · `.github/workflows/deploy.yml`. Phase 4 + 5 là các bước config bên ngoài repo.
 
 ---
 
@@ -144,7 +144,7 @@ Lưu ý free tier: DB **tự pause sau 1 tuần không hoạt động** → app 
 
 ---
 
-## Phase 3 — Tạo project Vercel
+## Phase 3 — Tạo project Vercel ✅ (XONG — deployment production verify thật 23/09/2026)
 
 ### 3.1. Tạo project
 
