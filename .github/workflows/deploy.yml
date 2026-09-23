@@ -69,10 +69,14 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      # Dùng DIRECT URL (port 5432) — migrations không chạy được qua pooler
+      # Dùng DIRECT URL (port 5432) — migrations không chạy được qua pooler.
+      # Set CẢ HAI DATABASE_URL + DIRECT_URL: schema khai báo directUrl = env("DIRECT_URL")
+      # và prisma.config.ts (dotenv/config) không có .env trên runner → phải truyền env thật
+      # (bỏ qua → P1012 "Environment variable not found: DIRECT_URL").
       - name: Apply migrations
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DIRECT_URL }}
+          DIRECT_URL: ${{ secrets.SUPABASE_DIRECT_URL }}
         run: pnpm --filter @expense-tracker/api exec prisma migrate deploy
 
   deploy:
