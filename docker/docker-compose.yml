@@ -1,0 +1,35 @@
+# Self-host MVP: API (Express + Prisma) + Web (nginx) — SQLite trên volume, 1 server.
+# Nâng cấp PostgreSQL (multi-instance / nhiều dữ liệu hơn): xem docs/deploy.md.
+#
+# Chạy:
+#   cd docker
+#   copy .env.example .env   (Windows) / cp .env.example .env (macOS/Linux) — điền JWT_SECRET
+#   docker compose up -d --build
+#   # App: http://localhost:8080
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      # SQLite trên volume (đường dẫn TUYỆT ĐỐI trong container)
+      DATABASE_URL: "file:/data/et.db"
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET trong docker/.env — chuỗi ngẫu nhiên dài}
+    volumes:
+      - etdb:/data
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  etdb:

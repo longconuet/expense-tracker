@@ -1,0 +1,15 @@
+# Context build = root repo (xem Dockerfile trong apps/) — loại bỏ thứ không cần vào image
+node_modules
+**/node_modules
+**/dist
+coverage
+dev-dist
+playwright-report
+test-results
+*.log
+*.db
+*.db-journal
+.git
+docs
+apps/web/e2e
+docker

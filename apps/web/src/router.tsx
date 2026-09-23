@@ -1,16 +1,28 @@
+import { Suspense, lazy } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppShell } from "./core/AppShell";
 import { RequireAuth } from "./core/RequireAuth";
+import { Spinner } from "./shared/ui/Spinner";
 import AddPage from "./features/expenses/AddPage";
 import EditPage from "./features/expenses/EditPage";
 import HomePage from "./features/home/HomePage";
 import HistoryPage from "./features/history/HistoryPage";
 import MePage from "./features/me/MePage";
-import StatsPage from "./features/stats/StatsPage";
 import JoinPage from "./features/auth/JoinPage";
 import LoginPage from "./features/auth/LoginPage";
 import OnboardingPage from "./features/auth/OnboardingPage";
 import RegisterPage from "./features/auth/RegisterPage";
+
+// Stats page kéo recharts (~700 kB) — lazy load để không phình main bundle
+const StatsPage = lazy(() => import("./features/stats/StatsPage"));
+
+function PageFallback() {
+  return (
+    <div className="flex justify-center py-16">
+      <Spinner />
+    </div>
+  );
+}
 
 /**
  * Bảng route:
@@ -32,7 +44,14 @@ export const router = createBrowserRouter([
         element: <AppShell />,
         children: [
           { path: "/", element: <HomePage /> },
-          { path: "/stats", element: <StatsPage /> },
+          {
+            path: "/stats",
+            element: (
+              <Suspense fallback={<PageFallback />}>
+                <StatsPage />
+              </Suspense>
+            ),
+          },
           { path: "/add", element: <AddPage /> },
           { path: "/expenses/:id/edit", element: <EditPage /> },
           { path: "/history", element: <HistoryPage /> },

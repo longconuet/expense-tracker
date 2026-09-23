@@ -3,7 +3,7 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 23/09/2026 — sau **WBS 13** (HOÀN TẤT): E2E Playwright
+## Cập nhật: 23/09/2026 — sau **WBS 14** (HOÀN TẤT): Polish + hướng dẫn local + guide deploy — **toàn bộ 14 WBS đã xong**
 
 ## Đã xong
 - [x] **Task 1**: Scaffold monorepo (web + api + shared)
@@ -22,6 +22,7 @@
 - [x] **Polish WBS 9** (chi tiết dưới): `/add` nâng cấp thành màn keypad full-screen
 - [x] **Polish WBS 10** (chi tiết dưới): Home/History nhóm theo ngày có tiểu kết + màn sửa khoản
 - [x] **WBS 13** (chi tiết dưới): E2E Playwright 8 test (auth, khoản chi, offline)
+- [x] **WBS 14** (chi tiết dưới): Polish (lazy StatsPage) + README hướng dẫn local + `docs/deploy.md` (Docker đã test thật, Vercel/Supabase guide)
 
 ### Chi tiết Polish WBS 10 — nhóm theo ngày + edit khoản
 - **`core/expenseGroups.ts`** (mới) — `groupByDay(expenses) → DayGroup[]` (`{ date, label, total, expenses }`, giữ thứ tự input = date desc của API) + `dayLabel(date)` = "Hôm nay" / "Hôm qua" / `shortDate` ("22/09", kèm năm nếu khác năm). Dùng chung 2 màn
@@ -48,6 +49,19 @@
 - `.gitignore`: + `playwright-report/`, `test-results/`
 - **Kết quả: E2E 8/8 pass (~16s) · unit 169/169 · tsc + lint + build OK**
 - Chromium Playwright đã cài máy (`%USERPROFILE%\AppData\Local\ms-playwright`) — chạy lại E2E không cần cài
+
+### Chi tiết WBS 14 — Polish + hướng dẫn local + guide deploy
+- **Polish — lazy load StatsPage** (`router.tsx`): `lazy(() => import(...StatsPage))` + Suspense (fallback Spinner) — recharts (~700 kB) tách khỏi main bundle: **main 735 → 365 kB**, StatsPage thành chunk riêng (370 kB), hết build warning >500 kB; verified browser thật (dev `:5173` — `/stats` render đúng, empty state tháng 9/2026)
+- **`README.md`** viết lại — hướng dẫn chạy local đầy đủ: requirements (Node 20+/pnpm 12), env API (`JWT_SECRET` bắt buộc đổi), `db:migrate` + `db:seed` (tuỳ chọn), `pnpm dev`, quy trình test PWA offline (build + preview + kill API), bảng scripts (root/api/web), testing (unit/e2e/PWA), quy ước API, link deploy
+- **`docs/deploy.md`** (mới) — 2 tuỳ chọn:
+  - **A. Self-host Docker — đã build + smoke test thật ✅** (Docker 29.8, Windows): `apps/api/Dockerfile` (node:24-alpine + Prisma + **tsx**, không có bước biên dịch — `packages/shared` export thẳng source TS) · `apps/web/Dockerfile` (Vite build + PWA → nginx:alpine) · `apps/web/nginx.conf` (SPA fallback + proxy `/api` → `api:3001` same domain — không cần CORS) · `docker/docker-compose.yml` (SQLite trên volume `etdb`, tự `prisma migrate deploy` khi API start, `JWT_SECRET` bắt buộc từ `docker/.env`) · `docker/.env.example` · `.dockerignore` (root). Smoke test qua `:8080`: health 200 + web 200 + luồng register → login → tạo family (7 preset) → tạo khoản chi → list → refresh rotation **đạt toàn bộ** → dọn bằng `down -v`
+  - **B. Vercel + Supabase (Postgres)** — hướng dẫn tham khảo, **chưa chạy thử** (đánh dấu rõ trong doc): Supabase session pooling (`:6543`), đổi schema `provider` sang `postgresql`, `vercel.json` monorepo (API function + web static — **bắt buộc cùng domain** để refresh cookie hoạt động), `postinstall: prisma generate`, lưu ý serverless (connection pooling, không worker phía server)
+- **Bẫy gặp + xử lý trong task**:
+  - Docker web build fail: `tsconfig.base.json` (root) không được copy vào context → `error TS5083` + cascade. Fix: `COPY tsconfig.base.json` trong cả 2 Dockerfile
+  - Thử `tsc -p tsconfig.build.json` (NodeNext) emit JS cho API → fail (type-check source `packages/shared` — import không extension; test nằm trong `src/__tests__`). **Quyết định: API production chạy tsx** (đơn giản, không đổi kiến trúc shared) — bỏ `build:prod`/`start` đã thử
+  - **tsc vẫn emit khi có lỗi type** → `apps/api/dist/` tồn tại → Vitest API nạp trùng `dist/__tests__/*.test.js` (test 60 biến 60+60, P2002 trùng email trên test.db chung). Fix: xoá dist + `apps/api/vitest.config.ts` thêm `include: ["src/**/*.{test,spec}.{ts,tsx}"]` (guard tương tự web)
+- **Kết quả: unit 169/169 (api 60, web 105, shared 4) · tsc + lint + build OK · E2E 8/8 (16.8s) · Docker smoke PASS**
+- **Toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**
 
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
@@ -113,20 +127,25 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 23/09/2026)
-- 5 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
+- 6 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
   - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
   - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
   - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
   - (WBS 10) — `feat: WBS 10 — Home/History nhóm theo ngày có tiểu kết + màn sửa khoản chi` — xem `git log --oneline`
   - (WBS 13) — `feat: WBS 13 — E2E Playwright (auth, khoản chi, offline) + fix sync lúc khởi động` — xem `git log --oneline`
+  - (WBS 14) — `feat: WBS 14 — Polish (lazy StatsPage) + README hướng dẫn local + deploy guide (Docker self-host đã test, Vercel/Supabase)` — xem `git log --oneline`
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 
 ## Đang làm
-- (không) — chờ user chọn bước kế
+- (không) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**
 
-## Task kế tiếp: **WBS 14** (Polish + hướng dẫn chạy local + guide deploy)
-1. **WBS 14** — Polish + hướng dẫn chạy local + guide deploy (Vercel/Supabase hoặc self-host)
+## Task kế tiếp: (không có WBS nào còn lại)
+Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gốc):
+1. Upgrade PostgreSQL thật (đổi provider schema + migration PG + chạy compose với service postgres) — doc đã có hướng dẫn trong `docs/deploy.md`
+2. Chạy thử deploy Vercel + Supabase theo guide (mục B — chưa được kiểm chứng)
+3. UI quản lý queue offline (hiện khoản đang chờ sync, xoá/đẩy lại) — mục "Chênh với spec"
+4. Code-splitting thêm (VD recharts đã tách; nếu thêm thư viện nặng khác) hoặc tối ưu bundle
 
 ## Quyết định đã chốt
 - Màu chính: teal — light `#0D9488` / dark `#2DD4BF`; dark mode theo class, toggle màn "Tôi", lưu localStorage (key `etracker-theme`)
@@ -151,7 +170,7 @@
 - **jsdom không có IndexedDB** — test db/syncQueue/readCache mock `core/db` (vi.hoisted Map) hoặc stub fake IDB (xem `__tests__/db.test.ts` — fake đủ dùng: open/createObjectStore/transaction/put/get/getAll/delete)
 - **jsdom chặn form submit** khi có input `required` rỗng → field validate bằng JS thì không dùng `required`
 - **recharts 3 + tab ẩn**: shape (sector/bar) rỗng do rAF không chạy trong tab hidden (Review pane) — **artifact môi trường, không phải bug**; shim `requestAnimationFrame = setTimeout(cb,16)` để verify; tab visible render bình thường
-- **Dev server** (đang chạy background): api :3001 · web dev :5174 (5173 bị zombie chiếm → vite tự nhảy 5174) · **preview PWA :4173** (build + SW + proxy API)
+- **Dev server** (đang chạy background bằng `pnpm dev`, session WBS 14): api :3001 · web dev :5173 · **preview PWA :4173** (build + SW + proxy API — chỉ khi chạy `vite preview` sau build)
 - **E2E (Playwright)**: `pnpm test:e2e` (root) — tự bật API :3101 + `e2e.db` (reset mỗi lần) + web :5199 (proxy qua `VITE_API_PROXY_TARGET`), không đụng dev :3001/dev.db. Chromium đã cài sẵn máy
 - **Test account dev DB**: final@test.com / `MatKhau123!` (family "Nhà Final", owner, name "User Final"); còn smoke@test.com, smoke2, smoke3 (cùng mật khẩu). Nhà Final hiện **0 khoản chi**
 - **Windows**: `del`/`node -e` path absolute hay lỗi quote (cmd) → viết file `.cjs` tạm rồi `node <file>`; findstr quote cũng hay hỏng → để output nguyên, grep tay
