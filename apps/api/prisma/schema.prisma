@@ -1,0 +1,81 @@
+// Prisma schema — Chi Tiêu Gia Đình
+// Dev: SQLite (zero-setup). Prod: đổi provider thành "postgresql" + DATABASE_URL.
+// SQLite không hỗ trợ enum của Prisma → role dùng String + const phía code.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  memberships FamilyMember[]
+  expenses    Expense[]
+}
+
+model Family {
+  id         String   @id @default(cuid())
+  name       String
+  inviteCode String   @unique
+  createdAt  DateTime @default(now())
+
+  members    FamilyMember[]
+  categories Category[]
+  expenses   Expense[]
+}
+
+model FamilyMember {
+  id       String   @id @default(cuid())
+  familyId String
+  userId   String
+  role     String   @default("MEMBER") // "OWNER" | "MEMBER"
+  joinedAt DateTime @default(now())
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@index([userId])
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  familyId String
+  name     String
+  icon     String
+  isPreset Boolean @default(false)
+  order    Int     @default(0)
+
+  family   Family    @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@unique([familyId, name])
+}
+
+model Expense {
+  id         String   @id @default(cuid())
+  familyId   String
+  userId     String // người nhập khoản chi
+  categoryId String
+  amount     Int // số nguyên VND
+  date       String // YYYY-MM-DD (ngày cục bộ)
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  family   Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@index([familyId, date])
+  @@index([familyId, categoryId, date])
+}

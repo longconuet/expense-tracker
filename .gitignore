@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+dev-dist/
+*.log
+.env
+.env.*
+!.env.example
+*.db
+*.db-journal
+*.sqlite
+.DS_Store
+Thumbs.db
