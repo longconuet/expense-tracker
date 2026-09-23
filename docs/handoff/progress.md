@@ -84,12 +84,18 @@
 - Offline: khoản chờ sync **không hiển thị** trong list (chỉ có banner đếm) — đủ cho MVP; muốn hiển thị thì merge queue vào list ở UI
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
+## Trạng thái Git (cập nhật 23/09/2026)
+- 2 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
+  - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
+  - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
+- Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
+- Working tree clean
+
 ## Đang làm
 - (không) — chờ user chọn bước kế
 
-## Task kế tiếp: **Polish WBS 10** (hoặc commit khối Task 8+12+9)
-1. **Commit** (user đang giữ — repo **chưa có commit nào**): khối Task 8 + màn thật + Task 12 + WBS 9 → 1 commit Conventional Commits vào `develop` (VD `feat: app shell, 5 màn chính, dark mode, PWA offline và keypad nhập chi (Task 8, 9, 12 WBS)`) — **không** Co-Authored-By/nhãn AI
-2. **WBS 10**:
+## Task kế tiếp: **Polish WBS 10**
+1. **WBS 10**:
    - Home + History: **nhóm khoản theo ngày có tiểu kết** (tiêu đề ngày "Hôm nay / Hôm qua / 23/09" + tổng ngày)
    - **Edit khoản**: chạm món → màn sửa (keypad + danh mục + ngày + note, `PUT /expenses/:id` đã sẵn) — route `/expenses/:id/edit` trong shell
 
@@ -103,10 +109,10 @@
 - API envelope: `{ success, data, error, meta }`
 - **Offline (Task 12)**: ghi offline trigger = `ApiError` status 0 (mạng) hoặc ≥ 500 (5xx); 4xx **không** bao giờ ghi offline / fallback cache. Read cache = stale-while-error, không TTL. Sync trigger = khởi động app + event `online` + interval 30s khi còn khoản chờ. IndexedDB DB `etracker-offline` (stores `expenses`, `cache`)
 - **Icon PWA**: sinh bằng `scripts/generate-icons.mjs` (chạy lại nếu đổi design: donut trắng trên nền teal), file PNG commit vào repo
-- Commit: Conventional Commits, thẳng `develop`, 1 task = 1 commit (**vẫn tạm dừng theo yêu cầu user — repo chưa có commit nào**)
+- Commit: Conventional Commits, thẳng `develop`, 1 task = 1 commit; remote `origin` = https://github.com/longconuet/expense-tracker.git
 
 ## Ghi chú kỹ thuật (môi trường)
-- Node 24, pnpm 12.5.1, git 2.55 (repo init nhánh `develop`, **chưa commit**)
+- Node 24, pnpm 12.5.1, git 2.55 (nhánh `develop` tracking `origin/develop` trên GitHub)
 - Pin: typescript ^5.9.3, Prisma 6.19, zod 4; React 19.3, Vite 8.3, Vitest 5, Tailwind 4.3, Express 5.2, react-router 7.18, zustand 5, recharts 3.10, vite-plugin-pwa 1.3
 - Express 5: async handler throw → tự vào error handler; `req.params.*` type `string | string[]`; middleware truyền **function**
 - Prisma: update relation dùng `category: { connect: { id } }`
