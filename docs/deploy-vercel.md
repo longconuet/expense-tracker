@@ -44,8 +44,8 @@ flowchart LR
 | **1** ✅ | Chuyển project sang PostgreSQL (schema, dev DB qua Docker, test, e2e, migrations mới) | **XONG** (23/09/2026 — chi tiết dưới) | ~1 task |
 | **2** ✅ | Tạo project Supabase + lấy 2 connection string | **XONG** (23/09/2026 — đã verify thật) | ~5 phút |
 | **3** ✅ | Tạo project Vercel + env + cấu hình không auto-deploy prod + fix deployment (shared dist, vercel.json modern, pgbouncer) | **XONG** (23/09/2026 — deployment production đã verify thật) | ~1 task |
-| **4** | Thêm GitHub Secrets + bật workflows | Bạn (GitHub) | ~5 phút |
-| **5** | Merge `develop → main` lần đầu → CI/CD chạy → verify | Bạn (chạy) + tôi (hỗ trợ) | ~15 phút |
+| **4** ✅ | Thêm GitHub Secrets + bật workflows | **XONG** (23/09/2026 — 4 secrets đã thêm, CI xanh trên push + PR) | ~5 phút |
+| **5** ✅ | Merge `develop → main` lần đầu → CI/CD chạy → verify | **XONG** (23/09/2026 — PR #1 + fix PR #2, CD xanh 3 job, verify production 9/9) | ~15 phút |
 
 Các file **đã sẵn trong repo** (cập nhật trong Phase 3): `vercel.json` (root — config modern: `outputDirectory` + `functions`) · `api/index.ts` + `api/package.json` (entry serverless mỏng + ESM) · `apps/api/src/vercel.ts` (app Express) · `packages/shared/` (build sang `dist`) · `.github/workflows/ci.yml` · `.github/workflows/deploy.yml`. Phase 4 + 5 là các bước config bên ngoài repo.
 
@@ -204,7 +204,9 @@ Lưu ý free tier: DB **tự pause sau 1 tuần không hoạt động** → app 
 
 ---
 
-## Phase 4 — GitHub Actions (CI/CD)
+## Phase 4 — GitHub Actions (CI/CD) ✅ (HOÀN TẤT 23/09/2026)
+
+> Đã thêm 4 secrets (`SUPABASE_DIRECT_URL`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`). CI chạy xanh trên mọi push `develop` + PR. Chi tiết thực thi: Phase 5.
 
 File workflow **đã có trong repo**: `.github/workflows/ci.yml` + `.github/workflows/deploy.yml`. Chỉ việc thêm secrets.
 
@@ -243,7 +245,7 @@ Vercel project → **Settings → Git → Connect to Git** (nếu import lúc t�
 
 ---
 
-## Phase 5 — Chạy lần đầu + verify
+## Phase 5 — Chạy lần đầu + verify ✅ (HOÀN TẤT 23/09/2026)
 
 1. Push `develop` lên GitHub → xem **CI chạy xanh** (Actions tab).
 2. Mở PR `develop → main` → merge → **deploy.yml chạy**: test → migrate → deploy (xem log từng job).
@@ -258,6 +260,14 @@ Vercel project → **Settings → Git → Connect to Git** (nếu import lúc t�
    - [ ] Dark mode + mobile view ~390px
 
 4. (Tuỳ chọn) **Custom domain**: Vercel project → **Settings → Domains** → thêm domain + theo dõi DNS (A/CNAME) → HTTPS tự cấp. App không cần đổi gì (dùng đường dẫn tương đối).
+
+### Thực thi lần đầu (23/09/2026)
+
+- **Tạo `main` + PR #1** (`develop → main`, 13 commits — release v1.0): merge commit `b6159c4`.
+- **CD run 1 fail ở job `migrate`**: `P1012: Environment variable not found: DIRECT_URL` — job migrate chỉ set `DATABASE_URL` trong khi schema khai báo `directUrl = env("DIRECT_URL")` và runner không có `.env`. Fix: thêm `DIRECT_URL` vào env bước migrate (commit `123aa4a`, **PR #2**, merge `f6bae94`).
+- **CD run 2 xanh 3 job** (~3,5 phút): test (lint+build+unit, PG service) → `prisma migrate deploy` vào Supabase `:5432` → `vercel deploy --prod`.
+- **Production sau CD**: `https://expense-tracker-py2qaofkm-long-7bf1.vercel.app` — checklist verify qua API **9/9** (health, register, login + cookie `httpOnly+Secure+SameSite` trên https, tạo family, 7 preset, tạo khoản chi, list tháng, stats tổng/byCategory/byDay, **refresh bằng cookie không Bearer**, logout). PWA assets (sw.js/manifest/icons) + alias production verify OK.
+- Kiểm tra PWA offline + dark mode + mobile 390px: xem trực tiếp trên trình duyệt (không tự động hoá được).
 
 ---
 

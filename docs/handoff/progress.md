@@ -3,9 +3,9 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 23/09/2026 — **Phase 3 XONG**: Vercel production deployment xanh — API + web + PWA + Supabase **verify thật** (`VERCEL_SMOKE_ALL_PASS` + `PHASE3_VERIFY_ALL_PASS`) — **sẵn Phase 4 (GitHub Secrets)**
+## Cập nhật: 23/09/2026 — **TẤT CẢ 5 PHASE DEPLOY XONG ✅**: CI/CD GitHub Actions chạy thật (test → migrate Supabase → vercel deploy --prod) — production sau CD **verify 9/9** (`P5_FINAL_VERIFY_ALL_PASS`) — app lên production `https://expense-tracker-py2qaofkm-long-7bf1.vercel.app`
 
-> Trước đó (cùng ngày): WBS 14 hoàn tất (Polish + hướng dẫn local + guide deploy) — toàn bộ 14 WBS xong.
+> Trước đó (cùng ngày): Phase 3 XONG (deployment Vercel xanh, verify thật) · WBS 14 hoàn tất — toàn bộ 14 WBS + guide deploy xong.
 
 ## Đã xong
 - [x] **Task 1**: Scaffold monorepo (web + api + shared)
@@ -29,6 +29,8 @@
 - [x] **Phase 1** (post-WBS, chi tiết dưới): chuyển toàn bộ project từ SQLite → PostgreSQL (điều kiện deploy Vercel+Supabase)
 - [x] **Phase 2** (post-WBS): tạo Supabase project + verify 2 connection string (chi tiết dưới)
 - [x] **Phase 3 — Fix deployment Vercel** (post-WBS, chi tiết dưới): chẩn đoán + sửa 2 lỗi deployment (API 500 + web 404) — verified local đủ bộ
+- [x] **Phase 4 — GitHub Secrets + CI/CD** (post-WBS): 4 secrets repo, CI xanh trên push + PR (chi tiết dưới)
+- [x] **Phase 5 — Release production qua CI/CD** (post-WBS): PR #1 + PR #2 (fix P1012) → CD xanh 3 job → verify production 9/9 (chi tiết dưới)
 
 ### Chi tiết Polish WBS 10 — nhóm theo ngày + edit khoản
 - **`core/expenseGroups.ts`** (mới) — `groupByDay(expenses) → DayGroup[]` (`{ date, label, total, expenses }`, giữ thứ tự input = date desc của API) + `dayLabel(date)` = "Hôm nay" / "Hôm qua" / `shortDate` ("22/09", kèm năm nếu khác năm). Dùng chung 2 màn
@@ -115,6 +117,19 @@
 - **Vercel IDs (đã lấy bằng token)**: Org/Team `team_XlBNRntktz7iEVVFH0VXw1ud` · Project `prj_tcIH0xdkBCaB6ubaxQyXeAUza3GL` · Node version project = 24.x
 - **Phase 3 XONG — verify production (23/09/2026 ~17:0x)**: deployment production `dpl_` (URL `expense-tracker-qelno8klx-long-7bf1.vercel.app`, alias `expense-tracker-seven-plum-41.vercel.app`) — `VERCEL_SMOKE_ALL_PASS` (health + register 201 ghi Supabase + web) + `PHASE3_VERIFY_ALL_PASS` (alias, sw.js/manifest/icons/assets JS, register→login→/me→family 201)
 - **Tiếp theo: Phase 4** — user thêm 4 GitHub Secrets (repo → Settings → Secrets and variables → Actions): `SUPABASE_DIRECT_URL` (URL `:5432` pooler session — giá trị có password chỉ nằm trong chat) · `VERCEL_TOKEN` (token `gh-actions-deploy`) · `VERCEL_ORG_ID` = `team_XlBNRntktz7iEVVFH0VXw1ud` · `VERCEL_PROJECT_ID` = `prj_tcIH0xdkBCaB6ubaxQyXeAUza3GL` → **Phase 5** (merge `develop → main` lần đầu, CI/CD chạy)
+
+### Chi tiết Phase 4 + 5 — CI/CD chạy thật + release production (23/09/2026)
+- **Phase 4**: user thêm 4 secrets repo (`SUPABASE_DIRECT_URL`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`) — CI tự chạy xanh trên push `develop` + PR (không cần cấu hình thêm)
+- **Tạo `main` + PR #1** (release v1.0): repo chưa có nhánh `main` (Web UI không cho chọn base branch chưa tồn tại) → tạo qua GitHub API (fine-grained PAT `Contents: W` + `Pull requests: W` + `Actions: R`, hạn 1 ngày): `git/refs` `refs/heads/main` @ commit gốc `998dd6e` → PR `develop → main` (13 commits, 113 files, +8148). Merge commit `b6159c4`
+  - Bẫy API: `POST /repos/.../branches` cần field `branch` (không phải `ref`); fine-grained thiếu quyền trả **404** (không phải 403)
+- **CD run 1 FAIL ở job `migrate`** (`P1012: Environment variable not found: DIRECT_URL`): job chỉ set `DATABASE_URL`, schema có `directUrl = env("DIRECT_URL")`, và `prisma.config.ts` (dotenv/config) không có `.env` trên runner → Prisma bỏ qua nạp env → validate schema fail. Job `test` + các step trước đó đều OK
+- **Fix `123aa4a`** (PR #2, 2 files): `deploy.yml` — env bước Apply migrations thêm `DIRECT_URL: ${{ secrets.SUPABASE_DIRECT_URL }}` (trùng `DATABASE_URL` — `migrate deploy` dùng `directUrl`); `docs/deploy-vercel.md` + dòng Troubleshooting P1012. Merge commit `f6bae94`
+- **CD run 2 XANH 3 job** (~3,5 phút): `test` (lint + build + unit, PG16 service) → `migrate` (`prisma migrate deploy` vào Supabase `:5432`) → `deploy` (`vercel pull` + `vercel deploy --prod`) — proof: thứ tự `needs` đảm bảo migration xong trước khi code serve traffic
+- **Production sau CD**: `https://expense-tracker-py2qaofkm-long-7bf1.vercel.app` (dpl_1AuiZCu6bbqwdg3Td2bV58As2uBJ) — verify API **9/9** (`P5_FINAL_VERIFY_ALL_PASS`): health · register 201 · login + cookie `etracker_refresh` flags **HttpOnly+Secure+SameSite+Path trên https** · tạo family + inviteCode · 7 preset categories · tạo khoản chi 201 · list tháng (total=1, đúng amount) · stats (total/byCategory 100%/byDay hôm nay) · **refresh bằng cookie không Bearer → accessToken mới** · logout. PWA assets (sw.js/manifest/icons) + alias production OK (PHASE3_VERIFY_ALL_PASS)
+- **Verify còn thiếu (làm tay trên trình duyệt)**: PWA install + offline sync thật, dark mode, mobile ~390px — API/asset đã verify đủ, phần render do user tự xem
+- **Commit**: `123aa4a` (fix deploy.yml + docs) + commit docs này — tất cả đã push; `main` = `f6bae94` (+ commit docs khi merge)
+- **Script verify (temp, không commit)**: `p5-final-verify.mjs <BASE>` (checklist Phase 5) · `p3-status.cjs <VERCEL_TOKEN>` (list deployments + probe) · `p3-verify-final.mjs` / `p3-vercel-smoke.mjs` (Phase 3)
+- **Tiếp theo (tuỳ chọn)**: custom domain (Vercel → Settings → Domains) · preview deployment qua Vercel GitHub integration (docs §4.3) · xoá fine-grained PAT sau khi dùng xong (hạn 1 ngày tự hết)
 
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
