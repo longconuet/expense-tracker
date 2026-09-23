@@ -42,7 +42,7 @@ flowchart LR
 | Phase | Việc | Ai làm | Thời lượng |
 |---|---|---|---|
 | **1** ✅ | Chuyển project sang PostgreSQL (schema, dev DB qua Docker, test, e2e, migrations mới) | **XONG** (23/09/2026 — chi tiết dưới) | ~1 task |
-| **2** | Tạo project Supabase + lấy 2 connection string | Bạn (dashboard) | ~5 phút |
+| **2** ✅ | Tạo project Supabase + lấy 2 connection string | **XONG** (23/09/2026 — đã verify thật) | ~5 phút |
 | **3** | Tạo project Vercel + env + cấu hình không auto-deploy prod | Bạn (dashboard) | ~10 phút |
 | **4** | Thêm GitHub Secrets + bật workflows | Bạn (GitHub) | ~5 phút |
 | **5** | Merge `develop → main` lần đầu → CI/CD chạy → verify | Bạn (chạy) + tôi (hỗ trợ) | ~15 phút |
@@ -128,7 +128,7 @@ pnpm --filter @expense-tracker/api exec prisma migrate dev --name init
 
 ---
 
-## Phase 2 — Tạo Supabase (PostgreSQL managed)
+## Phase 2 — Tạo Supabase (PostgreSQL managed) ✅ (XONG — verified 23/09/2026)
 
 1. Đăng ký [supabase.com](https://supabase.com) (free) → **New project** (chọn region gần VN: `ap-southeast-1` Singapore, password cho DB).
 2. Vào **Project Settings → Database → Connection string**, copy 2 URL:
@@ -136,6 +136,9 @@ pnpm --filter @expense-tracker/api exec prisma migrate dev --name init
    - **Session pooling** (port `6543`): cùng trên nhưng port `6543`
    - (Giao diện Supabase có thể hiển thị theo tab "URI" / "Session Pooling" — bản chất là 2 port này.)
 3. Ghi lại 2 URL — dùng ở Phase 3 và 4.
+
+> **Đã verify thật (23/09/2026, region `ap-southeast-1`):** format hoạt động đúng như trên — user **`postgres.<ref>`**, host shared **`aws-0-ap-southeast-1.pooler.supabase.com`** (direct `:5432` · session pooling `:6543`).
+> ⚠️ Bẫy: URL mà UI Supabase mới hiển thị (host `db.<ref>.supabase.co`) có thể **không có record DNS** → lỗi `P1001 Can't reach`. Khi đó dùng format trên và verify: `prisma migrate deploy` với URL `:5432` + 1 query đơn giản qua Prisma Client với URL `:6543`. Migration **không** chạy qua `:6543` (schema engine + pgbouncer bị hang) — luôn dùng `:5432` cho migration.
 
 Lưu ý free tier: DB **tự pause sau 1 tuần không hoạt động** → app bị lỗi kết nối cho tới khi vào dashboard bật lại (mục Troubleshooting).
 

@@ -3,7 +3,7 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 23/09/2026 — sau **Phase 1** (HOÀN TẤT): chuyển toàn bộ project SQLite → PostgreSQL — **14/14 WBS + Phase 1 đã xong**
+## Cập nhật: 23/09/2026 — sau **Phase 2** (HOÀN TẤT): Supabase project + connection string đã verify — **14/14 WBS + Phase 1 + 2 đã xong, đang chờ Phase 3 (Vercel)**
 
 > Trước đó (cùng ngày): WBS 14 hoàn tất (Polish + hướng dẫn local + guide deploy) — toàn bộ 14 WBS xong.
 
@@ -27,6 +27,7 @@
 - [x] **WBS 14** (chi tiết dưới): Polish (lazy StatsPage) + README hướng dẫn local + `docs/deploy.md` (Docker đã test thật, Vercel/Supabase guide)
 - [x] **Guide deploy Vercel + Supabase + CI/CD** (post-WBS, chi tiết dưới): `docs/deploy-vercel.md` 5 phase + file deploy sẵn trong repo
 - [x] **Phase 1** (post-WBS, chi tiết dưới): chuyển toàn bộ project từ SQLite → PostgreSQL (điều kiện deploy Vercel+Supabase)
+- [x] **Phase 2** (post-WBS): tạo Supabase project + verify 2 connection string (chi tiết dưới)
 
 ### Chi tiết Polish WBS 10 — nhóm theo ngày + edit khoản
 - **`core/expenseGroups.ts`** (mới) — `groupByDay(expenses) → DayGroup[]` (`{ date, label, total, expenses }`, giữ thứ tự input = date desc của API) + `dayLabel(date)` = "Hôm nay" / "Hôm qua" / `shortDate` ("22/09", kèm năm nếu khác năm). Dùng chung 2 màn
@@ -82,6 +83,15 @@
 - **Docs**: README (yêu cầu Docker, bước bật PG trước, renumber mục 2→6) · `docs/deploy.md` §A (3 container, backup `pg_dump`, xoá mục "nâng cấp PostgreSQL") · `docs/deploy-vercel.md` Phase 1 đánh dấu XONG + khớp implement
 - **Bẫy gặp**: `prisma generate` EPERM khi dev server cũ đang giữ `query_engine-*.dll.node` (Windows) — phải kill cả chuỗi `pnpm dev` (tsx watch tự restart process con) rồi generate lại; script kill theo CommandLine khớp luôn VS Code đang mở project (để ý khi kill theo pattern)
 - **Còn để ý**: `apps/api/prisma/{dev,test,e2e}.db` (file SQLite cũ, gitignored) không dùng nữa — có thể xoá tay
+
+### Chi tiết Phase 2 — Supabase (23/09/2026)
+- User tạo Supabase project `expense-tracker` (region `ap-southeast-1`, free) — DB password do user đặt (**không nằm trong repo/memory**)
+- **URL hoạt động (đã verify)**: host shared `aws-0-ap-southeast-1.pooler.supabase.com` · user `postgres.fxhmbpfffvmdrhechlqo` (format `postgres.<ref>`)
+  - **Direct `:5432`** — `prisma migrate deploy` ✅: migration `20260923071509_init` **đã apply vào DB Supabase** (sẵn schema cho lần deploy đầu)
+  - **Session pooling `:6543`** — Prisma Client query ✅ (runtime)
+- **Bẫy (đã ghi vào docs/deploy-vercel.md)**: host UI mới `db.<ref>.supabase.co` **không có DNS** (verify qua DoH CF+Google) → P1001; shared host bắt buộc user `postgres.<ref>` làm tenant identifier (user `postgres` → `ENOIDENTIFIER`); `migrate deploy` **hang** trên `:6543` (schema engine + pgbouncer) → migration luôn qua `:5432`
+- **Giá trị dùng tiếp**: Vercel `DATABASE_URL` = URL `:6543` · Vercel `DIRECT_URL` + GH secret `SUPABASE_DIRECT_URL` = URL `:5432` (URL đầy đủ có password — chỉ nằm trong chat local, **không commit vào repo**)
+- **Tiếp theo: Phase 3** — tạo Vercel project (import repo, 3 env vars, Production Branch để trống, Node 22) + Vercel token + Org/Project ID
 
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
@@ -147,7 +157,7 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 23/09/2026)
-- 8 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
+- 9 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
   - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
   - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
   - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
@@ -155,7 +165,8 @@
   - (WBS 13) — `feat: WBS 13 — E2E Playwright (auth, khoản chi, offline) + fix sync lúc khởi động` — xem `git log --oneline`
   - (WBS 14) — `feat: WBS 14 — Polish (lazy StatsPage) + README hướng dẫn local + deploy guide (Docker self-host đã test, Vercel/Supabase)` — xem `git log --oneline`
   - (post-WBS) — `feat: chuẩn bị deploy Vercel + Supabase — vercel.json + entry serverless + workflows CI/CD + hướng dẫn 5 phase`
-  - (post-WBS) — `refactor: Phase 1 — chuyển toàn bộ project từ SQLite sang PostgreSQL (schema, dev/test/e2e DB, self-host compose) + docs` — xem `git log --oneline`
+  - (post-WBS) — `refactor: Phase 1 — chuyển toàn bộ project từ SQLite sang PostgreSQL (schema, dev/test/e2e DB, self-host compose) + docs`
+  - (post-WBS) — `docs: Phase 2 — verify kết nối Supabase (connection string working + bẫy DNS/pgbouncer)` — xem `git log --oneline`
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 
