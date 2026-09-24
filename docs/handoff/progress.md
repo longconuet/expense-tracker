@@ -3,6 +3,8 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
+## Cập nhật: 24/09/2026 — **Quản lý danh mục chi tiêu** (2 commit `d6880dd` + `0c33ae9` trên `develop`, đã push): trang `/categories` (thêm/sửa/xoá/đổi thứ tự, emoji picker, preset khoá), web unit 151/151 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: guard `activeFamilyId` cho refetchSilent), verified browser thật đủ 5 luồng
+
 ## Cập nhật: 24/09/2026 — **Modal xác nhận đồng nhất UI thay thế window.confirm** (commit `22f9471` trên `develop`, đã push): 15 test mới + 5 cập nhật, web unit 133/133 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix 1 MEDIUM focus-trap + 3 LOW), verified browser thật (mở/xoá/đóng/đăng xuất modal)
 
 ## Cập nhật: 24/09/2026 — **Skeleton loading Home/History/Stats + refetch không flicker** (commit `906d576` trên `develop`, đã push): 13 test mới, web unit 118/118 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: silent refetch History chỉ khi page 1). **Keep-warm XONG**: UptimeRobot free monitor ping 5 phút đã xanh đều (user tạo + verify) → `keep-warm.yml` đã xoá (scheduler GitHub không tự fire; run tay xanh chứng tỏ job OK — không cần giữ)
@@ -159,6 +161,18 @@
 - **Review** (agent riêng): DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · 1 MEDIUM (load-more reset im lặng — đã fix) · 3 LOW (class `rounded-lg`/`rounded-full` trong Skeleton phụ thuộc thứ tự Tailwind — chấp nhận; indentation — đã chạy prettier cho file task; 2 test edge thiếu — đã bổ sung 2)
 - **Kết quả**: unit web **118/118** (api 60 + shared 4 không đổi), lint + build xanh; commit `906d576` (11 file) push `develop`
 
+### Chi tiết Quản lý danh mục chi tiêu (24/09/2026)
+- **Quyết định user**: mọi member được quản lý (không đổi API) · có reorder (nút lên/xuống) · trang riêng `/categories` (vào từ MePage)
+- **API đã sẵn từ Task 5** (không sửa): GET/POST/PUT/DELETE `/api/families/:id/categories` — model có `order` + `isPreset`; POST tên 2-30 unique trong family (409 CATEGORY_EXISTS) · PUT preset chỉ đổi được `order` (403 PRESET_LOCKED) · DELETE chặn preset + đang có khoản (409 CATEGORY_IN_USE)
+- `dataApi.ts` (commit `d6880dd`): `createCategory`/`updateCategory`/`deleteCategory` — mutation không đi read cache
+- `features/categories/CategoriesPage.tsx` + `CategoriesSkeleton.tsx` (commit `0c33ae9`): list hàng (icon + tên + nhãn "Danh mục mặc định") với 4 nút ↑↓ (mọi hàng) ✏️ 🗑 (không preset) · Modal thêm/sửa: tên (validate client 2-30) + lưới 24 emoji gợi ý (gồm 7 icon preset) + ô nhập emoji tự (1-8) · ConfirmDialog xoá (danger) · reorder = swap `order` 2 hàng liền kề (2 PUT song song, giữ invariant order duy nhất)
+- **refetchSilent**: sau mỗi mutation OK → cập nhật list từ response + `fetchCategories` ngầm đồng bộ read cache; **guard `activeFamilyId` ở thời điểm resolve** (fix MEDIUM review — đổi family giữa chừng không ghi đè list family khác)
+- MePage: card "Danh mục chi tiêu" sau card family → `/categories`; route mới trong AppShell (không bottom nav, precedent `/expenses/:id/edit`); `icons.tsx` +TagIcon/PencilIcon/ArrowUpIcon/ArrowDownIcon
+- **Tests 13 mới** (web 137 → 151): `CategoriesPage`(12: render + ẩn nút preset, skeleton, fetch lỗi + retry, thêm OK/validate/409/offline, sửa pre-fill, xoá confirm/cancel/409 in-use, reorder swap + fail) · `MePage`(+1: nav)
+- **Verified browser thật**: MePage → /categories (7 preset đúng thứ tự, ẩn nút preset) · thêm "Tiền điện" 💧 (validate chặn khi chưa chọn icon) · reorder lên · sửa pre-fill (name + icon) · xoá confirm danger → 7 preset
+- **Review** (agent riêng, cả 2 commit): DUYỆT / DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · MEDIUM (refetchSilent không guard family — đã fix) · LOW đã xử lý: assert refetch ngầm trong test + test reorder fail · a11y grid emoji (role=group + aria-labelledby) · LOW để nghiên cứu sau: partial-failure 2 PUT reorder → order trùng (cần endpoint swap hoặc `@@unique([familyId, order])` phía API — ngoài scope)
+- **Kết quả**: full suite **215/215** (web 151, api 60, shared 4), lint + build xanh; commit `d6880dd` + `0c33ae9` push `develop`
+
 ### Chi tiết Modal xác nhận (24/09/2026)
 - **Yêu cầu**: thay dialog mặc định (window.confirm/prompt) bằng modal đồng nhất UI app. User chốt: **centered card mọi kích thước** (không bottom sheet) + **không modal cho mã mời** (bỏ fallback prompt — mã hiển thị sẵn trong card để copy tay)
 - `shared/ui/Modal.tsx` (mới) — card giữa màn mọi kích thước: overlay `fixed inset-0 z-50 bg-ink/40 p-4` + card `bg-card rounded-2xl shadow-lg max-w-sm p-5`, `role="dialog" aria-modal` + `aria-labelledby` (useId), đóng bằng Esc + click overlay (check `e.target === e.currentTarget`), focus vào dialog khi mở (trả về trigger khi đóng), focus trap (Tab wrap), khoá scroll body, `disableDismiss` chặn mọi đường đóng khi chờ API
@@ -235,11 +249,11 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 24/09/2026)
-- `develop` = `22f9471` (modal xác nhận) — **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git); `main` = `f6bae94` (release v1.0, chờ PR kế tiếp nếu user muốn)
-- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog)
+- `develop` = `0c33ae9` (màn quản lý danh mục) — **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git); `main` = `f6bae94` (release v1.0, chờ PR kế tiếp nếu user muốn)
+- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog) · `d6880dd` + `0c33ae9` (quản lý danh mục)
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
-- Baseline test hiện tại: **web 133** · api 60 · shared 4
+- Baseline test hiện tại: **web 151** · api 60 · shared 4
 
 ## Đang làm
 - (không) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**; keep-warm đã chuyển xong sang UptimeRobot (monitor ping 5 phút xanh đều + cảnh báo down)
