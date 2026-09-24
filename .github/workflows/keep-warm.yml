@@ -1,0 +1,23 @@
+# Keep-warm: ping /api/health production mỗi 5 phút để serverless function
+# Vercel (Hobby) không scale-to-zero — user không phải chờ cold start
+# (1-2s) cho request đầu sau khi app nằm im.
+#
+# Chi phí: ~0 — mỗi run ~1s (repo public → không giới hạn Actions minutes).
+# Lưu ý: cron GitHub Actions chạy trên nhánh DEFAULT (develop) và có thể trễ
+# vài phút khi runner đông; nếu đổi custom domain → cập nhật URL bên dưới.
+name: Keep-warm (production)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    name: Ping /api/health
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping production
+        run: |
+          curl -sf -o /dev/null -w "HTTP %{http_code} trong %{time_total}s\n" \
+            https://expense-tracker-long-7bf1.vercel.app/api/health
