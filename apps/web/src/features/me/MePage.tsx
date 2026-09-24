@@ -6,7 +6,7 @@ import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { RoleBadge } from "../../shared/ui/RoleBadge";
-import { CheckIcon, CopyIcon, DownloadIcon, LogoutIcon, MoonIcon, SunIcon, UsersIcon } from "../../shared/ui/icons";
+import { CheckIcon, ChevronRightIcon, CopyIcon, DownloadIcon, LogoutIcon, MoonIcon, SunIcon, TagIcon, UsersIcon } from "../../shared/ui/icons";
 import { useInstallPrompt } from "./useInstallPrompt";
 
 /**
@@ -121,6 +121,22 @@ export default function MePage() {
               {copied ? "Đã copy" : "Copy"}
             </Button>
           </div>
+        </Card>
+      )}
+
+      {activeFamily && (
+        <Card className="mt-4">
+          <button
+            type="button"
+            onClick={() => navigate("/categories")}
+            className="flex w-full items-center justify-between"
+          >
+            <span className="flex items-center gap-3">
+              <TagIcon className="h-5 w-5 text-ink-muted" />
+              <span className="font-medium text-ink">Danh mục chi tiêu</span>
+            </span>
+            <ChevronRightIcon className="h-5 w-5 text-ink-muted" />
+          </button>
         </Card>
       )}
 

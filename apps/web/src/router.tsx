@@ -8,6 +8,7 @@ import EditPage from "./features/expenses/EditPage";
 import HomePage from "./features/home/HomePage";
 import HistoryPage from "./features/history/HistoryPage";
 import MePage from "./features/me/MePage";
+import CategoriesPage from "./features/categories/CategoriesPage";
 import JoinPage from "./features/auth/JoinPage";
 import LoginPage from "./features/auth/LoginPage";
 import OnboardingPage from "./features/auth/OnboardingPage";
@@ -31,6 +32,7 @@ function PageFallback() {
  *   - /onboarding — màn ngoài shell (user chưa có family)
  *   - 5 màn chính trong AppShell (header + bottom nav)
  *   - /expenses/:id/edit — màn sửa khoản (trong shell, không có trong nav)
+ *   - /categories — quản lý danh mục chi tiêu (từ màn Tôi, không có trong nav)
  */
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -55,6 +57,7 @@ export const router = createBrowserRouter([
           { path: "/add", element: <AddPage /> },
           { path: "/expenses/:id/edit", element: <EditPage /> },
           { path: "/history", element: <HistoryPage /> },
+          { path: "/categories", element: <CategoriesPage /> },
           { path: "/me", element: <MePage /> },
         ],
       },

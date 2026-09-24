@@ -21,6 +21,7 @@ function renderMe() {
       <Routes>
         <Route path="/me" element={<MePage />} />
         <Route path="/login" element={<div>LOGIN MARKER</div>} />
+        <Route path="/categories" element={<div>CATEGORIES MARKER</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -157,5 +158,14 @@ describe("Màn Tôi", () => {
     expect(logoutMock).not.toHaveBeenCalled();
     expect(screen.queryByText("LOGIN MARKER")).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("hàng 'Danh mục chi tiêu' → điều hướng /categories", async () => {
+    // Arrange + Act
+    renderMe();
+    fireEvent.click(screen.getByRole("button", { name: "Danh mục chi tiêu" }));
+
+    // Assert
+    expect(await screen.findByText("CATEGORIES MARKER")).toBeInTheDocument();
   });
 });
