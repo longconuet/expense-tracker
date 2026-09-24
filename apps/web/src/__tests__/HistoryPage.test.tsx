@@ -75,10 +75,6 @@ describe("Lịch sử chi tiêu", () => {
     fetchExpensesMock.mockReset();
     deleteExpenseMock.mockReset();
     fetchCategoriesMock.mockResolvedValue([CAT]);
-    vi.stubGlobal(
-      "confirm",
-      vi.fn(() => true),
-    );
   });
 
   afterEach(() => {
@@ -165,7 +161,7 @@ describe("Lịch sử chi tiêu", () => {
     });
   });
 
-  it("xoá khoản có xác nhận → gọi API + gỡ khỏi danh sách", async () => {
+  it("xoá khoản qua dialog → gọi API + gỡ khỏi danh sách", async () => {
     // Arrange
     fetchExpensesMock.mockResolvedValue({
       expenses: PAGE1,
@@ -175,21 +171,21 @@ describe("Lịch sử chi tiêu", () => {
     renderHistory();
     await screen.findByText("cơm trưa");
 
-    // Act
+    // Act — mở dialog rồi bấm Xoá
     fireEvent.click(screen.getByRole("button", { name: /Xoá khoản cơm trưa/ }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText(/Xoá khoản "cơm trưa" \(50.000 ₫\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Xoá" }));
 
     // Assert
     expect(deleteExpenseMock).toHaveBeenCalledWith("e1");
     expect(await screen.findByText("xăng")).toBeInTheDocument();
     expect(screen.queryByText("cơm trưa")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("huy xác nhận xoá → không gọi API", async () => {
+  it("huy xác nhận xoá trong dialog → không gọi API", async () => {
     // Arrange
-    vi.stubGlobal(
-      "confirm",
-      vi.fn(() => false),
-    );
     fetchExpensesMock.mockResolvedValue({
       expenses: PAGE1,
       meta: { page: 1, pageSize: 20, total: 2 },
@@ -199,10 +195,53 @@ describe("Lịch sử chi tiêu", () => {
 
     // Act
     fireEvent.click(screen.getByRole("button", { name: /Xoá khoản cơm trưa/ }));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "Huỷ" }));
 
     // Assert
     expect(deleteExpenseMock).not.toHaveBeenCalled();
     expect(screen.getByText("cơm trưa")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("xoá khoản API fail → dialog đóng + hiện lỗi trên màn, khoản vẫn còn", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: PAGE1,
+      meta: { page: 1, pageSize: 20, total: 2 },
+    });
+    deleteExpenseMock.mockRejectedValue(new ApiError("NETWORK_ERROR", "Xoá không thành công.", 0));
+    renderHistory();
+    await screen.findByText("cơm trưa");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: /Xoá khoản cơm trưa/ }));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "Xoá" }));
+
+    // Assert
+    expect(await screen.findByRole("alert")).toHaveTextContent("Xoá không thành công.");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("cơm trưa")).toBeInTheDocument();
+  });
+
+  it("đóng dialog xoá bằng Escape → không gọi API", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: PAGE1,
+      meta: { page: 1, pageSize: 20, total: 2 },
+    });
+    renderHistory();
+    await screen.findByText("cơm trưa");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: /Xoá khoản cơm trưa/ }));
+    await screen.findByRole("dialog");
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    // Assert
+    expect(deleteExpenseMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("chạm khoản (owner) → điều hướng sang màn sửa /expenses/:id/edit", async () => {

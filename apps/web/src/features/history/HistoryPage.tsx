@@ -10,6 +10,7 @@ import { groupByDay } from "../../core/expenseGroups";
 import { useRefetchOnSync } from "../../core/useRefetchOnSync";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
+import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { ChevronLeftIcon, ChevronRightIcon, TrashIcon } from "../../shared/ui/icons";
 import { HistorySkeleton } from "./HistorySkeleton";
 
@@ -35,6 +36,7 @@ export default function HistoryPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const lastQuery = useRef("");
   const lastOk = useRef(false);
@@ -158,8 +160,6 @@ export default function HistoryPage() {
   }
 
   async function handleDelete(expense: Expense) {
-    const label = expense.note || expense.category.name;
-    if (!window.confirm(`Xoá khoản "${label}" (${formatVnd(expense.amount)})?`)) return;
     setDeletingId(expense.id);
     setError(null);
     try {
@@ -169,7 +169,10 @@ export default function HistoryPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Xoá không thành công, vui lòng thử lại.");
     } finally {
-      setDeletingId(null);
+      // Guard theo id — tránh xoá state thuộc về lần mở dialog khác
+      // (VD mở dialog xoá B khi request xoá A vẫn đang chạy)
+      setDeletingId((d) => (d === expense.id ? null : d));
+      setDeleteTarget((t) => (t?.id === expense.id ? null : t));
     }
   }
 
@@ -286,7 +289,7 @@ export default function HistoryPage() {
                           {modifiable && (
                             <button
                               type="button"
-                              onClick={() => handleDelete(expense)}
+                              onClick={() => setDeleteTarget(expense)}
                               disabled={deletingId === expense.id}
                               aria-label={`Xoá khoản ${expense.note || expense.category.name}`}
                               className="rounded-lg p-1.5 text-ink-muted transition hover:bg-danger/10 hover:text-danger disabled:opacity-40"
@@ -316,6 +319,19 @@ export default function HistoryPage() {
             </div>
           )}
         </>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          open
+          title="Xoá khoản chi"
+          message={`Xoá khoản "${deleteTarget.note || deleteTarget.category.name}" (${formatVnd(deleteTarget.amount)})?`}
+          confirmLabel="Xoá"
+          danger
+          loading={deletingId === deleteTarget.id}
+          onConfirm={() => handleDelete(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );
