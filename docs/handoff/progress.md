@@ -131,6 +131,14 @@
 - **Script verify (temp, không commit)**: `p5-final-verify.mjs <BASE>` (checklist Phase 5) · `p3-status.cjs <VERCEL_TOKEN>` (list deployments + probe) · `p3-verify-final.mjs` / `p3-vercel-smoke.mjs` (Phase 3)
 - **Tiếp theo (tuỳ chọn)**: custom domain (Vercel → Settings → Domains) · preview deployment qua Vercel GitHub integration (docs §4.3) · xoá fine-grained PAT sau khi dùng xong (hạn 1 ngày tự hết)
 
+### Chi tiết Perf fix + keep-warm (24/09/2026)
+- **Vấn đề**: user báo API đều chậm >2s. Đo thực tế từ VN (script `p5-perf-probe.mjs`): `/api/health` warm (không chạm DB) ~285ms, `register` 2.9s, `login`/`me` 1.5-1.6s. Header `x-vercel-id: hkg1::iad1` → **function chạy ở `iad1` (US East)** — Vercel tự chọn khi không khai `regions` trong `vercel.json`
+- **Chẩn đoán**: mỗi request đi VN → HK edge → US East → (query DB) Singapore → về; DB Supabase ở `ap-southeast-1`. **Không phải lỗi free plan** — Supabase DB đã ở SG (region gần nhất VN)
+- **Fix `cbc9526` (PR #5)**: `vercel.json` thêm `"regions": ["sin1"]` → function chạy Singapore. **Kết quả đo lại**: register 2932→367ms · login 1509→193ms · me 1607→132ms · health warm 260→~98ms
+- **Keep-warm (cùng commit)**: `.github/workflows/keep-warm.yml` — cron `*/5 * * * *` ping `GET /api/health` production (repo public → miễn phí Actions minutes) để giảm cold start request đầu sau khi idle
+- **Docs**: `deploy-vercel.md` §3.2 (regions trong config + bẫy region) + 2 dòng Troubleshooting mới (API chậm do region, cold start)
+- **Tiếp theo (tuỳ chọn)**: custom domain → cập nhật URL trong `keep-warm.yml` · Vercel Speed Insights nếu muốn giám sát liên tục
+
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
 - **`features/expenses/haptic.ts`** — `haptic(pattern)`: `navigator.vibrate` (no-op trên desktop) — rung khi chạm phím số/danh mục/nút Lưu

@@ -171,6 +171,7 @@ Lưu ý free tier: DB **tự pause sau 1 tuần không hoạt động** → app 
 {
   "buildCommand": "pnpm -r build",               // build shared (dist JS) + prisma generate + typecheck + Vite/PWA
   "outputDirectory": "apps/web/dist",             // static web → serve từ ROOT domain
+  "regions": ["sin1"],                            // function chạy Singapore — gần user (VN) + cùng region DB Supabase
   "functions": {
     "api/index.ts": { "maxDuration": 300 }        // API → serverless function (route /api)
   },
@@ -190,6 +191,7 @@ Lưu ý free tier: DB **tự pause sau 1 tuần không hoạt động** → app 
 > - **`?pgbouncer=true` bắt buộc trong `DATABASE_URL` (port 6543)** — `aws-<region>.pooler.supabase.com:6543` là **transaction mode** (Supavisor, không hỗ trợ prepared statements — sau 28/02/2025 port 6543 chỉ còn transaction). Prisma dùng prepared statement mặc định → lỗi **`prepared statement "s0" already exists`** (thường query đầu OK, query sau fail). Fix: thêm `?pgbouncer=true` vào cuối URL (Prisma tự chuyển simple protocol). URL `:5432` (session mode) và direct KHÔNG cần.
 > - **SPA rewrite nuốt `/api/*`** — nếu `rewrites` chỉ có `/(.*) → /index.html`, mọi path `/api/...` trả về HTML của web (không vào function). Phải khai rewrite `/api/(.*) → /api` **trước** fallback.
 > - **Deployment Protection (Vercel Authentication)**: nếu đang bật (Vercel có thể gợi ý bật khi tạo project), MỌI request bị chuyển hướng sang trang đăng nhập Vercel (API 401 + `vercel_auth_enabled` trong body). Tắt: **Project → Settings → Security → Deployment Protection → Off**.
+> - **Function chạy sai region (24/09/2026)** — API chậm >2s dù DB ở Singapore: Vercel tự đặt function ở `iad1` (US East) khi không khai `regions` trong `vercel.json` (xác nhận qua header `x-vercel-id: <edge>::<function-region>::...`). Mỗi query DB chạy 2 chuyến VN → US → SG. Fix: `"regions": ["sin1"]` — health 260→~100ms, login/me 1.5s→~150-200ms, register 2.9s→~370ms (đo từ VN).
 
 ### 3.3. Lấy Org ID + Project ID (cho Phase 4)
 
@@ -292,6 +294,8 @@ Vercel project → **Settings → Git → Connect to Git** (nếu import lúc t�
 | `/api/*` trả về HTML của web thay vì JSON | SPA rewrite `/(.*) → /index.html` khớp trước function | Rewrite `/api/(.*) → /api` phải đứng **trước** trong `vercel.json` (bẫy §3.2 Phase 3) |
 | API 500, log `prepared statement "s0" already exists` (query đầu OK, query sau fail) | `DATABASE_URL` trỏ pooler **transaction mode** (`:6543`) mà thiếu `?pgbouncer=true` | Thêm `?pgbouncer=true` vào cuối `DATABASE_URL` trong Vercel + redeploy (bẫy §3.2 Phase 3) |
 | Job `migrate` fail `P1012: Environment variable not found: DIRECT_URL` | Schema khai báo `directUrl = env("DIRECT_URL")` mà job migrate chỉ set `DATABASE_URL`; `prisma.config.ts` (dotenv) không có `.env` trên runner | Thêm `DIRECT_URL` (trùng `SUPABASE_DIRECT_URL`) vào `env:` của bước migrate trong `deploy.yml` (bẫy Phase 5) |
+| API đều chậm (>1-2s), kể cả endpoint không chạm DB | Function Vercel chạy **sai region** (xa user/DB) — Vercel tự chọn `iad1` (US) khi không khai `regions` | `"regions": ["sin1"]` trong `vercel.json` + redeploy; chẩn đoán qua header `x-vercel-id` (`<edge>::<function-region>::...`), bẫy §3.2 |
+| Request đầu sau khi app nằm im ~1-2s, các request sau nhanh | Serverless **cold start** (Hobby plan để instance nghỉ) | `.github/workflows/keep-warm.yml` ping `/api/health` mỗi 5 phút; hoặc chấp nhận (bản chất serverless) |
 
 ---
 
