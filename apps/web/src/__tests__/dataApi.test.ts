@@ -22,11 +22,14 @@ vi.mock("../core/db", () => ({
 }));
 
 import {
+  createCategory,
   createExpense,
+  deleteCategory,
   fetchCategories,
   fetchExpense,
   fetchExpenses,
   fetchStats,
+  updateCategory,
   updateExpense,
 } from "../core/dataApi";
 
@@ -239,6 +242,80 @@ describe("core/dataApi", () => {
     // Assert
     expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/categories");
     expect(categories).toEqual([CAT]);
+  });
+
+  // ---------------------------------------------------------------------
+  // Category CRUD
+  // ---------------------------------------------------------------------
+
+  it("createCategory POST đúng payload và trả category", async () => {
+    // Arrange
+    const created = { id: "c9", name: "Tiền điện", icon: "⚡", isPreset: false, order: 7 };
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ category: created }), 201));
+
+    // Act
+    const category = await createCategory("f1", { name: "Tiền điện", icon: "⚡" });
+
+    // Assert
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/categories");
+    expect(fetchMock.mock.calls[0][1].method).toBe("POST");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      name: "Tiền điện",
+      icon: "⚡",
+    });
+    expect(category).toEqual(created);
+  });
+
+  it("createCategory 409 trùng tên → ném ApiError (không fallback)", async () => {
+    // Arrange
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse(
+        {
+          success: false,
+          data: null,
+          error: { code: "CATEGORY_EXISTS", message: "Danh mục này đã tồn tại" },
+        },
+        409,
+      ),
+    );
+
+    // Act + Assert
+    await expect(createCategory("f1", { name: "Ăn uống", icon: "🍜" })).rejects.toMatchObject({
+      code: "CATEGORY_EXISTS",
+      status: 409,
+      message: "Danh mục này đã tồn tại",
+    });
+  });
+
+  it("updateCategory gửi PUT đúng payload (name/icon/order)", async () => {
+    // Arrange
+    const updated = { id: "c9", name: "Điện nước", icon: "💧", isPreset: false, order: 2 };
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ category: updated })));
+
+    // Act
+    const category = await updateCategory("f1", "c9", { name: "Điện nước", icon: "💧", order: 2 });
+
+    // Assert
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/categories/c9");
+    expect(fetchMock.mock.calls[0][1].method).toBe("PUT");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      name: "Điện nước",
+      icon: "💧",
+      order: 2,
+    });
+    expect(category).toEqual(updated);
+  });
+
+  it("deleteCategory gọi DELETE đúng path", async () => {
+    // Arrange
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ ok: true })));
+
+    // Act
+    await deleteCategory("f1", "c9");
+
+    // Assert
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/categories/c9");
+    expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");
   });
 
   it("fetchStats có/không có month", async () => {
