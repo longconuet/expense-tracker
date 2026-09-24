@@ -3,7 +3,7 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 24/09/2026 — **Skeleton loading Home/History/Stats + refetch không flicker** (commit `906d576` trên `develop`, đã push): 13 test mới, web unit 118/118 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: silent refetch History chỉ khi page 1). **Keep-warm**: run tay XANH (job OK), scheduler GitHub không tự fire → **user chốt chuyển sang UptimeRobot free** (ping 5 phút + cảnh báo down) — chờ user tạo monitor xong sẽ xoá `keep-warm.yml`
+## Cập nhật: 24/09/2026 — **Skeleton loading Home/History/Stats + refetch không flicker** (commit `906d576` trên `develop`, đã push): 13 test mới, web unit 118/118 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: silent refetch History chỉ khi page 1). **Keep-warm XONG**: UptimeRobot free monitor ping 5 phút đã xanh đều (user tạo + verify) → `keep-warm.yml` đã xoá (scheduler GitHub không tự fire; run tay xanh chứng tỏ job OK — không cần giữ)
 
 ## Cập nhật: 23/09/2026 — **TẤT CẢ 5 PHASE DEPLOY XONG ✅**: CI/CD GitHub Actions chạy thật (test → migrate Supabase → vercel deploy --prod) — production sau CD **verify 9/9** (`P5_FINAL_VERIFY_ALL_PASS`) — app lên production `https://expense-tracker-py2qaofkm-long-7bf1.vercel.app`
 
@@ -139,7 +139,7 @@
 - **Fix `cbc9526` (PR #5)**: `vercel.json` thêm `"regions": ["sin1"]` → function chạy Singapore. **Kết quả đo lại**: register 2932→367ms · login 1509→193ms · me 1607→132ms · health warm 260→~98ms
 - **Keep-warm (cùng commit)**: `.github/workflows/keep-warm.yml` — cron `*/5 * * * *` ping `GET /api/health` production (repo public → miễn phí Actions minutes) để giảm cold start request đầu sau khi idle
 - **Docs**: `deploy-vercel.md` §3.2 (regions trong config + bẫy region) + 2 dòng Troubleshooting mới (API chậm do region, cold start)
-- **Tiếp theo (tuỳ chọn)**: custom domain → cập nhật URL trong `keep-warm.yml` · Vercel Speed Insights nếu muốn giám sát liên tục
+- **Tiếp theo (tuỳ chọn)**: custom domain → cập nhật URL ở **monitor UptimeRobot** + `docs` (keep-warm.yml đã xoá 24/09 — scheduler GitHub không tự fire, UptimeRobot thay thế) · Vercel Speed Insights nếu muốn giám sát liên tục
 
 ### Chi tiết Skeleton loading (24/09/2026)
 - **Yêu cầu**: thay spinner bằng skeleton loading hiện đại hơn trên mobile (user duyệt spec trước khi code)
@@ -227,10 +227,7 @@
 - Working tree clean
 
 ## Đang làm
-- **Keep-warm — chuyển sang UptimeRobot (phương án 1, user chốt 24/09/2026)**: job GitHub đã verify XANH qua run tay (`workflow_dispatch` success 06:23 UTC 24/09) nhưng scheduler GitHub chưa tự fire (~90 phút, best-effort). UptimeRobot free ping ngoài + **tặng kèm cảnh báo khi production down** (email/Telegram). Việc:
-  1. User tạo tài khoản uptimerobot.com (free, 50 monitors, interval 5 phút cho HTTP) + thêm monitor: **HTTP(S)** · URL `https://expense-tracker-long-7bf1.vercel.app/api/health` · interval **5 phút** · bật notification (email/Telegram)
-  2. Sau ~1-2h thấy monitor xanh (pings đều) → báo agent → **xoá `.github/workflows/keep-warm.yml`** (1 commit, tránh ping trùng)
-- (không có task code nào khác) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**
+- (không) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**; keep-warm đã chuyển xong sang UptimeRobot (monitor ping 5 phút xanh đều + cảnh báo down)
 
 ## Task kế tiếp: (không có WBS nào còn lại)
 Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gốc):

@@ -295,7 +295,7 @@ Vercel project → **Settings → Git → Connect to Git** (nếu import lúc t�
 | API 500, log `prepared statement "s0" already exists` (query đầu OK, query sau fail) | `DATABASE_URL` trỏ pooler **transaction mode** (`:6543`) mà thiếu `?pgbouncer=true` | Thêm `?pgbouncer=true` vào cuối `DATABASE_URL` trong Vercel + redeploy (bẫy §3.2 Phase 3) |
 | Job `migrate` fail `P1012: Environment variable not found: DIRECT_URL` | Schema khai báo `directUrl = env("DIRECT_URL")` mà job migrate chỉ set `DATABASE_URL`; `prisma.config.ts` (dotenv) không có `.env` trên runner | Thêm `DIRECT_URL` (trùng `SUPABASE_DIRECT_URL`) vào `env:` của bước migrate trong `deploy.yml` (bẫy Phase 5) |
 | API đều chậm (>1-2s), kể cả endpoint không chạm DB | Function Vercel chạy **sai region** (xa user/DB) — Vercel tự chọn `iad1` (US) khi không khai `regions` | `"regions": ["sin1"]` trong `vercel.json` + redeploy; chẩn đoán qua header `x-vercel-id` (`<edge>::<function-region>::...`), bẫy §3.2 |
-| Request đầu sau khi app nằm im ~1-2s, các request sau nhanh | Serverless **cold start** (Hobby plan để instance nghỉ) | `.github/workflows/keep-warm.yml` ping `/api/health` mỗi 5 phút; hoặc chấp nhận (bản chất serverless) |
+| Request đầu sau khi app nằm im ~1-2s, các request sau nhanh | Serverless **cold start** (Hobby plan để instance nghỉ) | **UptimeRobot free** ping `GET /api/health` mỗi 5 phút (ping ngoài, kèm cảnh báo khi production down — monitor URL cần cập nhật nếu đổi domain); hoặc chấp nhận (bản chất serverless) |
 
 ---
 
