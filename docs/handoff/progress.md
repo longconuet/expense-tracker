@@ -3,6 +3,8 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
+## Cập nhật: 24/09/2026 — **Modal xác nhận đồng nhất UI thay thế window.confirm** (commit `22f9471` trên `develop`, đã push): 15 test mới + 5 cập nhật, web unit 133/133 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix 1 MEDIUM focus-trap + 3 LOW), verified browser thật (mở/xoá/đóng/đăng xuất modal)
+
 ## Cập nhật: 24/09/2026 — **Skeleton loading Home/History/Stats + refetch không flicker** (commit `906d576` trên `develop`, đã push): 13 test mới, web unit 118/118 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: silent refetch History chỉ khi page 1). **Keep-warm XONG**: UptimeRobot free monitor ping 5 phút đã xanh đều (user tạo + verify) → `keep-warm.yml` đã xoá (scheduler GitHub không tự fire; run tay xanh chứng tỏ job OK — không cần giữ)
 
 ## Cập nhật: 23/09/2026 — **TẤT CẢ 5 PHASE DEPLOY XONG ✅**: CI/CD GitHub Actions chạy thật (test → migrate Supabase → vercel deploy --prod) — production sau CD **verify 9/9** (`P5_FINAL_VERIFY_ALL_PASS`) — app lên production `https://expense-tracker-py2qaofkm-long-7bf1.vercel.app`
@@ -157,6 +159,18 @@
 - **Review** (agent riêng): DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · 1 MEDIUM (load-more reset im lặng — đã fix) · 3 LOW (class `rounded-lg`/`rounded-full` trong Skeleton phụ thuộc thứ tự Tailwind — chấp nhận; indentation — đã chạy prettier cho file task; 2 test edge thiếu — đã bổ sung 2)
 - **Kết quả**: unit web **118/118** (api 60 + shared 4 không đổi), lint + build xanh; commit `906d576` (11 file) push `develop`
 
+### Chi tiết Modal xác nhận (24/09/2026)
+- **Yêu cầu**: thay dialog mặc định (window.confirm/prompt) bằng modal đồng nhất UI app. User chốt: **centered card mọi kích thước** (không bottom sheet) + **không modal cho mã mời** (bỏ fallback prompt — mã hiển thị sẵn trong card để copy tay)
+- `shared/ui/Modal.tsx` (mới) — card giữa màn mọi kích thước: overlay `fixed inset-0 z-50 bg-ink/40 p-4` + card `bg-card rounded-2xl shadow-lg max-w-sm p-5`, `role="dialog" aria-modal` + `aria-labelledby` (useId), đóng bằng Esc + click overlay (check `e.target === e.currentTarget`), focus vào dialog khi mở (trả về trigger khi đóng), focus trap (Tab wrap), khoá scroll body, `disableDismiss` chặn mọi đường đóng khi chờ API
+- `shared/ui/ConfirmDialog.tsx` (mới) — title + message + hàng 2 nút flex-1 (Huỷ=secondary, confirm=primary|`danger`), `loading` → cả 2 disable + spinner, truyền `disableDismiss={loading}`
+- `index.css` — `--animate-fade-in` + `--animate-modal-in` (150ms) vào block `@theme` (Tailwind v4)
+- `HistoryPage` — `deleteTarget: Expense | null`; 🗑 → mở dialog; đóng trong `finally` **guard theo id** (`setDeleteTarget(t => t?.id === expense.id ? null : t)` + tương tự `deletingId`) tránh race giữa 2 lần mở
+- `MePage` — đăng xuất qua dialog (danger); bỏ fallback `window.prompt` (clipboard fail → do nothing, mã mời hiển thị sẵn trong card)
+- **Tests 15 mới + 5 cập nhật** (web 118 → 133): `Modal`(8: render/aria, không render khi đóng, click overlay vs thân, Esc, khoá scroll, **Tab-wrap kể cả focus ở container** (MEDIUM review), **trả focus về trigger**, disableDismiss) · `ConfirmDialog`(4: render, onConfirm/onCancel, danger/primary, loading) · `HistoryPage`(+2: API fail → dialog đóng + banner + khoản còn, Esc → không gọi API) · `MePage`(+1: clipboard fail → không prompt, không "Đã copy", mã vẫn hiện)
+- **Verified browser thật** (dev server, tài khoản test): modal đăng xuất (role/aria-modal/danger/overlay/body-lock; đóng bằng Esc + Huỷ; mở lại OK) · tạo khoản 50.000 Ăn uống → History → dialog `Xoá khoản "Ăn uống" (50.000 ₫)?` → bấm Xoá → khoản xoá + dialog đóng, không lỗi
+- **Review** (agent riêng): DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · 1 MEDIUM (focus ban đầu ở container `tabIndex=-1` → Tab văng ra ngoài modal; bẫy: **`Node.contains()` trả true cho chính node** nên guard `!contains(activeElement)` không khớp → fix: check "active không nằm trong danh sách focusable của dialog" rồi kéo về first/last) · LOW đã fix: `disableDismiss` khi loading, race `finally` (guard id), bỏ `stopPropagation` no-op, bổ sung test Tab-wrap + focus-restore; LOW chấp nhận: drag-select từ card ra overlay (edge hiếm)
+- **Kết quả**: unit web **133/133** (api 60 + shared 4 không đổi), lint + build xanh; commit `22f9471` (9 file) push `develop`
+
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
 - **`features/expenses/haptic.ts`** — `haptic(pattern)`: `navigator.vibrate` (no-op trên desktop) — rung khi chạm phím số/danh mục/nút Lưu
@@ -221,10 +235,11 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 24/09/2026)
-- `develop` = `906d576` (skeleton loading) — **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git); `main` = `f6bae94` (release v1.0, chờ PR kế tiếp nếu user muốn)
-- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `906d576` (skeleton + no-flicker)
+- `develop` = `22f9471` (modal xác nhận) — **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git); `main` = `f6bae94` (release v1.0, chờ PR kế tiếp nếu user muốn)
+- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog)
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
+- Baseline test hiện tại: **web 133** · api 60 · shared 4
 
 ## Đang làm
 - (không) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**; keep-warm đã chuyển xong sang UptimeRobot (monitor ping 5 phút xanh đều + cảnh báo down)
@@ -259,9 +274,9 @@ Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gố
 - **jsdom không có IndexedDB** — test db/syncQueue/readCache mock `core/db` (vi.hoisted Map) hoặc stub fake IDB (xem `__tests__/db.test.ts` — fake đủ dùng: open/createObjectStore/transaction/put/get/getAll/delete)
 - **jsdom chặn form submit** khi có input `required` rỗng → field validate bằng JS thì không dùng `required`
 - **recharts 3 + tab ẩn**: shape (sector/bar) rỗng do rAF không chạy trong tab hidden (Review pane) — **artifact môi trường, không phải bug**; shim `requestAnimationFrame = setTimeout(cb,16)` để verify; tab visible render bình thường
-- **Dev server** (đang chạy background bằng `pnpm dev`, session WBS 14): api :3001 · web dev :5173 · **preview PWA :4173** (build + SW + proxy API — chỉ khi chạy `vite preview` sau build)
+- **Dev server** (đang **TẮT** sau task modal 24/09 — user chạy `pnpm dev` khi cần): api :3001 · web dev :5173 · **preview PWA :4173** (build + SW + proxy API — chỉ khi chạy `vite preview` sau build)
 - **E2E (Playwright)**: `pnpm test:e2e` (root) — tự bật API :3101 + `e2e.db` (reset mỗi lần) + web :5199 (proxy qua `VITE_API_PROXY_TARGET`), không đụng dev :3001/dev.db. Chromium đã cài sẵn máy
-- **Test account dev DB**: final@test.com / `MatKhau123!` (family "Nhà Final", owner, name "User Final"); còn smoke@test.com, smoke2, smoke3 (cùng mật khẩu). Nhà Final hiện **0 khoản chi**
+- **Test account dev DB**: final@test.com / `MatKhau123!` (family "Nhà Final", owner, name "User Final"); còn smoke@test.com, smoke2, smoke3 (cùng mật khẩu); `sk-muf01glb@test.com` (family "Nhà Skeleton" — tạo khi verify skeleton, 0 khoản chi)
 - **Windows**: `del`/`node -e` path absolute hay lỗi quote (cmd) → viết file `.cjs` tạm rồi `node <file>`; findstr quote cũng hay hỏng → để output nguyên, grep tay
 - **Browser tool**: gọi qua Code Mode (`tools.browser["tabs.open"]`...), không gọi trực tiếp; `browser.screenshot` fail "needs a visible tab" → verify bằng `browser.evaluate`; input id tiếng Việt (VD `input-số-tiền`) hay lệch normalization khi truyền qua script → chọn input bằng `inputMode`/vị trí; click `a[href="/add"]` để SPA nav (giữ state page)
 
