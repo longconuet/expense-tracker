@@ -3,6 +3,8 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
+## Cập nhật: 24/09/2026 — **Skeleton loading Home/History/Stats + refetch không flicker** (commit `906d576` trên `develop`, đã push): 13 test mới, web unit 118/118 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: silent refetch History chỉ khi page 1). **Keep-warm cron**: ~70 phút sau khi bật vẫn 0 run (workflow active, đúng nhánh default, file đúng) — nghi scheduler GitHub (best-effort); việc còn lại: theo dõi run kế tiếp hoặc user bấm "Run workflow" tay để test job
+
 ## Cập nhật: 23/09/2026 — **TẤT CẢ 5 PHASE DEPLOY XONG ✅**: CI/CD GitHub Actions chạy thật (test → migrate Supabase → vercel deploy --prod) — production sau CD **verify 9/9** (`P5_FINAL_VERIFY_ALL_PASS`) — app lên production `https://expense-tracker-py2qaofkm-long-7bf1.vercel.app`
 
 > Trước đó (cùng ngày): Phase 3 XONG (deployment Vercel xanh, verify thật) · WBS 14 hoàn tất — toàn bộ 14 WBS + guide deploy xong.
@@ -139,6 +141,22 @@
 - **Docs**: `deploy-vercel.md` §3.2 (regions trong config + bẫy region) + 2 dòng Troubleshooting mới (API chậm do region, cold start)
 - **Tiếp theo (tuỳ chọn)**: custom domain → cập nhật URL trong `keep-warm.yml` · Vercel Speed Insights nếu muốn giám sát liên tục
 
+### Chi tiết Skeleton loading (24/09/2026)
+- **Yêu cầu**: thay spinner bằng skeleton loading hiện đại hơn trên mobile (user duyệt spec trước khi code)
+- `shared/ui/Skeleton.tsx` (mới) — primitive khối pulse `animate-pulse rounded-lg bg-ink/10` (token theme → tự đúng light/dark), `aria-hidden`; container màn hình chịu `role="status" aria-label="Đang tải"`
+- `features/home/HomeSkeleton.tsx` · `features/stats/StatsSkeleton.tsx` · `features/history/HistorySkeleton.tsx` — mô phỏng card thật (chiều cao khớp layout để data về không giật); phần không phụ thuộc data (tiêu đề, tháng, selector, chip lọc) do page giữ, **luôn hiện thật**
+- **Chống flicker — refetch lặng lẽ** (core của task): mỗi page theo dõi `lastQuery` (key `familyId|month[|categoryId]`) + `lastOk` (useRef, set trong `.then` có guard `cancelled`); query không đổi + lần fetch trước OK (VD sau `SYNCED_EVENT` offline sync) → **GIỮ data cũ, không reset** → không skeleton giữa chừng. Đổi query → reset + skeleton
+- **History thêm điều kiện page 1** (fix MEDIUM từ review agent): đã "Tải thêm" (page > 1) thì refetch sẽ co list về trang đầu → không silent, hiện skeleton làm tín hiệu. Đọc `meta` qua `metaRef` (pattern ref-giá-trị-mới-nhất, tránh thêm vào deps — page đổi khi load-more không được trigger refetch)
+- **Home**: lỗi khi đã có data (refetch ngầm fail) → giữ data + banner `role="alert"`; lỗi lần tải đầu → màn lỗi như cũ
+- Không đổi: Button loading, FullPageSpinner, Suspense fallback, Add/EditPage
+- **Tests 13 mới** (web 105 → 118): `Skeleton`(2) · mỗi page: skeleton lần tải đầu (không spinner) · đổi query → skeleton lại · sync → refetch lặng lẽ giữ data · `Stats`+`History`+`Home`: refetch ngầm lỗi có data → giữ data + banner
+- **Verified browser thật** (dev server + wrap `fetch` delay 5s API data): Home h1+tháng thật + 23 khối pulse · Stats selector thật + 9 khối · History chip thật + 20 khối · **0 spinner**; dispatch `SYNCED_EVENT` khi đang có data → data giữ nguyên, không skeleton
+- **Bẫy gặp**: skeleton chứa h1 trùng content → React remount cây khi data về → node h1 mà `findByRole` đã tìm bị detached (test fail "element could not be found") → **khắc phục: h1 + tháng thuộc về page (luôn render), skeleton chỉ chứa vùng data**
+- **Bẫy 2 (môi trường)**: `tsx watch` (API dev) watch luôn `node_modules/.prisma/client/*` → `prisma generate` trong `pnpm build` viết file → tsx restart API → giữ lock DLL → **EPERM rename** build fail. Fix: tắt dev server trước khi build (không cần fix config — chỉ xảy ra khi dev + build song song)
+- **Bẫy 3 (format)**: repo KHÔNG có `.prettierrc`/`.gitattributes` — `pnpm format` (prettier default `endOfLine: "lf"`) đã reformat 37 file không liên quan → đã **revert**; chỉ 11 file task nằm trong commit. Nếu muốn format toàn repo → làm 1 commit `style:` riêng sau khi user duyệt
+- **Review** (agent riêng): DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · 1 MEDIUM (load-more reset im lặng — đã fix) · 3 LOW (class `rounded-lg`/`rounded-full` trong Skeleton phụ thuộc thứ tự Tailwind — chấp nhận; indentation — đã chạy prettier cho file task; 2 test edge thiếu — đã bổ sung 2)
+- **Kết quả**: unit web **118/118** (api 60 + shared 4 không đổi), lint + build xanh; commit `906d576` (11 file) push `develop`
+
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
 - **`features/expenses/haptic.ts`** — `haptic(pattern)`: `navigator.vibrate` (no-op trên desktop) — rung khi chạm phím số/danh mục/nút Lưu
@@ -202,27 +220,15 @@
 - **Sửa khoản offline**: `PUT /expenses/:id` khi server không đạt → hiện lỗi (chưa có queue cho edit — queue chỉ support create)
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
-## Trạng thái Git (cập nhật 23/09/2026)
-- 14 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
-  - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
-  - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
-  - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
-  - (WBS 10) — `feat: WBS 10 — Home/History nhóm theo ngày có tiểu kết + màn sửa khoản chi` — xem `git log --oneline`
-  - (WBS 13) — `feat: WBS 13 — E2E Playwright (auth, khoản chi, offline) + fix sync lúc khởi động` — xem `git log --oneline`
-  - (WBS 14) — `feat: WBS 14 — Polish (lazy StatsPage) + README hướng dẫn local + deploy guide (Docker self-host đã test, Vercel/Supabase)` — xem `git log --oneline`
-  - (post-WBS) — `feat: chuẩn bị deploy Vercel + Supabase — vercel.json + entry serverless + workflows CI/CD + hướng dẫn 5 phase`
-  - (post-WBS) — `refactor: Phase 1 — chuyển toàn bộ project từ SQLite sang PostgreSQL (schema, dev/test/e2e DB, self-host compose) + docs`
-  - (post-WBS) — `docs: Phase 2 — verify kết nối Supabase (connection string working + bẫy DNS/pgbouncer)` — xem `git log --oneline`
-  - (post-WBS) — `fix: Phase 3 — Vercel deployment (shared build sang dist + vercel.json outputDirectory/functions)`
-  - (post-WBS) — `fix: Phase 3 — prisma generate trước tsc trong build API (cloud build không có client sẵn)`
-  - (post-WBS) — `fix: Phase 3 — deploy Vercel xanh: rewrite /api/* + api/package.json ESM + postinstall prisma generate`
-  - (post-WBS) — `fix: Phase 3 — DATABASE_URL thêm ?pgbouncer=true (pooler transaction mode)`
-  - (post-WBS) — `docs: Phase 3 XONG — guide đánh dấu ✅ + checkpoint verify production`
+## Trạng thái Git (cập nhật 24/09/2026)
+- `develop` = `906d576` (skeleton loading) — **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git); `main` = `f6bae94` (release v1.0, chờ PR kế tiếp nếu user muốn)
+- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `906d576` (skeleton + no-flicker)
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 
 ## Đang làm
-- (không) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**
+- **Keep-warm cron** (`keep-warm.yml`, từ `408e4b4`): ~70 phút sau khi bật (tính 04:15 UTC 24/09) vẫn **0 run** — đã verify: workflow state `active` · default branch = `develop` · file tồn tại trên remote develop. Kết luận: do scheduler GitHub (best-effort, có thể drop run đầu) — **chưa phải bug cấu hình**. Việc: theo dõi run kế tiếp (script `p5-kw-runs.cjs <GH_TOKEN>` trong temp opencode); nếu >1-2 giờ vẫn 0 → user bấm "Run workflow" tay (Actions tab) để test job, và cân nhắc phương án B (UptimeRobot free ping 5 phút) hoặc bỏ
+- (không có task code nào khác) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**
 
 ## Task kế tiếp: (không có WBS nào còn lại)
 Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gốc):
