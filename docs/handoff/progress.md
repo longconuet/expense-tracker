@@ -3,7 +3,7 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 24/09/2026 — **Skeleton loading Home/History/Stats + refetch không flicker** (commit `906d576` trên `develop`, đã push): 13 test mới, web unit 118/118 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: silent refetch History chỉ khi page 1). **Keep-warm cron**: ~70 phút sau khi bật vẫn 0 run (workflow active, đúng nhánh default, file đúng) — nghi scheduler GitHub (best-effort); việc còn lại: theo dõi run kế tiếp hoặc user bấm "Run workflow" tay để test job
+## Cập nhật: 24/09/2026 — **Skeleton loading Home/History/Stats + refetch không flicker** (commit `906d576` trên `develop`, đã push): 13 test mới, web unit 118/118 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: silent refetch History chỉ khi page 1). **Keep-warm cron**: run tay (workflow_dispatch) **XANH** — job OK; scheduler GitHub chưa tự fire (~80 phút, best-effort) → theo dõi run cron kế tiếp
 
 ## Cập nhật: 23/09/2026 — **TẤT CẢ 5 PHASE DEPLOY XONG ✅**: CI/CD GitHub Actions chạy thật (test → migrate Supabase → vercel deploy --prod) — production sau CD **verify 9/9** (`P5_FINAL_VERIFY_ALL_PASS`) — app lên production `https://expense-tracker-py2qaofkm-long-7bf1.vercel.app`
 
@@ -227,7 +227,7 @@
 - Working tree clean
 
 ## Đang làm
-- **Keep-warm cron** (`keep-warm.yml`, từ `408e4b4`): ~70 phút sau khi bật (tính 04:15 UTC 24/09) vẫn **0 run** — đã verify: workflow state `active` · default branch = `develop` · file tồn tại trên remote develop. Kết luận: do scheduler GitHub (best-effort, có thể drop run đầu) — **chưa phải bug cấu hình**. Việc: theo dõi run kế tiếp (script `p5-kw-runs.cjs <GH_TOKEN>` trong temp opencode); nếu >1-2 giờ vẫn 0 → user bấm "Run workflow" tay (Actions tab) để test job, và cân nhắc phương án B (UptimeRobot free ping 5 phút) hoặc bỏ
+- **Keep-warm cron** (`keep-warm.yml`, từ `408e4b4`): cấu hình đã verify đúng (workflow `active` · default branch `develop` · file trên remote). Cron scheduler GitHub chưa fire sau ~80 phút (best-effort, có thể drop run đầu). **06:23 UTC 24/09: user bấm "Run workflow" tay → run `workflow_dispatch` XANH (success)** → job + URL production OK, chỉ còn chờ scheduler tự chạy. Việc: kiểm tra run kế tiếp bằng `node p5-kw-runs.cjs <GH_TOKEN>` (script trong temp opencode, token GH hạn ~25/09 — tạo lại nếu hết); nếu sang ngày mai vẫn 0 run cron → quyết định: phương án B (UptimeRobot free ping 5 phút) hoặc C (chấp nhận cold start 1-2s sau khi app idle >15 phút — request đầu mỗi sáng)
 - (không có task code nào khác) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**
 
 ## Task kế tiếp: (không có WBS nào còn lại)
