@@ -14,9 +14,11 @@ import { Keypad, type KeypadKey } from "./Keypad";
 
 /**
  * Màn nhập khoản chi nhanh (WBS 9): full-screen, số tiền gõ bằng
- * **keypad số to 64px+** (không dùng bàn phím hệ thống), danh mục cuộn
+ * **keypad số** (không dùng bàn phím hệ thống), danh mục cuộn
  * ngang viên tròn to, ngày mặc định hôm nay (chạm để đổi), "Lưu" sáng
  * lên khi đủ số + danh mục, haptic khi chạm phím/nút.
+ * Keypad (size md 56px) đặt trên khu vực ngày + ghi chú để mobile
+ * nhập số tiện — không phải cuộn xuống.
  */
 
 const MAX_AMOUNT_DIGITS = 9; // 999.999.999 ₫
@@ -189,6 +191,12 @@ export default function AddPage() {
         </div>
       </div>
 
+      {/* Keypad ngay dưới danh mục (trên khu vực ngày + ghi chú) —
+          mobile không phải cuộn để thấy cả bàn phím, size md (56px). */}
+      <div className="mt-4">
+        <Keypad onKey={pressKey} disabled={submitting} size="md" />
+      </div>
+
       <Card className="mt-4">
         <Input label="Ngày" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
         <div className="mt-4">
@@ -208,10 +216,6 @@ export default function AddPage() {
           {formError}
         </p>
       ) : null}
-
-      <div className="mt-4">
-        <Keypad onKey={pressKey} disabled={submitting} />
-      </div>
 
       <Button
         size="lg"
