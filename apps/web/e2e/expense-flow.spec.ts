@@ -96,6 +96,29 @@ test.describe("Luồng khoản chi: keypad → trang chủ → lịch sử → s
     // Assert
     await expect(page.getByText("Chưa có khoản chi tháng này")).toBeVisible();
   });
+
+  test("gõ số tiền → khung gợi ý cố định: vị trí danh mục không đổi (không nhảy layout)", async ({
+    page,
+  }) => {
+    // Arrange — màn /add, số tiền trống (chưa có gợi ý)
+    await page.goto("/add");
+    const categoryRow = page.getByRole("group", { name: "Danh mục chi tiêu" });
+    await expect(categoryRow).toBeVisible(); // chờ qua Spinner (categories tải xong)
+    const yBefore = (await categoryRow.boundingBox())?.y;
+    expect(yBefore).toBeDefined();
+
+    // Act — gõ 1 chữ số → chip gợi ý hiện ra
+    await page
+      .getByRole("group", { name: "Bàn phím số" })
+      .getByRole("button", { name: "2", exact: true })
+      .click();
+    await expect(page.getByRole("button", { name: "Gợi ý 2.000 ₫" })).toBeVisible();
+
+    // Assert — chiều cao khối gợi ý cố định → vị trí danh mục không dịch chuyển
+    const yAfter = (await categoryRow.boundingBox())?.y;
+    expect(yAfter).toBeDefined();
+    expect(Math.abs(yAfter! - yBefore!)).toBeLessThan(1);
+  });
 });
 
 test.describe("Lịch sử: lọc theo thành viên (E2E)", () => {

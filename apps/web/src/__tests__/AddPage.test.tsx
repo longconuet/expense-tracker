@@ -142,6 +142,23 @@ describe("Màn thêm khoản chi (keypad)", () => {
     expect(chips.querySelectorAll("button")).toHaveLength(1);
   });
 
+  it("khung gợi ý giữ chiều cao cố định — không nhảy layout khi ẩn/hiện gợi ý", async () => {
+    // Arrange
+    renderAdd();
+    await screen.findByRole("button", { name: "Ăn uống" });
+
+    // Act — lúc đầu (chưa có số tiền): khung gợi ý vẫn tồn tại, rỗng
+    const frame = screen.getByTestId("suggestions-frame");
+    expect(screen.queryByRole("group", { name: "Gợi ý số tiền" })).not.toBeInTheDocument();
+
+    // Act — gõ 1 chữ số: gợi ý hiện vào CÙNG khung đó (chiều cao không đổi)
+    fireEvent.click(screen.getByRole("button", { name: "2" }));
+
+    // Assert — cùng 1 node DOM, giờ chứa nhóm gợi ý
+    expect(screen.getByTestId("suggestions-frame")).toBe(frame);
+    expect(frame).toContainElement(screen.getByRole("group", { name: "Gợi ý số tiền" }));
+  });
+
   it("nút C trên keypad → xoá toàn bộ số tiền, gợi ý biến mất", async () => {
     // Arrange + Act
     renderAdd();
