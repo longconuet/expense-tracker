@@ -58,4 +58,16 @@
   body {
     @apply antialiased bg-surface text-ink;
   }
+
+  /* iOS/Safari: ô date native có chiều cao + hộp nền riêng bên trong →
+     iPhone bị lệch/vỡ layout so với ô text trong cùng Card. Chuẩn hoá để
+     render như input thường (padding/chiều cao/bo góc/nền do component
+     Input kiểm soát); chạm vẫn mở date picker như bình thường, icon
+     calendar ở Chromium không bị ảnh hưởng. (Đã verify WebKit + Chromium,
+     viewport 390px, light + dark.) */
+  input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-height: 0;
+  }
 }
