@@ -3,6 +3,8 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
+## Cập nhật: 24/09/2026 — **Bình đẳng hoá danh mục — bỏ khoá preset** (commit `1c7003d` trên `develop`, đã push): preset giờ sửa/xoá được như danh mục thường (bỏ guard PRESET_LOCKED API + nhãn "Danh mục mặc định" + ẩn nút FE), `isPreset` chỉ còn ghi nhận nguồn gốc khởi tạo, api 61/61 + web 151/151 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (0 CRITICAL/HIGH, 4 LOW đã xử lý 3 — 1 issue có sẵn deferred: PUT không pre-check trùng tên → P2002 500)
+
 ## Cập nhật: 24/09/2026 — **Quản lý danh mục chi tiêu** (2 commit `d6880dd` + `0c33ae9` trên `develop`, đã push): trang `/categories` (thêm/sửa/xoá/đổi thứ tự, emoji picker, preset khoá), web unit 151/151 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: guard `activeFamilyId` cho refetchSilent), verified browser thật đủ 5 luồng
 
 ## Cập nhật: 24/09/2026 — **Modal xác nhận đồng nhất UI thay thế window.confirm** (commit `22f9471` trên `develop`, đã push): 15 test mới + 5 cập nhật, web unit 133/133 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix 1 MEDIUM focus-trap + 3 LOW), verified browser thật (mở/xoá/đóng/đăng xuất modal)
@@ -161,6 +163,16 @@
 - **Review** (agent riêng): DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · 1 MEDIUM (load-more reset im lặng — đã fix) · 3 LOW (class `rounded-lg`/`rounded-full` trong Skeleton phụ thuộc thứ tự Tailwind — chấp nhận; indentation — đã chạy prettier cho file task; 2 test edge thiếu — đã bổ sung 2)
 - **Kết quả**: unit web **118/118** (api 60 + shared 4 không đổi), lint + build xanh; commit `906d576` (11 file) push `develop`
 
+### Chi tiết Bình đẳng hoá danh mục — bỏ khoá preset (24/09/2026)
+- **Yêu cầu user**: bỏ nhãn "Danh mục mặc định" khỏi bảng, không phân biệt preset/tự tạo ở UI — **preset sửa/xoá được bình đẳng** như danh mục thường. "Mặc định" chỉ còn nghĩa: 7 danh mục tạo tự động khi lập family mới
+- **API** (`category.routes.ts`): xoá guard `PRESET_LOCKED` ở PUT (preset giờ đổi được name/icon/order) và DELETE (preset giờ xoá được) — guard duy nhất còn lại cho mọi danh mục: 409 `CATEGORY_IN_USE` khi đang có khoản chi · 404 `CATEGORY_NOT_FOUND`
+- **Giữ field `isPreset`** (schema + type shared + response): chỉ còn ghi nhận nguồn gốc, không có hành vi riêng — KHÔNG cần migration (reviewer đồng ý defer việc xoá field → task riêng nếu cần)
+- **FE**: `CategoriesPage` bỏ nhãn + bỏ điều kiện `!category.isPreset &&` ở nút sửa/xoá → mọi hàng đủ 4 nút (↑ ↓ ✏️ 🗑) · `CategoriesSkeleton` bỏ 1 dòng (từng mô phỏng nhãn) · comment `dataApi.updateCategory`/`deleteCategory` cập nhật · JSDoc `Category.isPreset` (shared): "chỉ ghi nhận nguồn gốc"
+- **Tests**: API — 2 test viết lại (preset sửa 200, preset xoá 200) + 1 mới (preset **đang có khoản chi** → 409 CATEGORY_IN_USE, ghim guard duy nhất còn lại) · FE — test render viết lại (mọi hàng đủ 4 nút, `queryAllByText("Danh mục mặc định")` = 0) · **api 61/61, web 151/151** (full 215+1=216/216 với shared 4), lint + build xanh
+- **Verified browser thật** (dev DB "Nhà Skeleton"): 7 hàng đều đủ 4 nút, không nhãn mặc định · **rename preset** "Ăn uống" → "Ăn uống & giải khát" OK (trước đây 403) · **xoá preset** "Khác" OK (trước đây 403) → sau đó khôi phục DB (đổi tên lại + thêm "Khác" 📦)
+- **Review** (agent riêng): DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · LOW đã xử lý: comment lỗi thời `deleteCategory` · test 409 xoá preset · plan.md "preset khoá" → "bình đẳng" · JSDoc `isPreset` · **Issue có sẵn DEFERRED (ngoài scope)**: PUT không pre-check trùng tên trong family → Prisma P2002 → 500 INTERNAL_ERROR (trước đây đã reachable với danh mục tự tạo, task này chỉ mở rộng mặt kích hoạt) — muốn fix: pre-check như POST → 409 `CATEGORY_EXISTS`, hoặc map P2002 trong errorHandler
+- **Kết quả**: commit `1c7003d` push `develop`
+
 ### Chi tiết Quản lý danh mục chi tiêu (24/09/2026)
 - **Quyết định user**: mọi member được quản lý (không đổi API) · có reorder (nút lên/xuống) · trang riêng `/categories` (vào từ MePage)
 - **API đã sẵn từ Task 5** (không sửa): GET/POST/PUT/DELETE `/api/families/:id/categories` — model có `order` + `isPreset`; POST tên 2-30 unique trong family (409 CATEGORY_EXISTS) · PUT preset chỉ đổi được `order` (403 PRESET_LOCKED) · DELETE chặn preset + đang có khoản (409 CATEGORY_IN_USE)
@@ -249,11 +261,11 @@
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
 ## Trạng thái Git (cập nhật 24/09/2026)
-- `develop` = `0c33ae9` (màn quản lý danh mục) — **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git); `main` = `f6bae94` (release v1.0, chờ PR kế tiếp nếu user muốn)
-- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog) · `d6880dd` + `0c33ae9` (quản lý danh mục)
+- `develop` = `1c7003d` (bình đẳng hoá danh mục — bỏ khoá preset) — **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git); `main` = `f6bae94` (release v1.0, chờ PR kế tiếp nếu user muốn)
+- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog) · `d6880dd` + `0c33ae9` (quản lý danh mục) · `1c7003d` (bình đẳng hoá preset)
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
-- Baseline test hiện tại: **web 151** · api 60 · shared 4
+- Baseline test hiện tại: **web 151** · api 61 · shared 4
 
 ## Đang làm
 - (không) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**; keep-warm đã chuyển xong sang UptimeRobot (monitor ping 5 phút xanh đều + cảnh báo down)
