@@ -172,6 +172,61 @@ describe("GET /api/families/:id/expenses — danh sách + lọc + phân trang", 
     );
   });
 
+  it("lọc theo date: chỉ trả khoản của đúng ngày đó (09-22 có 2 món, 09-21 có 1)", async () => {
+    const day22 = await request(app)
+      .get(`/api/families/${familyId}/expenses?date=2026-09-22`)
+      .set(auth(owner.token));
+    expect(day22.status).toBe(200);
+    expect(day22.body.data.expenses).toHaveLength(2);
+    expect(day22.body.data.expenses.every((e: { date: string }) => e.date === "2026-09-22")).toBe(true);
+    expect(day22.body.meta).toMatchObject({ page: 1, pageSize: 20, total: 2 });
+
+    const day21 = await request(app)
+      .get(`/api/families/${familyId}/expenses?date=2026-09-21`)
+      .set(auth(owner.token));
+    expect(day21.body.data.expenses).toHaveLength(1);
+    expect(day21.body.data.expenses[0].amount).toBe(30000);
+  });
+
+  it("date + categoryId kết hợp được; date không có khoản → trả rỗng (không lỗi)", async () => {
+    const combined = await request(app)
+      .get(`/api/families/${familyId}/expenses?date=2026-09-22&categoryId=${eatCategoryId}`)
+      .set(auth(owner.token));
+    expect(combined.status).toBe(200);
+    expect(combined.body.data.expenses).toHaveLength(2);
+
+    const empty = await request(app)
+      .get(`/api/families/${familyId}/expenses?date=2026-09-25`)
+      .set(auth(owner.token));
+    expect(empty.status).toBe(200);
+    expect(empty.body.data.expenses).toEqual([]);
+    expect(empty.body.meta.total).toBe(0);
+  });
+
+  it("date ưu tiên hơn month khi truyền cả hai", async () => {
+    const res = await request(app)
+      .get(`/api/families/${familyId}/expenses?month=2026-09&date=2026-09-20`)
+      .set(auth(owner.token));
+    expect(res.status).toBe(200);
+    expect(res.body.data.expenses).toHaveLength(1);
+    expect(res.body.data.expenses[0].date).toBe("2026-09-20");
+  });
+
+  it("date sai định dạng, không tồn tại hoặc truyền nhiều giá trị → 400 VALIDATION_ERROR", async () => {
+    for (const bad of ["2026-09-221", "2026/09/22", "2026-02-30", "2026-13-01"]) {
+      const res = await request(app).get(`/api/families/${familyId}/expenses?date=${bad}`).set(auth(owner.token));
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    }
+
+    // `date=a&date=b` → query thành array, không phải 1 string date hợp lệ
+    const multiRes = await request(app)
+      .get(`/api/families/${familyId}/expenses?date=2026-09-21&date=2026-09-22`)
+      .set(auth(owner.token));
+    expect(multiRes.status).toBe(400);
+    expect(multiRes.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("xếp theo date DESC, phân trang đúng", async () => {
     const p1 = await request(app)
       .get(`/api/families/${familyId}/expenses?month=2026-09&pageSize=2&page=1`)

@@ -1,6 +1,7 @@
 // Kiểu dữ liệu dùng chung giữa frontend và backend.
 
 export { formatVnd } from "./formatVnd.js";
+export { formatVndCompact } from "./formatVndCompact.js";
 
 // ---------------------------------------------------------------------------
 // Envelope API — mọi response REST đều có cấu trúc này

@@ -73,10 +73,10 @@ test.describe("Luồng khoản chi: keypad → trang chủ → lịch sử → s
     // Arrange
     await addExpense(page, "15000", "Mua sắm");
     await page.goto("/history");
-    page.on("dialog", (dialog) => dialog.accept());
 
-    // Act
+    // Act — bấm xoá → ConfirmDialog → xác nhận
     await page.getByRole("button", { name: /Xoá khoản/ }).click();
+    await page.getByRole("button", { name: "Xoá", exact: true }).click();
 
     // Assert
     await expect(page.getByText("Chưa có khoản chi tháng này")).toBeVisible();

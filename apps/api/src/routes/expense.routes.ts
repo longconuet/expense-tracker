@@ -119,18 +119,29 @@ expenseFamilyRouter.get("/", requireAuth, requireFamilyMember(), async (req, res
 
   const month = typeof req.query.month === "string" ? req.query.month : undefined;
   const categoryId = typeof req.query.categoryId === "string" ? req.query.categoryId : undefined;
+  const date = typeof req.query.date === "string" ? req.query.date : undefined;
   const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? "20"), 10) || 20));
 
   if (month && !MONTH_RE.test(month)) {
     throw new AppError(400, "VALIDATION_ERROR", "month phải có dạng YYYY-MM");
   }
+  if (date && !isValidDateStr(date)) {
+    throw new AppError(400, "VALIDATION_ERROR", "date phải có dạng YYYY-MM-DD và là ngày hợp lệ");
+  }
+  // `?date[]=...` (array/object) — từ chối rõ thay vì bỏ qua filter như tháng
+  if (req.query.date !== undefined && typeof req.query.date !== "string") {
+    throw new AppError(400, "VALIDATION_ERROR", "date phải có dạng YYYY-MM-DD và là ngày hợp lệ");
+  }
   if (categoryId) {
     await assertCategoryInFamily(familyId, categoryId);
   }
 
   const where: Prisma.ExpenseWhereInput = { familyId };
-  if (month) {
+  if (date) {
+    // Lọc đúng 1 ngày (VD popup chi tiết ngày từ lịch thống kê) — ưu tiên hơn month
+    where.date = date;
+  } else if (month) {
     where.date = { gte: `${month}-01`, lt: `${nextMonthStart(month)}-01` };
   }
   if (categoryId) {

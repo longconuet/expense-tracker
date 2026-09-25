@@ -83,6 +83,8 @@ export async function deleteCategory(familyId: string, categoryId: string): Prom
 
 export interface ExpenseListParams {
   month?: string;
+  /** Lọc đúng 1 ngày (YYYY-MM-DD) — ưu tiên hơn `month`. */
+  date?: string;
   categoryId?: string;
   page?: number;
   pageSize?: number;
@@ -99,6 +101,7 @@ export async function fetchExpenses(
 ): Promise<ExpenseListResult> {
   const query = new URLSearchParams();
   if (params.month) query.set("month", params.month);
+  if (params.date) query.set("date", params.date);
   if (params.categoryId) query.set("categoryId", params.categoryId);
   if (params.page) query.set("page", String(params.page));
   if (params.pageSize) query.set("pageSize", String(params.pageSize));
