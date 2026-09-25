@@ -3,6 +3,8 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
+## Cập nhật: 25/09/2026 — **Đăng nhập bằng username thay cho email** (commit `3655604` trên `develop`, đã push): username 2-20 ký tự `a-z 0-9 . _` (unique, tự lowercase) là định danh login, email nullable chỉ ghi nhận nguồn gốc — migration backfill từ phần trước `@` email cũ (trùng → hậu tố `_2`), api 61/61 + web 154/154 pass (219/219), review agent "DUYỆT" (0 CRITICAL/HIGH, 5 LOW: 2 fix luôn + 3 deferred), verified browser thật đủ 8 luồng (login backfill, register, 409 dưới ô, 401 message chung, MePage)
+
 ## Cập nhật: 24/09/2026 — **Bình đẳng hoá danh mục — bỏ khoá preset** (commit `1c7003d` trên `develop`, đã push): preset giờ sửa/xoá được như danh mục thường (bỏ guard PRESET_LOCKED API + nhãn "Danh mục mặc định" + ẩn nút FE), `isPreset` chỉ còn ghi nhận nguồn gốc khởi tạo, api 61/61 + web 151/151 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (0 CRITICAL/HIGH, 4 LOW đã xử lý 3 — 1 issue có sẵn deferred: PUT không pre-check trùng tên → P2002 500)
 
 ## Cập nhật: 24/09/2026 — **Quản lý danh mục chi tiêu** (2 commit `d6880dd` + `0c33ae9` trên `develop`, đã push): trang `/categories` (thêm/sửa/xoá/đổi thứ tự, emoji picker, preset khoá), web unit 151/151 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: guard `activeFamilyId` cho refetchSilent), verified browser thật đủ 5 luồng
@@ -147,6 +149,16 @@
 - **Docs**: `deploy-vercel.md` §3.2 (regions trong config + bẫy region) + 2 dòng Troubleshooting mới (API chậm do region, cold start)
 - **Tiếp theo (tuỳ chọn)**: custom domain → cập nhật URL ở **monitor UptimeRobot** + `docs` (keep-warm.yml đã xoá 24/09 — scheduler GitHub không tự fire, UptimeRobot thay thế) · Vercel Speed Insights nếu muốn giám sát liên tục
 
+### Chi tiết Đăng nhập bằng username thay cho email (25/09/2026)
+- **Quyết định user** (spec duyệt, 4 điểm chốt): username 2-20 ký tự `a-z 0-9 . _` bắt đầu/kết thúc bằng chữ hoặc số, tự lowercase · tài khoản cũ tự sinh username từ phần trước `@` email trong migration (trùng → hậu tố `_2`, `_3`) · cột email **giữ trong DB, chuyển nullable**, bỏ khỏi UI/API (user mới email = NULL) · **không** làm tính năng đổi username sau (YAGNI)
+- **Schema + migration**: `User` thêm `username String @unique`, `email String? @unique`; migration `20260925120000_add_username` (SQL custom viết tay): ADD COLUMN nullable → backfill `regexp_replace(split_part(email,'@',1), '[^a-z0-9._]','_','g')` + trim `._` đầu/cuối + fallback `user`+8 ký tự id nếu <2 ký tự → dedup `ROW_NUMBER() OVER (PARTITION BY username)` + hậu tố `_<rn>` → `SET NOT NULL` + `CREATE UNIQUE INDEX "User_username_key"` → email `DROP NOT NULL`. Đã apply dev DB + verify backfill (`final@test.com`→`final`, `sk-muf01glb@test.com`→`sk_muf01glb`)
+- **API** (`auth.routes.ts`): register `{name, username, password}` → 409 `USERNAME_TAKEN` · login `{username, password}` → 401 `INVALID_CREDENTIALS` "Tên đăng nhập hoặc mật khẩu không đúng" (1 message chung cho sai pass + không tồn tại — chống enumeration) · zod `usernameField` = trim + lowercase + regex `/^[a-z0-9][a-z0-9._]{0,18}[a-z0-9]$/` · `publicUser` → `{id, name, username}` · `me.routes.ts` /me trả username
+- **FE**: `authStore` login/register theo username · `LoginPage` ô "Tên đăng nhập" (`type=text`, `autocomplete=username`, placeholder `an2310`) · `RegisterPage` ô username + hint "2-20 ký tự: chữ thường, số, dấu . _" + **`usernameError` 409 hiện ngay dưới ô** (Input `error` prop, tự reset khi gõ lại) · `MePage` hàng email → username · `AppShell` tooltip username
+- **Tests**: `auth.test.ts` viết lại (register 201 shape, 409 khác hoa thường/thừa khoảng trắng, 400 validate 3 field, login 200/401 sai pass/401 không tồn tại, /me username, refresh/logout) · helper + call sites `family`/`expense`/`stats`/`category` test đổi sang username (bẫy: username **không có dấu gạch** — giá trị test ban đầu `fam-owner`… sai rule, sửa về `fam_owner`…) · fixtures FE `MOCK_USER`/`USER` các page + `api.test` body + `LoginPage.test` (placeholder/payload/401) · **`RegisterPage.test.tsx` MỚI** (3 test: payload không email, 409 dưới ô, reset lỗi khi gõ lại) · E2E `helpers.ts` (`e2e_<token>`, label "Tên đăng nhập") + `auth.spec.ts` (message 401 mới) · `seed.ts` upsert theo username `test_user`
+- **Verified browser thật** (dev server): form login đúng label/autocomplete · login `sk_muf01glb` (backfill) OK → home · MePage name + username (không email) · register `test_verify_9x` mới → onboarding · 409 trùng → "Tên đăng nhập đã được sử dụng" **ngay dưới ô** · sai pass → 401 · username không tồn tại (hợp lệ) → 401 **cùng message** · response user `{id, name, username}`
+- **Review** (agent riêng): DUYỆT — 0 CRITICAL/HIGH · LOW đã fix: message cosmetic `api.test.ts` · thiếu test reset `usernameError` (đã thêm) · LOW deferred (xem "Issue deferred")
+- **Kết quả**: full suite **219/219** (web 154, api 61, shared 4), lint + build xanh; commit `3655604` push `develop` (CD migrate prod + deploy — thiết bị đã đăng nhập giữ phiên, token JWT theo userId)
+
 ### Chi tiết Skeleton loading (24/09/2026)
 - **Yêu cầu**: thay spinner bằng skeleton loading hiện đại hơn trên mobile (user duyệt spec trước khi code)
 - `shared/ui/Skeleton.tsx` (mới) — primitive khối pulse `animate-pulse rounded-lg bg-ink/10` (token theme → tự đúng light/dark), `aria-hidden`; container màn hình chịu `role="status" aria-label="Đang tải"`
@@ -260,12 +272,12 @@
 - **Sửa khoản offline**: `PUT /expenses/:id` khi server không đạt → hiện lỗi (chưa có queue cho edit — queue chỉ support create)
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
-## Trạng thái Git (cập nhật 24/09/2026)
-- `develop` = `1c7003d` (bình đẳng hoá danh mục — bỏ khoá preset) — **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git); `main` = `f6bae94` (release v1.0, chờ PR kế tiếp nếu user muốn)
-- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog) · `d6880dd` + `0c33ae9` (quản lý danh mục) · `1c7003d` (bình đẳng hoá preset)
+## Trạng thái Git (cập nhật 25/09/2026)
+- `develop` = `3655604` (đăng nhập bằng username thay cho email) — **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git); `main` = `f6bae94` (release v1.0, chờ PR kế tiếp nếu user muốn)
+- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog) · `d6880dd` + `0c33ae9` (quản lý danh mục) · `1c7003d` (bình đẳng hoá preset) · `3655604` (username thay email)
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
-- Baseline test hiện tại: **web 151** · api 61 · shared 4
+- Baseline test hiện tại: **web 154** · api 61 · shared 4 (tổng 219)
 
 ## Đang làm
 - (không) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**; keep-warm đã chuyển xong sang UptimeRobot (monitor ping 5 phút xanh đều + cảnh báo down)
@@ -282,12 +294,19 @@ Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gố
 - Access token: in-memory; chỉ persist `activeFamilyId` (key `etracker-auth`)
 - Category mặc định: Ăn uống 🍜 · Đi lại 🚗 · Gia đình ⚡ · Sức khỏe 💊 · Vui chơi 🎬 · Mua sắm 🛒 · Khác 📦
 - Quyền sửa/xoá khoản chi: người tạo + owner (API enforce; FE chỉ hiện nút khi `owner || createdByName === user.name`)
-- Auth: JWT access (in-memory FE) + refresh cookie httpOnly, rotation, stateless
+- Auth: JWT access (in-memory FE) + refresh cookie httpOnly, rotation, stateless — token theo `userId`, không phụ thuộc username/email (đổi định danh không phá phiên)
+- **Đăng nhập bằng username** (25/09): username 2-20 ký tự `a-z 0-9 . _` bắt đầu/kết thúc bằng chữ hoặc số, tự lowercase, unique — định danh login duy nhất; email nullable chỉ ghi nhận nguồn gốc (backfill từ phần trước @ của email cũ); không có tính năng đổi username sau (YAGNI)
 - DB: SQLite dev → PostgreSQL prod (Prisma 6.19)
 - API envelope: `{ success, data, error, meta }`
 - **Offline (Task 12)**: ghi offline trigger = `ApiError` status 0 (mạng) hoặc ≥ 500 (5xx); 4xx **không** bao giờ ghi offline / fallback cache. Read cache = stale-while-error, không TTL. Sync trigger = khởi động app + event `online` + interval 30s khi còn khoản chờ. IndexedDB DB `etracker-offline` (stores `expenses`, `cache`)
 - **Icon PWA**: sinh bằng `scripts/generate-icons.mjs` (chạy lại nếu đổi design: donut trắng trên nền teal), file PNG commit vào repo
 - Commit: Conventional Commits, thẳng `develop`, 1 task = 1 commit; remote `origin` = https://github.com/longconuet/expense-tracker.git
+
+## Issue deferred (không chặn — làm khi cần)
+- **Map Prisma P2002 trong `errorHandler`** (lấp chung 2 case): (1) PUT category đổi tên trùng trong family → 500 thay vì 409 (có sẵn từ task quản lý danh mục); (2) race register: `findUnique` + `create` không nguyên tử, 2 request trùng username song song → P2002 → 500 thay vì 409 (unique index vẫn chặn vỡ dữ liệu). Fix: map `code === "P2002"` → 409 code thích hợp, hoặc pre-check như POST category
+- **Rate limit `/api/auth/*`** (brute force): chưa có; username ngắn dễ đoán hơn email — follow-up `express-rate-limit`. (Side-channel timing nhỏ khi user không tồn tại — bỏ qua)
+- **Reorder 2 PUT song song** (task quản lý danh mục): partial-failure → order trùng; cần endpoint swap hoặc `@@unique([familyId, order])` phía API
+- **Migration backfill edge pathological**: 2 email trùng prefix + user thứ 3 đã có sẵn username đúng bằng hậu tố (VD `a@x`, `a@y`, `a_2@z`) → unique index fail khi migrate (rollback sạch, không nửa vời) — gần như không thể xảy ra với quy mô app
 
 ## Ghi chú kỹ thuật (môi trường)
 - Node 24, pnpm 12.5.1, git 2.55 (nhánh `develop` tracking `origin/develop` trên GitHub)
@@ -300,15 +319,16 @@ Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gố
 - **jsdom không có IndexedDB** — test db/syncQueue/readCache mock `core/db` (vi.hoisted Map) hoặc stub fake IDB (xem `__tests__/db.test.ts` — fake đủ dùng: open/createObjectStore/transaction/put/get/getAll/delete)
 - **jsdom chặn form submit** khi có input `required` rỗng → field validate bằng JS thì không dùng `required`
 - **recharts 3 + tab ẩn**: shape (sector/bar) rỗng do rAF không chạy trong tab hidden (Review pane) — **artifact môi trường, không phải bug**; shim `requestAnimationFrame = setTimeout(cb,16)` để verify; tab visible render bình thường
-- **Dev server** (đang **TẮT** sau task modal 24/09 — user chạy `pnpm dev` khi cần): api :3001 · web dev :5173 · **preview PWA :4173** (build + SW + proxy API — chỉ khi chạy `vite preview` sau build)
+- **Dev server** (đang **TẮT** sau task username 25/09 — user chạy `pnpm dev` khi cần): api :3001 · web dev :5173 · **preview PWA :4173** (build + SW + proxy API — chỉ khi chạy `vite preview` sau build)
 - **E2E (Playwright)**: `pnpm test:e2e` (root) — tự bật API :3101 + `e2e.db` (reset mỗi lần) + web :5199 (proxy qua `VITE_API_PROXY_TARGET`), không đụng dev :3001/dev.db. Chromium đã cài sẵn máy
-- **Test account dev DB**: final@test.com / `MatKhau123!` (family "Nhà Final", owner, name "User Final"); còn smoke@test.com, smoke2, smoke3 (cùng mật khẩu); `sk-muf01glb@test.com` (family "Nhà Skeleton" — tạo khi verify skeleton, 0 khoản chi)
+- **Test account dev DB** (sau migration username 25/09 — mật khẩu chung `MatKhau123!`): `sk_muf01glb` (family "Nhà Skeleton", owner) · `final` (family "Nhà Final", owner) · `test_verify_9x` (tài khoản verify browser, không có family) — username = phần trước @ của email cũ (gạch → `_`); email cũ vẫn giữ trong DB (nullable)
 - **Windows**: `del`/`node -e` path absolute hay lỗi quote (cmd) → viết file `.cjs` tạm rồi `node <file>`; findstr quote cũng hay hỏng → để output nguyên, grep tay
 - **Browser tool**: gọi qua Code Mode (`tools.browser["tabs.open"]`...), không gọi trực tiếp; `browser.screenshot` fail "needs a visible tab" → verify bằng `browser.evaluate`; input id tiếng Việt (VD `input-số-tiền`) hay lệch normalization khi truyền qua script → chọn input bằng `inputMode`/vị trí; click `a[href="/add"]` để SPA nav (giữ state page)
 
 ## Bản đồ API hoàn chỉnh (cho FE gọi)
-- `POST /api/auth/register` {name,email,password} → 201 {user, accessToken} — 409 EMAIL_EXISTS
-- `POST /api/auth/login` {email,password} → {user, accessToken} — 401 INVALID_CREDENTIALS
+- `POST /api/auth/register` {name,username,password} → 201 {user, accessToken} — 409 USERNAME_TAKEN
+- `POST /api/auth/login` {username,password} → {user, accessToken} — 401 INVALID_CREDENTIALS (1 message chung, không tiết lộ tài khoản tồn tại)
+- user trong mọi response: `{id, name, username}` (không có email) · username: 2-20 ký tự, `a-z 0-9 . _`, bắt đầu/kết thúc bằng chữ hoặc số, tự lowercase
 - `POST /api/auth/refresh` (cookie tự gửi) → {user, accessToken} — 401 UNAUTHORIZED
 - `POST /api/auth/logout`
 - `GET /api/me` → {user, families: Family[]} — family có `myRole`

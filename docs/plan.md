@@ -21,7 +21,7 @@
 | Test | Vitest (unit) · supertest (integration) · Playwright (E2E) — coverage ≥ 80% |
 
 ## 3. Data model
-- `User`: id, name, email (unique), passwordHash
+- `User`: id, name, username (unique, 2-20 ký tự a-z0-9._), email (nullable, chỉ ghi nhận — không dùng), passwordHash
 - `Family`: id, name, inviteCode (6 ký tự, unique)
 - `FamilyMember`: familyId, userId, role (OWNER/MEMBER), joinedAt
 - `Category`: familyId, name, icon, isPreset, order
