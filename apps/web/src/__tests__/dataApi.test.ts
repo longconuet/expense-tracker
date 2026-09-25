@@ -101,6 +101,19 @@ describe("core/dataApi", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/expenses?date=2026-09-09&pageSize=100");
   });
 
+  it("fetchExpenses lọc theo userId → query string có userId", async () => {
+    // Arrange
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ expenses: [EXPENSE] })));
+
+    // Act
+    await fetchExpenses("f1", { month: "2026-09", userId: "u2", page: 1, pageSize: 20 });
+
+    // Assert
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/families/f1/expenses?month=2026-09&userId=u2&page=1&pageSize=20",
+    );
+  });
+
   it("fetchExpenses không có filter → không có query string", async () => {
     // Arrange
     fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ expenses: [] }, { page: 1, pageSize: 20, total: 0 })));

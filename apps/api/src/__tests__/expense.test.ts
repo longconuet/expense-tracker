@@ -172,6 +172,45 @@ describe("GET /api/families/:id/expenses — danh sách + lọc + phân trang", 
     );
   });
 
+  it("lọc theo userId: chỉ trả khoản do người đó nhập", async () => {
+    // member đúng 1 khoản trong data test ("Cơm trưa" 45000 ở describe POST)
+    const res = await request(app)
+      .get(`/api/families/${familyId}/expenses?userId=${member.userId}`)
+      .set(auth(owner.token));
+    expect(res.status).toBe(200);
+    expect(res.body.data.expenses).toHaveLength(1);
+    expect(res.body.data.expenses[0].amount).toBe(45000);
+    expect(res.body.meta).toMatchObject({ page: 1, pageSize: 20, total: 1 });
+
+    // owner: 3 khoản tháng 9 (kết hợp với month)
+    const ownerSep = await request(app)
+      .get(`/api/families/${familyId}/expenses?month=2026-09&userId=${owner.userId}`)
+      .set(auth(owner.token));
+    expect(ownerSep.status).toBe(200);
+    expect(ownerSep.body.data.expenses).toHaveLength(3);
+  });
+
+  it("userId không thuộc family hoặc không tồn tại → 404; dạng array → 400", async () => {
+    const outside = await request(app)
+      .get(`/api/families/${familyId}/expenses?userId=${stranger.userId}`)
+      .set(auth(owner.token));
+    expect(outside.status).toBe(404);
+    expect(outside.body.error.code).toBe("USER_NOT_IN_FAMILY");
+
+    const missing = await request(app)
+      .get(`/api/families/${familyId}/expenses?userId=khong-ton-tai`)
+      .set(auth(owner.token));
+    expect(missing.status).toBe(404);
+    expect(missing.body.error.code).toBe("USER_NOT_IN_FAMILY");
+
+    // `userId=a&userId=b` → query thành array
+    const multi = await request(app)
+      .get(`/api/families/${familyId}/expenses?userId=${member.userId}&userId=${owner.userId}`)
+      .set(auth(owner.token));
+    expect(multi.status).toBe(400);
+    expect(multi.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("lọc theo date: chỉ trả khoản của đúng ngày đó (09-22 có 2 món, 09-21 có 1)", async () => {
     const day22 = await request(app)
       .get(`/api/families/${familyId}/expenses?date=2026-09-22`)

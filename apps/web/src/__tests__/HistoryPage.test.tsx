@@ -1,7 +1,7 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchCategories, fetchExpenses, deleteExpense } from "../core/dataApi";
+import { fetchCategories, fetchExpenses, deleteExpense, fetchFamilyDetail } from "../core/dataApi";
 import { useAuthStore } from "../core/authStore";
 import { ApiError } from "../core/api";
 import { addMonths, currentMonth, today, yesterday } from "../core/dates";
@@ -12,11 +12,13 @@ vi.mock("../core/dataApi", () => ({
   fetchCategories: vi.fn(),
   fetchExpenses: vi.fn(),
   deleteExpense: vi.fn(),
+  fetchFamilyDetail: vi.fn(),
 }));
 
 const fetchCategoriesMock = vi.mocked(fetchCategories);
 const fetchExpensesMock = vi.mocked(fetchExpenses);
 const deleteExpenseMock = vi.mocked(deleteExpense);
+const fetchFamilyDetailMock = vi.mocked(fetchFamilyDetail);
 
 const USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY = {
@@ -28,7 +30,19 @@ const FAMILY = {
   myRole: "OWNER",
 } as const;
 
+const FAMILY2 = {
+  id: "f2",
+  name: "Nhà Khác",
+  inviteCode: "XYZ789",
+  ownerName: "Chủ 2",
+  memberCount: 2,
+  myRole: "MEMBER",
+} as const;
+
 const CAT = { id: "c1", name: "Ăn uống", icon: "🍜", isPreset: true, order: 0 };
+
+const MEMBER_AN = { userId: "u1", name: "An", role: "OWNER", joinedAt: "2026-09-01T00:00:00.000Z" } as const;
+const MEMBER_BINH = { userId: "u2", name: "Bình", role: "MEMBER", joinedAt: "2026-09-02T00:00:00.000Z" } as const;
 
 function expense(id: string, note: string, amount: number, createdByName = "An", date = today()) {
   return {
@@ -74,7 +88,10 @@ describe("Lịch sử chi tiêu", () => {
     fetchCategoriesMock.mockReset();
     fetchExpensesMock.mockReset();
     deleteExpenseMock.mockReset();
+    fetchFamilyDetailMock.mockReset();
     fetchCategoriesMock.mockResolvedValue([CAT]);
+    // Mặc định family 1 thành viên → hàng chip lọc thành viên ẩn (không đụng test cũ)
+    fetchFamilyDetailMock.mockResolvedValue({ ...FAMILY, members: [MEMBER_AN] });
   });
 
   afterEach(() => {
@@ -159,6 +176,203 @@ describe("Lịch sử chi tiêu", () => {
         expect.objectContaining({ categoryId: "c1" }),
       );
     });
+  });
+
+  it("family 2 thành viên → hiện chip lọc (Tất cả + 2 tên); 1 thành viên → ẩn", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [],
+      meta: { page: 1, pageSize: 20, total: 0 },
+    });
+    fetchFamilyDetailMock.mockResolvedValue({ ...FAMILY, members: [MEMBER_AN, MEMBER_BINH] });
+
+    // Act
+    renderHistory();
+    const group = await screen.findByRole("group", { name: "Lọc theo thành viên" });
+
+    // Assert — chip "Tất cả" active mặc định + 2 chip tên member
+    expect(within(group).getByRole("button", { name: "Tất cả" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(group).getByRole("button", { name: "An" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(group).getByRole("button", { name: "Bình" })).toHaveAttribute("aria-pressed", "false");
+
+    // 1 thành viên → không hiện hàng chip
+    cleanup();
+    fetchFamilyDetailMock.mockResolvedValue({ ...FAMILY, members: [MEMBER_AN] });
+    renderHistory();
+    await screen.findByText("Chưa có khoản chi tháng này");
+    expect(screen.queryByRole("group", { name: "Lọc theo thành viên" })).not.toBeInTheDocument();
+  });
+
+  it("bấm chip thành viên → fetch theo userId; bấm chip đang chọn → về 'Tất cả'", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [],
+      meta: { page: 1, pageSize: 20, total: 0 },
+    });
+    fetchFamilyDetailMock.mockResolvedValue({ ...FAMILY, members: [MEMBER_AN, MEMBER_BINH] });
+    renderHistory();
+    const group = await screen.findByRole("group", { name: "Lọc theo thành viên" });
+
+    // Act — chọn "Bình"
+    fireEvent.click(within(group).getByRole("button", { name: "Bình" }));
+
+    // Assert
+    await waitFor(() => {
+      expect(fetchExpensesMock).toHaveBeenLastCalledWith(
+        "f1",
+        expect.objectContaining({ userId: "u2" }),
+      );
+    });
+    expect(within(group).getByRole("button", { name: "Bình" })).toHaveAttribute("aria-pressed", "true");
+
+    // Act — bấm lại chip đang chọn → reset
+    fireEvent.click(within(group).getByRole("button", { name: "Bình" }));
+
+    // Assert
+    await waitFor(() => {
+      const lastParams = fetchExpensesMock.mock.lastCall?.[1];
+      expect(lastParams).toBeDefined();
+      expect(lastParams?.userId).toBeUndefined();
+    });
+    expect(within(group).getByRole("button", { name: "Tất cả" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("kết hợp filter thành viên + danh mục → cả 2 param", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [],
+      meta: { page: 1, pageSize: 20, total: 0 },
+    });
+    fetchFamilyDetailMock.mockResolvedValue({ ...FAMILY, members: [MEMBER_AN, MEMBER_BINH] });
+    renderHistory();
+    const group = await screen.findByRole("group", { name: "Lọc theo thành viên" });
+    await screen.findByText("Chưa có khoản chi tháng này");
+
+    // Act
+    fireEvent.click(within(group).getByRole("button", { name: "Bình" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ăn uống" }));
+
+    // Assert
+    await waitFor(() => {
+      expect(fetchExpensesMock).toHaveBeenLastCalledWith(
+        "f1",
+        expect.objectContaining({ userId: "u2", categoryId: "c1" }),
+      );
+    });
+  });
+
+  it("không có khoản của thành viên đang lọc → thông báo kèm tên member", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [],
+      meta: { page: 1, pageSize: 20, total: 0 },
+    });
+    fetchFamilyDetailMock.mockResolvedValue({ ...FAMILY, members: [MEMBER_AN, MEMBER_BINH] });
+    renderHistory();
+    const group = await screen.findByRole("group", { name: "Lọc theo thành viên" });
+
+    // Act
+    fireEvent.click(within(group).getByRole("button", { name: "Bình" }));
+
+    // Assert
+    expect(await screen.findByText("Không có khoản chi của Bình tháng này")).toBeInTheDocument();
+  });
+
+  it("'Tải thêm' giữ filter thành viên (cùng userId, trang kế tiếp)", async () => {
+    // Arrange
+    fetchFamilyDetailMock.mockResolvedValue({ ...FAMILY, members: [MEMBER_AN, MEMBER_BINH] });
+    fetchExpensesMock.mockImplementation(async (_fid, params) => {
+      if (params?.page === 1) {
+        return { expenses: [expense("e1", "cơm trưa", 50_000)], meta: { page: 1, pageSize: 20, total: 3 } };
+      }
+      return { expenses: [], meta: { page: 2, pageSize: 20, total: 3 } };
+    });
+    renderHistory();
+    const group = await screen.findByRole("group", { name: "Lọc theo thành viên" });
+
+    // Act — chọn "An" rồi tải thêm
+    fireEvent.click(within(group).getByRole("button", { name: "An" }));
+    await waitFor(() => expect(fetchExpensesMock).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: /Tải thêm \(1\/3\)/ }));
+
+    // Assert
+    await waitFor(() => {
+      const lastParams = fetchExpensesMock.mock.lastCall?.[1];
+      expect(lastParams).toMatchObject({ page: 2, userId: "u1" });
+    });
+  });
+
+  it("đổi family khi đang lọc → reset về 'Tất cả', không fetch family mới với userId cũ", async () => {
+    // Arrange — 2 family; đang lọc "Bình" ở family f1
+    useAuthStore.setState({ user: USER, families: [FAMILY, FAMILY2], activeFamilyId: FAMILY.id });
+    fetchFamilyDetailMock.mockResolvedValue({ ...FAMILY, members: [MEMBER_AN, MEMBER_BINH] });
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [],
+      meta: { page: 1, pageSize: 20, total: 0 },
+    });
+    renderHistory();
+    const group = await screen.findByRole("group", { name: "Lọc theo thành viên" });
+    fireEvent.click(within(group).getByRole("button", { name: "Bình" }));
+    await waitFor(() => {
+      expect(fetchExpensesMock).toHaveBeenLastCalledWith(
+        "f1",
+        expect.objectContaining({ userId: "u2" }),
+      );
+    });
+
+    // Act — đổi sang family khác
+    act(() => {
+      useAuthStore.setState({ activeFamilyId: FAMILY2.id });
+    });
+
+    // Assert — mọi request của f2 đều KHÔNG kèm userId cũ; chip về "Tất cả"
+    await waitFor(() => {
+      const f2Calls = fetchExpensesMock.mock.calls.filter(([fid]) => fid === "f2");
+      expect(f2Calls.length).toBeGreaterThan(0);
+      expect(f2Calls.every(([, params]) => params?.userId === undefined)).toBe(true);
+    });
+    expect(
+      within(screen.getByRole("group", { name: "Lọc theo thành viên" })).getByRole("button", {
+        name: "Tất cả",
+      }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("member đang lọc bị xoá khỏi family (404) → tự reset về 'Tất cả' + refresh chip, không hiện lỗi", async () => {
+    // Arrange — lần 2 gọi fetchFamilyDetail trả family chỉ còn An (Bình đã bị xoá)
+    let membersCalls = 0;
+    fetchFamilyDetailMock.mockImplementation(async () => {
+      membersCalls += 1;
+      return {
+        ...FAMILY,
+        members: membersCalls === 1 ? [MEMBER_AN, MEMBER_BINH] : [MEMBER_AN],
+      };
+    });
+    fetchExpensesMock.mockImplementation(async (_fid, params) => {
+      if (params?.userId === "u2") {
+        throw new ApiError("USER_NOT_IN_FAMILY", "Thành viên không thuộc gia đình này", 404);
+      }
+      return { expenses: [], meta: { page: 1, pageSize: 20, total: 0 } };
+    });
+    renderHistory();
+    const group = await screen.findByRole("group", { name: "Lọc theo thành viên" });
+
+    // Act — chọn "Bình" → fetch 404 → tự phục hồi
+    fireEvent.click(within(group).getByRole("button", { name: "Bình" }));
+    await waitFor(() => {
+      const lastParams = fetchExpensesMock.mock.lastCall?.[1];
+      expect(lastParams?.userId).toBeUndefined(); // đã refetch về "Tất cả"
+    });
+
+    // Assert — không hiện banner lỗi; chip "Bình" biến mất (danh sách đã refresh)
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(within(group).queryByRole("button", { name: "Bình" })).not.toBeInTheDocument();
+    });
+    expect(within(group).getByRole("button", { name: "Tất cả" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("xoá khoản qua dialog → gọi API + gỡ khỏi danh sách", async () => {
