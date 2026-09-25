@@ -33,7 +33,7 @@ export type UserRole = "OWNER" | "MEMBER";
 export interface User {
   id: string;
   name: string;
-  email: string;
+  username: string;
 }
 
 export interface Family {

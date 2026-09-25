@@ -8,7 +8,7 @@ import { AuthLayout, FormError } from "./AuthLayout";
 import { completeAfterAuth } from "./afterAuth";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -31,7 +31,7 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email.trim(), password);
+      await login(username.trim(), password);
       navigate(await completeAfterAuth(code), { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra, vui lòng thử lại.");
@@ -41,17 +41,17 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthLayout title="Đăng nhập" subtitle="Chào mừng trở lại! Nhập email và mật khẩu của bạn.">
+    <AuthLayout title="Đăng nhập" subtitle="Chào mừng trở lại! Nhập tên đăng nhập và mật khẩu của bạn.">
       <form onSubmit={handleSubmit}>
         <FormError message={error} />
 
         <Input
-          label="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="ban@gmail.com"
-          autoComplete="email"
+          label="Tên đăng nhập"
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="an2310"
+          autoComplete="username"
           required
         />
         <div className="mt-4">

@@ -24,7 +24,7 @@ export function AuthLayout({
   );
 }
 
-/** Lỗi form mức tổng thể (VD sai mật khẩu, email tồn tại) — hiện trên nút submit. */
+/** Lỗi form mức tổng thể (VD sai mật khẩu, username tồn tại) — hiện trên nút submit. */
 export function FormError({ message }: { message: string | null }) {
   if (!message) return null;
   return (

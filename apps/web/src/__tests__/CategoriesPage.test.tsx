@@ -22,7 +22,7 @@ const createCategoryMock = vi.mocked(createCategory);
 const updateCategoryMock = vi.mocked(updateCategory);
 const deleteCategoryMock = vi.mocked(deleteCategory);
 
-const USER = { id: "u1", name: "An", email: "an@test.com" };
+const USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY = {
   id: "f1",
   name: "Nhà An",

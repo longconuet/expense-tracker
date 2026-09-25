@@ -5,7 +5,7 @@ import { useAuthStore } from "../core/authStore";
 import { useThemeStore } from "../core/themeStore";
 import MePage from "../features/me/MePage";
 
-const USER = { id: "u1", name: "An", email: "an@test.com" };
+const USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY = {
   id: "f1",
   name: "Nhà An",
@@ -58,7 +58,7 @@ describe("Màn Tôi", () => {
 
     // Assert
     expect(screen.getByText("An")).toBeInTheDocument();
-    expect(screen.getByText("an@test.com")).toBeInTheDocument();
+    expect(screen.getByText("an2310")).toBeInTheDocument();
     expect(screen.getByText("Nhà An")).toBeInTheDocument();
     expect(screen.getByText("ABC123")).toBeInTheDocument();
     expect(screen.getByText("Chủ gia đình")).toBeInTheDocument();

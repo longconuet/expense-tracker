@@ -5,7 +5,7 @@ import { AppShell } from "../core/AppShell";
 import { useAuthStore } from "../core/authStore";
 import { useSyncStore } from "../core/syncQueue";
 
-const MOCK_USER = { id: "u1", name: "An", email: "an@test.com" };
+const MOCK_USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY_A = {
   id: "fa",
   name: "Nhà An",

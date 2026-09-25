@@ -18,7 +18,7 @@ const fetchCategoriesMock = vi.mocked(fetchCategories);
 const fetchExpensesMock = vi.mocked(fetchExpenses);
 const deleteExpenseMock = vi.mocked(deleteExpense);
 
-const USER = { id: "u1", name: "An", email: "an@test.com" };
+const USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY = {
   id: "f1",
   name: "Nhà An",
@@ -264,7 +264,7 @@ describe("Lịch sử chi tiêu", () => {
   it("member không phải người tạo → khoản không phải link, không có nút xoá", async () => {
     // Arrange
     useAuthStore.setState({
-      user: { id: "u2", name: "Bình", email: "binh@test.com" },
+      user: { id: "u2", name: "Bình", username: "binh99" },
       families: [{ ...FAMILY, myRole: "MEMBER" }],
       activeFamilyId: FAMILY.id,
     });

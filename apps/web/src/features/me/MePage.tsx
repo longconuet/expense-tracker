@@ -58,7 +58,7 @@ export default function MePage() {
 
       <Card className="mt-4">
         <p className="text-lg font-semibold text-ink">{user?.name}</p>
-        <p className="text-sm text-ink-muted">{user?.email}</p>
+        <p className="text-sm text-ink-muted">{user?.username}</p>
       </Card>
 
       <Card className="mt-4">

@@ -47,7 +47,7 @@ meRouter.get("/me", requireAuth, async (req, res) => {
   });
 
   sendOk(res, {
-    user: { id: user.id, name: user.name, email: user.email },
+    user: { id: user.id, name: user.name, username: user.username },
     families,
   });
 });

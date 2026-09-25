@@ -10,16 +10,16 @@ let app: Express;
 
 interface Actor {
   userId: string;
-  email: string;
+  username: string;
   token: string;
 }
 
-async function registerActor(name: string, email: string): Promise<Actor> {
+async function registerActor(name: string, username: string): Promise<Actor> {
   const res = await request(app)
     .post("/api/auth/register")
-    .send({ name, email, password: PASSWORD });
+    .send({ name, username, password: PASSWORD });
   expect(res.status).toBe(201);
-  return { userId: res.body.data.user.id, email, token: res.body.data.accessToken };
+  return { userId: res.body.data.user.id, username, token: res.body.data.accessToken };
 }
 
 async function createFamily(actor: Actor, name: string) {
@@ -41,7 +41,7 @@ afterAll(async () => {
 
 describe("POST /api/families — tạo family", () => {
   it("tạo family: user thành OWNER, có mã 6 ký tự, seed 7 preset categories", async () => {
-    const actor = await registerActor("Chủ Gia", "fam-owner@test.com");
+    const actor = await registerActor("Chủ Gia", "fam_owner");
 
     const family = await createFamily(actor, "Nhà Mình");
 
@@ -57,7 +57,7 @@ describe("POST /api/families — tạo family", () => {
   });
 
   it("từ chối tên quá ngắn với 400", async () => {
-    const actor = await registerActor("Tên Ngắn", "fam-short@test.com");
+    const actor = await registerActor("Tên Ngắn", "fam_short");
 
     const res = await request(app)
       .post("/api/families")
@@ -71,10 +71,10 @@ describe("POST /api/families — tạo family", () => {
 
 describe("POST /api/families/join — vào bằng mã mời", () => {
   it("member mới vào bằng mã (không phân biệt hoa thường) → MEMBER", async () => {
-    const owner = await registerActor("Chủ B", "fam-b-owner@test.com");
+    const owner = await registerActor("Chủ B", "fam_b_owner");
     const family = await createFamily(owner, "Gia Đình B");
 
-    const member = await registerActor("Thành Viên B", "fam-b-member@test.com");
+    const member = await registerActor("Thành Viên B", "fam_b_member");
     const res = await request(app)
       .post("/api/families/join")
       .set("Authorization", `Bearer ${member.token}`)
@@ -87,7 +87,7 @@ describe("POST /api/families/join — vào bằng mã mời", () => {
   });
 
   it("mã không tồn tại → 404 FAMILY_NOT_FOUND", async () => {
-    const actor = await registerActor("Người Lạ", "fam-stranger@test.com");
+    const actor = await registerActor("Người Lạ", "fam_stranger");
 
     const res = await request(app)
       .post("/api/families/join")
@@ -99,7 +99,7 @@ describe("POST /api/families/join — vào bằng mã mời", () => {
   });
 
   it("vào family đã là thành viên → 409 ALREADY_MEMBER", async () => {
-    const owner = await registerActor("Chủ C", "fam-c-owner@test.com");
+    const owner = await registerActor("Chủ C", "fam_c_owner");
     const family = await createFamily(owner, "Gia Đình C");
 
     const res = await request(app)
@@ -114,10 +114,10 @@ describe("POST /api/families/join — vào bằng mã mời", () => {
 
 describe("GET /api/families/:id — chi tiết family", () => {
   it("thành viên xem được family + danh sách thành viên", async () => {
-    const owner = await registerActor("Chủ D", "fam-d-owner@test.com");
+    const owner = await registerActor("Chủ D", "fam_d_owner");
     const family = await createFamily(owner, "Gia Đình D");
 
-    const member = await registerActor("Thành Viên D", "fam-d-member@test.com");
+    const member = await registerActor("Thành Viên D", "fam_d_member");
     await request(app)
       .post("/api/families/join")
       .set("Authorization", `Bearer ${member.token}`)
@@ -133,9 +133,9 @@ describe("GET /api/families/:id — chi tiết family", () => {
   });
 
   it("người ngoài → 403 NOT_FAMILY_MEMBER", async () => {
-    const owner = await registerActor("Chủ E", "fam-e-owner@test.com");
+    const owner = await registerActor("Chủ E", "fam_e_owner");
     const family = await createFamily(owner, "Gia Đình E");
-    const stranger = await registerActor("Người Ngoài", "fam-e-stranger@test.com");
+    const stranger = await registerActor("Người Ngoài", "fam_e_stranger");
 
     const res = await request(app)
       .get(`/api/families/${family.id}`)
@@ -148,9 +148,9 @@ describe("GET /api/families/:id — chi tiết family", () => {
 
 describe("POST /api/families/:id/regenerate-code", () => {
   it("owner đổi được mã, member không được (403)", async () => {
-    const owner = await registerActor("Chủ F", "fam-f-owner@test.com");
+    const owner = await registerActor("Chủ F", "fam_f_owner");
     const family = await createFamily(owner, "Gia Đình F");
-    const member = await registerActor("Thành Viên F", "fam-f-member@test.com");
+    const member = await registerActor("Thành Viên F", "fam_f_member");
     await request(app)
       .post("/api/families/join")
       .set("Authorization", `Bearer ${member.token}`)
@@ -173,9 +173,9 @@ describe("POST /api/families/:id/regenerate-code", () => {
 
 describe("DELETE /api/families/:id/members/:userId — xoá thành viên", () => {
   it("owner xoá member: member mất quyền truy cập", async () => {
-    const owner = await registerActor("Chủ G", "fam-g-owner@test.com");
+    const owner = await registerActor("Chủ G", "fam_g_owner");
     const family = await createFamily(owner, "Gia Đình G");
-    const member = await registerActor("Thành Viên G", "fam-g-member@test.com");
+    const member = await registerActor("Thành Viên G", "fam_g_member");
     await request(app)
       .post("/api/families/join")
       .set("Authorization", `Bearer ${member.token}`)
@@ -193,10 +193,10 @@ describe("DELETE /api/families/:id/members/:userId — xoá thành viên", () =>
   });
 
   it("member không xoá được member khác (403), owner không tự rời (400)", async () => {
-    const owner = await registerActor("Chủ H", "fam-h-owner@test.com");
+    const owner = await registerActor("Chủ H", "fam_h_owner");
     const family = await createFamily(owner, "Gia Đình H");
-    const m1 = await registerActor("Member 1", "fam-h-m1@test.com");
-    const m2 = await registerActor("Member 2", "fam-h-m2@test.com");
+    const m1 = await registerActor("Member 1", "fam_h_m1");
+    const m2 = await registerActor("Member 2", "fam_h_m2");
     for (const m of [m1, m2]) {
       await request(app)
         .post("/api/families/join")
@@ -226,9 +226,9 @@ describe("DELETE /api/families/:id/members/:userId — xoá thành viên", () =>
 
 describe("DELETE /api/families/:id — xoá family", () => {
   it("có thành viên khác → 409; không còn ai → 200 và /me sạch", async () => {
-    const owner = await registerActor("Chủ I", "fam-i-owner@test.com");
+    const owner = await registerActor("Chủ I", "fam_i_owner");
     const family = await createFamily(owner, "Gia Đình I");
-    const member = await registerActor("Thành Viên I", "fam-i-member@test.com");
+    const member = await registerActor("Thành Viên I", "fam_i_member");
     await request(app)
       .post("/api/families/join")
       .set("Authorization", `Bearer ${member.token}`)
@@ -257,9 +257,9 @@ describe("DELETE /api/families/:id — xoá family", () => {
   });
 
   it("member không xoá được family (403)", async () => {
-    const owner = await registerActor("Chủ J", "fam-j-owner@test.com");
+    const owner = await registerActor("Chủ J", "fam_j_owner");
     const family = await createFamily(owner, "Gia Đình J");
-    const member = await registerActor("Thành Viên J", "fam-j-member@test.com");
+    const member = await registerActor("Thành Viên J", "fam_j_member");
     await request(app)
       .post("/api/families/join")
       .set("Authorization", `Bearer ${member.token}`)

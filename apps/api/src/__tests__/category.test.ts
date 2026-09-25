@@ -16,7 +16,7 @@ beforeAll(async () => {
   app = createApp();
   const reg = await request(app)
     .post("/api/auth/register")
-    .send({ name: "Chủ Cat", email: "cat-owner@test.com", password: PASSWORD });
+    .send({ name: "Chủ Cat", username: "cat_owner", password: PASSWORD });
   ownerToken = reg.body.data.accessToken;
 
   const fam = await request(app)

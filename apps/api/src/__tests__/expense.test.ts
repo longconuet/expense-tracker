@@ -15,10 +15,10 @@ let eatCategoryId: string; // "Ăn uống"
 
 const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
-async function register(name: string, email: string) {
+async function register(name: string, username: string) {
   const res = await request(app)
     .post("/api/auth/register")
-    .send({ name, email, password: PASSWORD });
+    .send({ name, username, password: PASSWORD });
   expect(res.status).toBe(201);
   return { userId: res.body.data.user.id, name, token: res.body.data.accessToken };
 }
@@ -33,20 +33,20 @@ async function createExpense(
 beforeAll(async () => {
   app = createApp();
 
-  owner = await register("Chủ Exp", "exp-owner@test.com");
+  owner = await register("Chủ Exp", "exp_owner");
   const fam = await request(app)
     .post("/api/families")
     .set(auth(owner.token))
     .send({ name: "Gia Đình Exp" });
   familyId = fam.body.data.family.id;
 
-  member = await register("Member Exp", "exp-member@test.com");
+  member = await register("Member Exp", "exp_member");
   await request(app)
     .post("/api/families/join")
     .set(auth(member.token))
     .send({ code: fam.body.data.family.inviteCode });
 
-  stranger = await register("Người Lạ Exp", "exp-stranger@test.com");
+  stranger = await register("Người Lạ Exp", "exp_stranger");
 
   const cats = await request(app)
     .get(`/api/families/${familyId}/categories`)
