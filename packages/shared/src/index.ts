@@ -85,6 +85,7 @@ export interface MonthlyStats {
   previousMonthTotal: number;
   byCategory: Array<{ category: Category; total: number; percent: number }>;
   byDay: Array<{ date: string; total: number }>;
+  byMember: Array<{ name: string; total: number; percent: number }>;
 }
 
 // ---------------------------------------------------------------------------

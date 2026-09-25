@@ -13,6 +13,13 @@ export function StatsSkeleton() {
       <Card className="mt-4">
         <Skeleton className="h-4 w-24" />
         <Skeleton className="mt-3 h-9 w-40" />
+        {/* Section theo thành viên */}
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
+          <Skeleton className="h-4 w-28" />
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-4 w-full" />
+          ))}
+        </div>
       </Card>
 
       {/* Theo danh mục — donut + chú thích */}
