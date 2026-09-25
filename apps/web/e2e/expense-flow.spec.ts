@@ -4,6 +4,7 @@ import {
   anotherDayInCurrentMonth,
   backspace,
   newAccount,
+  pickCategory,
   registerAndCreateFamily,
   typeKeypad,
 } from "./helpers";
@@ -24,6 +25,20 @@ test.describe("Luồng khoản chi: keypad → trang chủ → lịch sử → s
     await expect(group).toBeVisible();
     await expect(group).toContainText("125.000 ₫");
     await expect(group).toContainText("Ăn uống");
+  });
+
+  test("gợi ý số tiền: gõ 2 → bấm chip 20k → lưu → khoản 20.000 ₫", async ({ page }) => {
+    // Arrange + Act — gõ 2, chip gợi ý hiện ngay dưới số tiền
+    await page.goto("/add");
+    await typeKeypad(page, "2");
+    const chip = page.getByRole("button", { name: "Gợi ý 20.000 ₫", exact: true });
+    await expect(chip).toHaveText("20k");
+    await chip.click();
+    await pickCategory(page, "Ăn uống");
+    await page.getByRole("button", { name: "Lưu khoản chi" }).click();
+
+    // Assert
+    await expect(page.locator('section[aria-label="Hôm nay"]')).toContainText("20.000 ₫");
   });
 
   test("lịch sử: 2 khoản ở 2 ngày khác nhau → nhóm theo ngày có tiểu kết", async ({

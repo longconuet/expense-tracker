@@ -54,9 +54,14 @@ interface KeypadProps {
   disabled?: boolean;
   /** Mặc định "lg" (64px). "md" = 56px cho màn có ít chiều cao. */
   size?: KeypadSize;
+  /**
+   * Callback xoá toàn bộ số tiền — khi truyền sẽ hiện nút "C" cạnh phím
+   * xoá từng số (dòng cuối: ⌫ | C | 0). Không truyền: giữ ⌫ | 0 (rộng).
+   */
+  onClearAll?: () => void;
 }
 
-export function Keypad({ onKey, disabled = false, size = "lg" }: KeypadProps) {
+export function Keypad({ onKey, disabled = false, size = "lg", onClearAll }: KeypadProps) {
   return (
     <div
       role="group"
@@ -74,7 +79,14 @@ export function Keypad({ onKey, disabled = false, size = "lg" }: KeypadProps) {
         disabled={disabled}
         onClick={() => onKey("back")}
       />
-      <KeypadButton label="0" wide size={size} disabled={disabled} onClick={() => onKey("0")} />
+      {onClearAll ? (
+        <>
+          <KeypadButton label="C" ariaLabel="Xoá toàn bộ" size={size} disabled={disabled} onClick={onClearAll} />
+          <KeypadButton label="0" size={size} disabled={disabled} onClick={() => onKey("0")} />
+        </>
+      ) : (
+        <KeypadButton label="0" wide size={size} disabled={disabled} onClick={() => onKey("0")} />
+      )}
     </div>
   );
 }

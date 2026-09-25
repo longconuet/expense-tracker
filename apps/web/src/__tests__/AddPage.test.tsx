@@ -105,6 +105,56 @@ describe("Màn thêm khoản chi (keypad)", () => {
     expect(screen.getByText("500")).toBeInTheDocument();
   });
 
+  it("gõ 2 → 4 gợi ý tròn bên dưới số tiền; bấm chip 20k → số tiền thành 20.000", async () => {
+    // Arrange + Act
+    renderAdd();
+    await typeAmount("2");
+
+    // Assert — 4 chip gợi ý, nhãn compact, aria-label giá trị đầy đủ
+    expect(screen.getByRole("button", { name: "Gợi ý 2.000 ₫" }).textContent).toBe("2k");
+    expect(screen.getByRole("button", { name: "Gợi ý 20.000 ₫" }).textContent).toBe("20k");
+    expect(screen.getByRole("button", { name: "Gợi ý 200.000 ₫" }).textContent).toBe("200k");
+    expect(screen.getByRole("button", { name: "Gợi ý 2.000.000 ₫" }).textContent).toBe("2m");
+
+    // Act — bấm chip 20k
+    fireEvent.click(screen.getByRole("button", { name: "Gợi ý 20.000 ₫" }));
+
+    // Assert — số tiền được điền, gợi ý cập nhật theo tiền tố mới
+    expect(screen.getByText("20.000")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Gợi ý 20.000.000 ₫" }).textContent).toBe("20m");
+    expect(screen.getByRole("button", { name: "Gợi ý 200.000.000 ₫" }).textContent).toBe("200m");
+    expect(screen.queryByRole("button", { name: "Gợi ý 20.000 ₫" })).not.toBeInTheDocument();
+  });
+
+  it("chưa nhập số → không hiện gợi ý; số lớn → gợi ý còn lại < 4 (lọc vượt 9 chữ số)", async () => {
+    // Arrange
+    renderAdd();
+
+    // Assert — ban đầu không có nhóm gợi ý
+    expect(screen.queryByRole("group", { name: "Gợi ý số tiền" })).not.toBeInTheDocument();
+
+    // Act — gõ 6 chữ số 500000 → chỉ còn 1 gợi ý (giá trị còn lại vượt 9 chữ số)
+    await typeAmount("500000");
+
+    // Assert
+    expect(screen.getByRole("button", { name: "Gợi ý 500.000.000 ₫" }).textContent).toBe("500m");
+    const chips = screen.getByRole("group", { name: "Gợi ý số tiền" });
+    expect(chips.querySelectorAll("button")).toHaveLength(1);
+  });
+
+  it("nút C trên keypad → xoá toàn bộ số tiền, gợi ý biến mất", async () => {
+    // Arrange + Act
+    renderAdd();
+    await typeAmount("250");
+    expect(screen.getByRole("group", { name: "Gợi ý số tiền" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Xoá toàn bộ" }));
+
+    // Assert — hiển thị về 0 (đọc aria-live, tránh đụng phím "0" của keypad)
+    const display = document.querySelector('[aria-live="polite"]');
+    expect(display?.textContent).toBe("0");
+    expect(screen.queryByRole("group", { name: "Gợi ý số tiền" })).not.toBeInTheDocument();
+  });
+
   it("chỉ nhận tối đa 9 chữ số", async () => {
     // Arrange + Act
     renderAdd();
