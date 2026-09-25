@@ -48,6 +48,33 @@ describe("Keypad (bàn phím số)", () => {
     );
   });
 
+  it("onClearAll → thêm nút 'Xoá toàn bộ' cạnh phím xoá (12 phím, 0 không còn rộng)", () => {
+    // Arrange + Act
+    render(<Keypad onKey={vi.fn()} onClearAll={vi.fn()} />);
+
+    // Assert
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(12);
+    expect(screen.getByRole("button", { name: "Xoá toàn bộ" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "0" })).not.toHaveClass("col-span-2");
+  });
+
+  it("bấm nút C → gọi onClearAll; không truyền prop → không có nút C", () => {
+    // Arrange
+    const onClearAll = vi.fn();
+    const { unmount } = render(<Keypad onKey={vi.fn()} onClearAll={onClearAll} />);
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Xoá toàn bộ" }));
+
+    // Assert
+    expect(onClearAll).toHaveBeenCalledTimes(1);
+    unmount();
+
+    render(<Keypad onKey={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: "Xoá toàn bộ" })).not.toBeInTheDocument();
+  });
+
   it("disabled → toàn bộ phím không bấm được", () => {
     // Arrange
     const onKey = vi.fn();

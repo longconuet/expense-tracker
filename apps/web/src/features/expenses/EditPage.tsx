@@ -159,9 +159,8 @@ export default function EditPage() {
         <span className="ml-1.5 text-2xl font-semibold text-ink-muted">₫</span>
       </div>
 
-      {/* Danh mục — viên tròn to, cuộn ngang */}
+      {/* Danh mục — viên tròn cuộn ngang (không tiêu đề, icon gọn để hiện nhiều hơn) */}
       <div className="-mx-4 mt-4">
-        <p className="mb-2 px-4 text-sm font-medium text-ink">Danh mục</p>
         <div role="group" aria-label="Danh mục chi tiêu" className="flex gap-3 overflow-x-auto px-4 pb-1">
           {categories.map((category) => {
             const selected = category.id === categoryId;
@@ -174,11 +173,11 @@ export default function EditPage() {
                   haptic(8);
                   setCategoryId(category.id);
                 }}
-                className="flex w-[76px] shrink-0 flex-col items-center gap-1.5"
+                className="flex w-[66px] shrink-0 flex-col items-center gap-1.5"
               >
                 <span
                   aria-hidden
-                  className={`flex h-[68px] w-[68px] items-center justify-center rounded-full border-2 text-4xl transition ${
+                  className={`flex h-[58px] w-[58px] items-center justify-center rounded-full border-2 text-3xl transition ${
                     selected ? "border-primary bg-primary-soft" : "border-border bg-card"
                   }`}
                 >
