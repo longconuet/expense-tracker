@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import type { ApiMeta, Category, Expense } from "@expense-tracker/shared";
+import type { ApiMeta, Category, Expense, FamilyMemberDto } from "@expense-tracker/shared";
 import { formatVnd } from "@expense-tracker/shared";
 import { ApiError } from "../../core/api";
 import { useAuthStore } from "../../core/authStore";
-import { deleteExpense, fetchCategories, fetchExpenses } from "../../core/dataApi";
+import { deleteExpense, fetchCategories, fetchExpenses, fetchFamilyDetail } from "../../core/dataApi";
 import { addMonths, currentMonth, monthLabel } from "../../core/dates";
 import { groupByDay } from "../../core/expenseGroups";
 import { useRefetchOnSync } from "../../core/useRefetchOnSync";
@@ -16,9 +16,36 @@ import { HistorySkeleton } from "./HistorySkeleton";
 
 const PAGE_SIZE = 20;
 
+/** Chip lọc (thành viên/danh mục) — 2 trạng thái active/inactive. */
+function FilterChip({
+  pressed,
+  onClick,
+  children,
+}: {
+  pressed: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={pressed}
+      className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+        pressed
+          ? "border-primary bg-primary-soft text-primary"
+          : "border-border bg-card text-ink-muted"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 /**
- * Lịch sử chi tiêu: lọc theo tháng (tiến/lùi) + danh mục, phân trang
- * "tải thêm", xoá khoản (chủ gia đình hoặc người tạo).
+ * Lịch sử chi tiêu: lọc theo tháng (tiến/lùi) + thành viên (chip, hiện khi
+ * family ≥ 2 người) + danh mục, phân trang "tải thêm", xoá khoản (chủ gia
+ * đình hoặc người tạo).
  */
 export default function HistoryPage() {
   const activeFamilyId = useAuthStore((s) => s.activeFamilyId);
@@ -29,6 +56,8 @@ export default function HistoryPage() {
 
   const [month, setMonth] = useState(currentMonth());
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [memberId, setMemberId] = useState<string | null>(null);
+  const [members, setMembers] = useState<FamilyMemberDto[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [meta, setMeta] = useState<ApiMeta | null>(null);
@@ -38,6 +67,8 @@ export default function HistoryPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Bump khi member đang lọc biến mất khỏi family → refresh danh sách chip
+  const [membersKey, setMembersKey] = useState(0);
   const lastQuery = useRef("");
   const lastOk = useRef(false);
   // Giá trị `meta` mới nhất cho effect đọc (tránh thêm vào deps — page đổi
@@ -48,7 +79,23 @@ export default function HistoryPage() {
   // Khoản offline vừa sync về server → refetch
   useRefetchOnSync(() => setReloadKey((k) => k + 1));
 
+  // Đổi family (FamilySwitcher trên mọi màn): reset lọc member TRƯỚC khi render
+  // kế tiếp — memberId cũ trỏ member của family cũ → fetch sẽ 404 / filter
+  // "cơ" người không thuộc family mới. (CategoryId cũng có cùng gap — ngoài
+  // phạm vi task này.)
+  const [prevFamilyId, setPrevFamilyId] = useState(activeFamilyId);
+  if (activeFamilyId !== prevFamilyId) {
+    setPrevFamilyId(activeFamilyId);
+    setMemberId(null);
+  }
+
   const atCurrentMonth = month === currentMonth();
+  const activeMember = members.find((m) => m.userId === memberId) ?? null;
+  const emptyMessage = activeMember
+    ? `Không có khoản chi của ${activeMember.name} tháng này`
+    : categoryId
+      ? "Không có khoản chi trong danh mục này"
+      : "Chưa có khoản chi tháng này";
 
   useEffect(() => {
     if (!activeFamilyId) return;
@@ -65,6 +112,28 @@ export default function HistoryPage() {
     };
   }, [activeFamilyId]);
 
+  // Danh sách thành viên cho chip lọc (hàng chip tự ẩn khi family 1 người)
+  useEffect(() => {
+    if (!activeFamilyId) return;
+    let cancelled = false;
+    fetchFamilyDetail(activeFamilyId)
+      .then((detail) => {
+        if (cancelled) return;
+        setMembers(detail.members);
+        // memberId cũ (từ family trước / member đã bị xoá) không còn trong
+        // danh sách mới → reset về "Tất cả"
+        setMemberId((cur) =>
+          cur && !detail.members.some((m) => m.userId === cur) ? null : cur,
+        );
+      })
+      .catch(() => {
+        // Không tải được thì bỏ qua chip lọc thành viên
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFamilyId, membersKey]);
+
   useEffect(() => {
     if (!activeFamilyId) return;
     let cancelled = false;
@@ -72,7 +141,7 @@ export default function HistoryPage() {
     // → GIỮ list cũ, không hiện skeleton. Đổi tháng/chip = query mới.
     // Đã "Tải thêm" (page > 1) thì refetch sẽ co list về 20 dòng đầu →
     // thay đổi lớn, xứng đáng có skeleton làm tín hiệu.
-    const query = `${activeFamilyId}|${month}|${categoryId ?? ""}`;
+    const query = `${activeFamilyId}|${month}|${categoryId ?? ""}|${memberId ?? ""}`;
     const isSilent =
       lastQuery.current === query && lastOk.current && (metaRef.current?.page ?? 1) === 1;
     lastQuery.current = query;
@@ -85,6 +154,7 @@ export default function HistoryPage() {
     fetchExpenses(activeFamilyId, {
       month,
       categoryId: categoryId ?? undefined,
+      userId: memberId ?? undefined,
       page: 1,
       pageSize: PAGE_SIZE,
     })
@@ -96,9 +166,15 @@ export default function HistoryPage() {
         }
       })
       .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : "Không tải được lịch sử.");
+        if (cancelled) return;
+        // Member đang lọc đã bị xoá khỏi family (API 404) → reset filter +
+        // refresh danh sách chip; effect tự refetch (deps đổi) — không hiện lỗi
+        if (err instanceof ApiError && err.code === "USER_NOT_IN_FAMILY") {
+          if (memberId !== null) setMembersKey((k) => k + 1);
+          setMemberId(null);
+          return;
         }
+        setError(err instanceof ApiError ? err.message : "Không tải được lịch sử.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -107,7 +183,7 @@ export default function HistoryPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeFamilyId, month, categoryId, reloadKey]);
+  }, [activeFamilyId, month, categoryId, memberId, reloadKey]);
 
   function changeMonth(delta: number) {
     const next = addMonths(month, delta);
@@ -125,6 +201,7 @@ export default function HistoryPage() {
       const result = await fetchExpenses(activeFamilyId, {
         month,
         categoryId: categoryId ?? undefined,
+        userId: memberId ?? undefined,
         page: nextPage,
         pageSize: PAGE_SIZE,
       });
@@ -202,39 +279,44 @@ export default function HistoryPage() {
         </button>
       </div>
 
+      {/* Lọc theo thành viên — chip (tối ưu cho family 2 người: 3 chip chạm
+          trực tiếp, không cần dropdown). Family 1 người → ẩn (không lọc được gì). */}
+      {members.length >= 2 && (
+        <div
+          role="group"
+          aria-label="Lọc theo thành viên"
+          className="mt-3 flex gap-2 overflow-x-auto pb-1"
+        >
+          <FilterChip pressed={memberId === null} onClick={() => setMemberId(null)}>
+            Tất cả
+          </FilterChip>
+          {members.map((m) => (
+            <FilterChip
+              key={m.userId}
+              pressed={m.userId === memberId}
+              onClick={() => setMemberId(m.userId === memberId ? null : m.userId)}
+            >
+              {m.name}
+            </FilterChip>
+          ))}
+        </div>
+      )}
+
       {/* Lọc danh mục */}
       {categories.length > 0 && (
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-          <button
-            type="button"
-            onClick={() => setCategoryId(null)}
-            aria-pressed={categoryId === null}
-            className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-              categoryId === null
-                ? "border-primary bg-primary-soft text-primary"
-                : "border-border bg-card text-ink-muted"
-            }`}
-          >
+          <FilterChip pressed={categoryId === null} onClick={() => setCategoryId(null)}>
             Tất cả
-          </button>
-          {categories.map((category) => {
-            const selected = category.id === categoryId;
-            return (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => setCategoryId(selected ? null : category.id)}
-                aria-pressed={selected}
-                className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-                  selected
-                    ? "border-primary bg-primary-soft text-primary"
-                    : "border-border bg-card text-ink-muted"
-                }`}
-              >
-                <span aria-hidden>{category.icon}</span> {category.name}
-              </button>
-            );
-          })}
+          </FilterChip>
+          {categories.map((category) => (
+            <FilterChip
+              key={category.id}
+              pressed={category.id === categoryId}
+              onClick={() => setCategoryId(category.id === categoryId ? null : category.id)}
+            >
+              <span aria-hidden>{category.icon}</span> {category.name}
+            </FilterChip>
+          ))}
         </div>
       )}
 
@@ -251,9 +333,7 @@ export default function HistoryPage() {
           <p className="text-4xl" aria-hidden>
             🧾
           </p>
-          <p className="mt-2 font-medium text-ink">
-            {categoryId ? "Không có khoản chi trong danh mục này" : "Chưa có khoản chi tháng này"}
-          </p>
+          <p className="mt-2 font-medium text-ink">{emptyMessage}</p>
         </Card>
       ) : (
         <>

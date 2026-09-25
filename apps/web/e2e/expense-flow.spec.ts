@@ -96,4 +96,76 @@ test.describe("Luồng khoản chi: keypad → trang chủ → lịch sử → s
     // Assert
     await expect(page.getByText("Chưa có khoản chi tháng này")).toBeVisible();
   });
+
+  test("gõ số tiền → khung gợi ý cố định: vị trí danh mục không đổi (không nhảy layout)", async ({
+    page,
+  }) => {
+    // Arrange — màn /add, số tiền trống (chưa có gợi ý)
+    await page.goto("/add");
+    const categoryRow = page.getByRole("group", { name: "Danh mục chi tiêu" });
+    await expect(categoryRow).toBeVisible(); // chờ qua Spinner (categories tải xong)
+    const yBefore = (await categoryRow.boundingBox())?.y;
+    expect(yBefore).toBeDefined();
+
+    // Act — gõ 1 chữ số → chip gợi ý hiện ra
+    await page
+      .getByRole("group", { name: "Bàn phím số" })
+      .getByRole("button", { name: "2", exact: true })
+      .click();
+    await expect(page.getByRole("button", { name: "Gợi ý 2.000 ₫" })).toBeVisible();
+
+    // Assert — chiều cao khối gợi ý cố định → vị trí danh mục không dịch chuyển
+    const yAfter = (await categoryRow.boundingBox())?.y;
+    expect(yAfter).toBeDefined();
+    expect(Math.abs(yAfter! - yBefore!)).toBeLessThan(1);
+  });
+});
+
+test.describe("Lịch sử: lọc theo thành viên (E2E)", () => {
+  test("family 2 thành viên → chip lọc; chọn member → chỉ hiện khoản của người đó", async ({
+    browser,
+    page,
+  }) => {
+    // Arrange — A tạo family + 1 khoản 10.000 ₫
+    const a = newAccount();
+    await registerAndCreateFamily(page, a);
+    await addExpense(page, "10000", "Ăn uống");
+
+    // Đọc mã mời trên màn "Tôi"
+    await page.goto("/me");
+    const inviteCode = (await page.locator("p.font-mono").first().textContent())?.trim();
+    expect(inviteCode).toMatch(/^[A-HJ-MN-Z2-9]{6}$/);
+
+    // B đăng ký ở context riêng → auto-join qua ?code= → thêm 1 khoản 20.000 ₫
+    const b = newAccount();
+    const contextB = await browser.newContext();
+    const pageB = await contextB.newPage();
+    await pageB.goto(`/register?code=${inviteCode}`);
+    await pageB.getByLabel("Họ và tên").fill(b.name);
+    await pageB.getByLabel("Tên đăng nhập").fill(b.username);
+    await pageB.getByLabel("Mật khẩu").fill(b.password);
+    await pageB.getByRole("button", { name: "Đăng ký" }).click();
+    await pageB.getByRole("heading", { name: "Trang chủ" }).waitFor();
+    await addExpense(pageB, "20000", "Ăn uống");
+
+    // Act — A mở lịch sử, hiện chip 2 thành viên, lọc theo B
+    await page.goto("/history");
+    const memberGroup = page.getByRole("group", { name: "Lọc theo thành viên" });
+    await expect(memberGroup.getByRole("button", { name: a.name, exact: true })).toBeVisible();
+    await expect(memberGroup.getByRole("button", { name: b.name, exact: true })).toBeVisible();
+
+    await memberGroup.getByRole("button", { name: b.name, exact: true }).click();
+
+    // Assert — chỉ còn khoản của B (20.000 ₫), khoản 10.000 ₫ của A biến mất
+    const today = page.locator('section[aria-label="Hôm nay"]');
+    await expect(today).toContainText("20.000 ₫");
+    await expect(today).not.toContainText("10.000 ₫");
+
+    // Về "Tất cả" → cả 2 khoản hiện lại
+    await memberGroup.getByRole("button", { name: "Tất cả" }).click();
+    await expect(today).toContainText("10.000 ₫");
+    await expect(today).toContainText("20.000 ₫");
+
+    await contextB.close();
+  });
 });

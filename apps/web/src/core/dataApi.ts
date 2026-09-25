@@ -86,6 +86,8 @@ export interface ExpenseListParams {
   /** Lọc đúng 1 ngày (YYYY-MM-DD) — ưu tiên hơn `month`. */
   date?: string;
   categoryId?: string;
+  /** Lọc theo người nhập khoản (member của family). */
+  userId?: string;
   page?: number;
   pageSize?: number;
 }
@@ -103,6 +105,7 @@ export async function fetchExpenses(
   if (params.month) query.set("month", params.month);
   if (params.date) query.set("date", params.date);
   if (params.categoryId) query.set("categoryId", params.categoryId);
+  if (params.userId) query.set("userId", params.userId);
   if (params.page) query.set("page", String(params.page));
   if (params.pageSize) query.set("pageSize", String(params.pageSize));
   const qs = query.toString();

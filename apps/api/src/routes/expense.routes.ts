@@ -82,6 +82,17 @@ async function assertCategoryInFamily(familyId: string, categoryId: string) {
   return category;
 }
 
+/** Filter `userId` — người không phải thành viên family → 404 (giống precedent categoryId). */
+async function assertUserInFamily(familyId: string, userId: string) {
+  const membership = await prisma.familyMember.findUnique({
+    where: { familyId_userId: { familyId, userId } },
+  });
+  if (!membership) {
+    throw new AppError(404, "USER_NOT_IN_FAMILY", "Thành viên không thuộc gia đình này");
+  }
+  return membership;
+}
+
 /**
  * Tra khoản chi + enforce quyền sửa/xoá: chỉ NGƯỜI TẠO hoặc OWNER family.
  * Trả expense kèm relations để re-use cho response.
@@ -120,6 +131,7 @@ expenseFamilyRouter.get("/", requireAuth, requireFamilyMember(), async (req, res
   const month = typeof req.query.month === "string" ? req.query.month : undefined;
   const categoryId = typeof req.query.categoryId === "string" ? req.query.categoryId : undefined;
   const date = typeof req.query.date === "string" ? req.query.date : undefined;
+  const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
   const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
   const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? "20"), 10) || 20));
 
@@ -133,8 +145,15 @@ expenseFamilyRouter.get("/", requireAuth, requireFamilyMember(), async (req, res
   if (req.query.date !== undefined && typeof req.query.date !== "string") {
     throw new AppError(400, "VALIDATION_ERROR", "date phải có dạng YYYY-MM-DD và là ngày hợp lệ");
   }
+  // `?userId[]=...` (array/object) — từ chối rõ (precedent date)
+  if (req.query.userId !== undefined && typeof req.query.userId !== "string") {
+    throw new AppError(400, "VALIDATION_ERROR", "userId không hợp lệ");
+  }
   if (categoryId) {
     await assertCategoryInFamily(familyId, categoryId);
+  }
+  if (userId) {
+    await assertUserInFamily(familyId, userId);
   }
 
   const where: Prisma.ExpenseWhereInput = { familyId };
@@ -146,6 +165,9 @@ expenseFamilyRouter.get("/", requireAuth, requireFamilyMember(), async (req, res
   }
   if (categoryId) {
     where.categoryId = categoryId;
+  }
+  if (userId) {
+    where.userId = userId;
   }
 
   const [total, items] = await Promise.all([

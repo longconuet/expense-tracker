@@ -156,40 +156,42 @@ export default function AddPage() {
 
   return (
     <div role="form" aria-label="Thêm khoản chi" className="flex flex-col">
-      <h1 className="text-xl font-bold text-ink">Thêm khoản chi</h1>
-
       {/* Số tiền — hiển thị lớn, gõ bằng keypad bên dưới */}
-      <div className="mt-3 rounded-2xl border border-border bg-card px-4 py-5 text-center">
+      <div className="rounded-2xl border border-border bg-card px-4 py-5 text-center">
         <span aria-live="polite" className="text-5xl font-bold tracking-tight text-ink tabular-nums">
           {amount ? Number(amount).toLocaleString("vi-VN") : "0"}
         </span>
         <span className="ml-1.5 text-2xl font-semibold text-ink-muted">₫</span>
       </div>
 
-      {/* Gợi ý số tròn khi đang gõ dở — chạm chip điền luôn giá trị */}
-      {suggestions.length > 0 ? (
-        <div
-          role="group"
-          aria-label="Gợi ý số tiền"
-          className={`mt-2 grid gap-2 ${SUGGEST_COLS[suggestions.length]}`}
-        >
-          {suggestions.map((value) => (
-            <button
-              key={value}
-              type="button"
-              disabled={submitting}
-              aria-label={`Gợi ý ${formatVnd(value)}`}
-              onClick={() => {
-                haptic(8);
-                setAmount(String(value));
-              }}
-              className="rounded-full border border-border bg-card px-2 py-1.5 text-sm font-medium text-ink transition active:border-primary active:bg-primary-soft active:text-primary disabled:opacity-50"
-            >
-              {formatVndCompact(value)}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {/* Gợi ý số tròn khi đang gõ dở — chạm chip điền luôn giá trị.
+          Khối DUY TRÌ CHIỀU CAO CỐ ĐỊNH 34px (= chiều cao chip) dù không
+          có gợi ý — tránh giao diện nhảy lên/xuống khi ẩn/hiện. */}
+      <div className="mt-2 h-[34px]" data-testid="suggestions-frame">
+        {suggestions.length > 0 ? (
+          <div
+            role="group"
+            aria-label="Gợi ý số tiền"
+            className={`grid gap-2 ${SUGGEST_COLS[suggestions.length]}`}
+          >
+            {suggestions.map((value) => (
+              <button
+                key={value}
+                type="button"
+                disabled={submitting}
+                aria-label={`Gợi ý ${formatVnd(value)}`}
+                onClick={() => {
+                  haptic(8);
+                  setAmount(String(value));
+                }}
+                className="rounded-full border border-border bg-card px-2 py-1.5 text-sm font-medium text-ink transition active:border-primary active:bg-primary-soft active:text-primary disabled:opacity-50"
+              >
+                {formatVndCompact(value)}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       {/* Danh mục — viên tròn cuộn ngang (không tiêu đề, icon gọn để hiện nhiều hơn) */}
       <div className="-mx-4 mt-4">
