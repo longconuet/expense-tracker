@@ -6,12 +6,14 @@ import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { RoleBadge } from "../../shared/ui/RoleBadge";
-import { CheckIcon, ChevronRightIcon, CopyIcon, DownloadIcon, LogoutIcon, MoonIcon, SunIcon, TagIcon, UsersIcon } from "../../shared/ui/icons";
+import { CheckIcon, ChevronRightIcon, CopyIcon, DownloadIcon, LogoutIcon, MoonIcon, RefreshIcon, SunIcon, TagIcon, UsersIcon } from "../../shared/ui/icons";
 import { useInstallPrompt } from "./useInstallPrompt";
+import { useSwUpdate } from "./useSwUpdate";
 
 /**
  * Màn "Tôi": thông tin tài khoản, giao diện tối, gia đình hiện tại
- * (mã mời + copy) và đăng xuất.
+ * (mã mời + copy) và đăng xuất. Có bản cập nhật PWA mới → hiện nút
+ * "Cập nhật ngay" ở đầu màn.
  */
 export default function MePage() {
   const navigate = useNavigate();
@@ -24,6 +26,7 @@ export default function MePage() {
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
 
   const { canInstall, promptInstall } = useInstallPrompt();
+  const { updateAvailable, applying, applyUpdate } = useSwUpdate();
 
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -55,6 +58,23 @@ export default function MePage() {
   return (
     <div>
       <h1 className="text-xl font-bold text-ink">Tôi</h1>
+
+      {updateAvailable && (
+        <Card role="status" className="mt-4 border border-primary/40">
+          <div className="flex items-center gap-3">
+            <RefreshIcon className="h-5 w-5 shrink-0 text-primary" />
+            <div>
+              <p className="font-medium text-ink">Có bản cập nhật mới</p>
+              <p className="text-xs text-ink-muted">
+                Cập nhật để dùng phiên bản mới nhất của ứng dụng.
+              </p>
+            </div>
+          </div>
+          <Button className="mt-3 w-full" onClick={applyUpdate} loading={applying}>
+            Cập nhật ngay
+          </Button>
+        </Card>
+      )}
 
       <Card className="mt-4">
         <p className="text-lg font-semibold text-ink">{user?.name}</p>

@@ -1,9 +1,20 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../core/swUpdate", () => ({
+  hasPendingUpdate: vi.fn(() => false),
+  requestSwUpdateCheck: vi.fn(async () => undefined),
+  applySwUpdate: vi.fn(async () => undefined),
+}));
+
+import { applySwUpdate, hasPendingUpdate } from "../core/swUpdate";
 import { useAuthStore } from "../core/authStore";
 import { useThemeStore } from "../core/themeStore";
 import MePage from "../features/me/MePage";
+
+const hasPendingUpdateMock = vi.mocked(hasPendingUpdate);
+const applySwUpdateMock = vi.mocked(applySwUpdate);
 
 const USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY = {
@@ -44,6 +55,17 @@ describe("Màn Tôi", () => {
       value: { writeText: writeTextMock },
       configurable: true,
     });
+    // Hook useSwUpdate cần serviceWorker để đăng ký listener + kiểm tra
+    hasPendingUpdateMock.mockReturnValue(false);
+    applySwUpdateMock.mockReset();
+    Object.defineProperty(navigator, "serviceWorker", {
+      value: {
+        controller: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      },
+      configurable: true,
+    });
   });
 
   afterEach(() => {
@@ -62,6 +84,31 @@ describe("Màn Tôi", () => {
     expect(screen.getByText("Nhà An")).toBeInTheDocument();
     expect(screen.getByText("ABC123")).toBeInTheDocument();
     expect(screen.getByText("Chủ gia đình")).toBeInTheDocument();
+  });
+
+  it("không có bản cập nhật mới → không hiện nút 'Cập nhật ngay'", async () => {
+    // Arrange + Act (hasPendingUpdate mặc định false)
+    renderMe();
+    await act(async () => {});
+
+    // Assert
+    expect(screen.queryByRole("button", { name: "Cập nhật ngay" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Có bản cập nhật mới")).not.toBeInTheDocument();
+  });
+
+  it("có bản cập nhật mới → hiện nút 'Cập nhật ngay'; bấm → gọi applySwUpdate", async () => {
+    // Arrange
+    hasPendingUpdateMock.mockReturnValue(true);
+
+    // Act
+    renderMe();
+    const updateBtn = await screen.findByRole("button", { name: "Cập nhật ngay" });
+    fireEvent.click(updateBtn);
+    await act(async () => {});
+
+    // Assert
+    expect(screen.getByText("Có bản cập nhật mới")).toBeInTheDocument();
+    expect(applySwUpdateMock).toHaveBeenCalledTimes(1);
   });
 
   it("bật/tắt giao diện tối → theme store đổi + class .dark trên <html>", () => {
