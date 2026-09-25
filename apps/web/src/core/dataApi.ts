@@ -59,7 +59,7 @@ export async function createCategory(
   return data.category;
 }
 
-/** Sửa danh mục — preset chỉ đổi được `order` (API trả 403 PRESET_LOCKED). */
+/** Sửa danh mục (mọi danh mục đều sửa được — kể cả preset khởi tạo). */
 export async function updateCategory(
   familyId: string,
   categoryId: string,
@@ -72,7 +72,7 @@ export async function updateCategory(
   return data.category;
 }
 
-/** Xoá danh mục — 403 preset, 409 khi đang có khoản chi (CATEGORY_IN_USE). */
+/** Xoá danh mục — 409 khi đang có khoản chi (CATEGORY_IN_USE); mọi danh mục (kể cả preset) đều xoá được. */
 export async function deleteCategory(familyId: string, categoryId: string): Promise<void> {
   await apiFetch(`/api/families/${familyId}/categories/${categoryId}`, { method: "DELETE" });
 }

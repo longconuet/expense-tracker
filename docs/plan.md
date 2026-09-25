@@ -31,7 +31,7 @@
 ## 4. API (envelope `{ success, data, error, meta }`)
 - **Auth**: `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `GET /me`
 - **Family**: `POST /families` (tạo, trả về mã) · `POST /families/join` {code} · `GET /families/:id` (thành viên) · `POST /families/:id/regenerate-code` · xoá/thoát thành viên
-- **Category**: CRUD theo family (preset khoá, tự do thêm/bớt)
+- **Category**: CRUD theo family — mọi danh mục bình đẳng (preset chỉ là danh mục khởi tạo khi lập family, không có hành vi riêng); xoá chặn 409 khi đang có khoản chi
 - **Expense**: `GET /families/:id/expenses?month=&categoryId=&page=` (phân trang `meta`) · `POST /expenses` · `PUT/DELETE /expenses/:id`
 - **Stats**: `GET /families/:id/stats?month=` → tổng tháng, theo danh mục (%), theo ngày, so tháng trước
 

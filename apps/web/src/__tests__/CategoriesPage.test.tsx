@@ -54,32 +54,28 @@ describe("Quản lý danh mục chi tiêu", () => {
     cleanup();
   });
 
-  it("hiện list theo thứ tự; preset có nhãn 'Danh mục mặc định' + ẩn nút sửa/xoá", async () => {
+  it("hiện list theo thứ tự; mọi hàng (kể cả preset) đủ 4 nút, không nhãn mặc định", async () => {
     // Arrange + Act
     fetchCategoriesMock.mockResolvedValue(LIST);
     render(<CategoriesPage />);
     const rows = await screen.findAllByRole("listitem");
 
-    // Assert — thứ tự + nhãn preset
+    // Assert — thứ tự, không còn nhãn "Danh mục mặc định"
     expect(rows).toHaveLength(3);
     expect(rows[0]).toHaveTextContent("Ăn uống");
     expect(rows[1]).toHaveTextContent("Tiền điện");
     expect(rows[2]).toHaveTextContent("Khác");
-    expect(screen.getAllByText("Danh mục mặc định")).toHaveLength(2);
+    expect(screen.queryAllByText("Danh mục mặc định")).toHaveLength(0);
 
-    // Preset: không có nút sửa/xoá, chỉ có đổi thứ tự
-    const presetRow = within(rows[0]);
-    expect(presetRow.queryByRole("button", { name: /Sửa danh mục/ })).not.toBeInTheDocument();
-    expect(presetRow.queryByRole("button", { name: /Xoá danh mục/ })).not.toBeInTheDocument();
-    expect(presetRow.getByRole("button", { name: "Đưa Ăn uống lên trên" })).toBeInTheDocument();
-
-    // Không preset: đủ 4 nút
-    const customRow = within(rows[1]);
-    expect(customRow.getByRole("button", { name: "Sửa danh mục Tiền điện" })).toBeInTheDocument();
-    expect(customRow.getByRole("button", { name: "Xoá danh mục Tiền điện" })).toBeInTheDocument();
+    // Mọi hàng (kể cả preset) đều có đủ 4 nút hành động
+    for (const row of rows) {
+      expect(within(row).getAllByRole("button")).toHaveLength(4);
+    }
+    expect(within(rows[0]).getByRole("button", { name: "Sửa danh mục Ăn uống" })).toBeInTheDocument();
+    expect(within(rows[0]).getByRole("button", { name: "Xoá danh mục Ăn uống" })).toBeInTheDocument();
 
     // Nút đầu/cuối list disable
-    expect(presetRow.getByRole("button", { name: "Đưa Ăn uống lên trên" })).toBeDisabled();
+    expect(within(rows[0]).getByRole("button", { name: "Đưa Ăn uống lên trên" })).toBeDisabled();
     expect(within(rows[2]).getByRole("button", { name: "Đưa Khác xuống dưới" })).toBeDisabled();
   });
 

@@ -24,9 +24,9 @@ import { CategoriesSkeleton } from "./CategoriesSkeleton";
 
 /**
  * Màn quản lý danh mục chi tiêu — thêm / sửa / xoá / đổi thứ tự.
- * Mọi member đều được quyền (API enforce). Preset: chỉ đổi được thứ tự
- * (FE ẩn nút sửa/xoá theo `isPreset`). Mutation offline → hiện lỗi,
- * không có hàng đợi (nhất quán với sửa khoản offline).
+ * Mọi member đều được quyền (API enforce). Mọi danh mục bình đẳng
+ * (preset khởi tạo khi tạo family cũng sửa/xoá được như danh mục thường).
+ * Mutation offline → hiện lỗi, không có hàng đợi (nhất quán với sửa khoản offline).
  */
 
 /** Emoji gợi ý — 24 ô, bao gồm icon của 7 preset để dễ chọn lại. */
@@ -264,9 +264,6 @@ export default function CategoriesPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-ink">{category.name}</p>
-                      {category.isPreset && (
-                        <p className="text-xs text-ink-muted">Danh mục mặc định</p>
-                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       <button
@@ -287,28 +284,24 @@ export default function CategoriesPage() {
                       >
                         <ArrowDownIcon className="h-4 w-4" />
                       </button>
-                      {!category.isPreset && (
-                        <button
-                          type="button"
-                          onClick={() => openEdit(category)}
-                          disabled={busy}
-                          aria-label={`Sửa danh mục ${category.name}`}
-                          className="rounded-lg p-1.5 text-ink-muted transition hover:bg-ink/5 disabled:opacity-30"
-                        >
-                          <PencilIcon className="h-4 w-4" />
-                        </button>
-                      )}
-                      {!category.isPreset && (
-                        <button
-                          type="button"
-                          onClick={() => setDeleteTarget(category)}
-                          disabled={busy}
-                          aria-label={`Xoá danh mục ${category.name}`}
-                          className="rounded-lg p-1.5 text-ink-muted transition hover:bg-danger/10 hover:text-danger disabled:opacity-30"
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => openEdit(category)}
+                        disabled={busy}
+                        aria-label={`Sửa danh mục ${category.name}`}
+                        className="rounded-lg p-1.5 text-ink-muted transition hover:bg-ink/5 disabled:opacity-30"
+                      >
+                        <PencilIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(category)}
+                        disabled={busy}
+                        aria-label={`Xoá danh mục ${category.name}`}
+                        className="rounded-lg p-1.5 text-ink-muted transition hover:bg-danger/10 hover:text-danger disabled:opacity-30"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
                     </div>
                   </Card>
                 </li>
