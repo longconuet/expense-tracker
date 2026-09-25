@@ -57,7 +57,7 @@ categoryRouter.post("/", validateBody(createCategorySchema), async (req, res) =>
   sendOk(res, { category }, undefined, 201);
 });
 
-/** Sửa category — preset chỉ đổi được order, không đổi name/icon. */
+/** Sửa category — mọi danh mục (kể cả preset khởi tạo) đều sửa được. */
 categoryRouter.put("/:categoryId", validateBody(updateCategorySchema), async (req, res) => {
   const { familyId } = req.family!;
   const categoryId = String(req.params.categoryId ?? "");
@@ -66,13 +66,6 @@ categoryRouter.put("/:categoryId", validateBody(updateCategorySchema), async (re
   const category = await prisma.category.findFirst({ where: { id: categoryId, familyId } });
   if (!category) {
     throw new AppError(404, "CATEGORY_NOT_FOUND", "Không tìm thấy danh mục");
-  }
-
-  const presetTouched =
-    category.isPreset &&
-    ((name !== undefined && name !== category.name) || (icon !== undefined && icon !== category.icon));
-  if (presetTouched) {
-    throw new AppError(403, "PRESET_LOCKED", "Danh mục mặc định không thể đổi tên/icon");
   }
 
   const data: Prisma.CategoryUpdateInput = {};
@@ -84,7 +77,7 @@ categoryRouter.put("/:categoryId", validateBody(updateCategorySchema), async (re
   sendOk(res, { category: updated });
 });
 
-/** Xoá category — preset không xoá; đang có khoản chi thì không xoá. */
+/** Xoá category — mọi danh mục đều xoá được (chặn khi đang có khoản chi). */
 categoryRouter.delete("/:categoryId", async (req, res) => {
   const { familyId } = req.family!;
   const categoryId = String(req.params.categoryId ?? "");
@@ -92,9 +85,6 @@ categoryRouter.delete("/:categoryId", async (req, res) => {
   const category = await prisma.category.findFirst({ where: { id: categoryId, familyId } });
   if (!category) {
     throw new AppError(404, "CATEGORY_NOT_FOUND", "Không tìm thấy danh mục");
-  }
-  if (category.isPreset) {
-    throw new AppError(403, "PRESET_LOCKED", "Không xoá được danh mục mặc định");
   }
 
   const expenseCount = await prisma.expense.count({ where: { categoryId: category.id } });

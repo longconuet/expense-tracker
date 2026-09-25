@@ -14,7 +14,7 @@ function fakeResponse(
   } as unknown as Response;
 }
 
-const MOCK_USER = { id: "u1", name: "An", email: "an@test.com" };
+const MOCK_USER = { id: "u1", name: "An", username: "an2310" };
 const MOCK_FAMILY = {
   id: "f1",
   name: "Nhà An",

@@ -7,7 +7,7 @@ function uniqueToken(): string {
 
 export interface TestAccount {
   name: string;
-  email: string;
+  username: string;
   password: string;
   familyName: string;
 }
@@ -16,7 +16,7 @@ export function newAccount(): TestAccount {
   const token = uniqueToken();
   return {
     name: `User E2E ${token}`,
-    email: `e2e-${token}@test.com`,
+    username: `e2e_${token}`,
     password: "MatKhau123!",
     familyName: `Nhà E2E ${token}`,
   };
@@ -26,7 +26,7 @@ export function newAccount(): TestAccount {
 export async function registerAndCreateFamily(page: Page, account: TestAccount): Promise<void> {
   await page.goto("/register");
   await page.getByLabel("Họ và tên").fill(account.name);
-  await page.getByLabel("Email").fill(account.email);
+  await page.getByLabel("Tên đăng nhập").fill(account.username);
   await page.getByLabel("Mật khẩu").fill(account.password);
   await page.getByRole("button", { name: "Đăng ký" }).click();
 

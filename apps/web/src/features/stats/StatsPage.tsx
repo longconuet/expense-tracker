@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -18,8 +18,8 @@ import { fetchStats } from "../../core/dataApi";
 import { addMonths, currentMonth, monthLabel } from "../../core/dates";
 import { useRefetchOnSync } from "../../core/useRefetchOnSync";
 import { Card } from "../../shared/ui/Card";
-import { Spinner } from "../../shared/ui/Spinner";
 import { ChevronLeftIcon, ChevronRightIcon } from "../../shared/ui/icons";
+import { StatsSkeleton } from "./StatsSkeleton";
 
 /** Palette cố định cho các lát donut — độ sáng vừa phải, đọc được cả 2 theme. */
 const PIE_COLORS = [
@@ -51,6 +51,8 @@ export default function StatsPage() {
   const [stats, setStats] = useState<MonthlyStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const lastQuery = useRef("");
+  const lastOk = useRef(false);
 
   // Khoản offline vừa sync về server → refetch
   useRefetchOnSync(() => setReloadKey((k) => k + 1));
@@ -60,12 +62,23 @@ export default function StatsPage() {
   useEffect(() => {
     if (!activeFamilyId) return;
     let cancelled = false;
-    setStats(null);
+    // Refetch lặng lẽ (tháng không đổi + lần fetch trước OK) → GIỮ data cũ.
+    // Đổi tháng = query mới → reset → hiện skeleton.
+    const query = `${activeFamilyId}|${month}`;
+    const isSilent = lastQuery.current === query && lastOk.current;
+    lastQuery.current = query;
+    if (!isSilent) {
+      lastOk.current = false;
+      setStats(null);
+    }
     setError(null);
 
     fetchStats(activeFamilyId, month)
       .then((data) => {
-        if (!cancelled) setStats(data);
+        if (!cancelled) {
+          lastOk.current = true;
+          setStats(data);
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -118,9 +131,7 @@ export default function StatsPage() {
       )}
 
       {!stats && !error ? (
-        <div className="flex justify-center py-16">
-          <Spinner />
-        </div>
+        <StatsSkeleton />
       ) : stats && stats.total === 0 ? (
         <Card className="mt-4 text-center">
           <p className="text-4xl" aria-hidden>
@@ -171,7 +182,10 @@ export default function StatsPage() {
                       <Cell key={entry.category.id} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => formatVnd(Number(value))} contentStyle={TOOLTIP_STYLE} />
+                  <Tooltip
+                    formatter={(value) => formatVnd(Number(value))}
+                    contentStyle={TOOLTIP_STYLE}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -197,7 +211,9 @@ export default function StatsPage() {
             <h2 className="font-semibold text-ink">Theo ngày</h2>
             <div className="mt-2 h-48">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stats.byDay.map((d) => ({ day: Number(d.date.slice(8)), total: d.total }))}>
+                <BarChart
+                  data={stats.byDay.map((d) => ({ day: Number(d.date.slice(8)), total: d.total }))}
+                >
                   <XAxis
                     dataKey="day"
                     interval={4}

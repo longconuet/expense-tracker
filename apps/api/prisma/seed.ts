@@ -5,21 +5,21 @@ import { PRESET_CATEGORIES } from "@expense-tracker/shared";
 
 const prisma = new PrismaClient();
 
-const TEST_EMAIL = "test@example.com";
+const TEST_USERNAME = "test_user";
 const TEST_FAMILY_CODE = "TEST12";
 
 async function main() {
   // 1. User test (passwordHash placeholder — task 3 sẽ dùng bcrypt thật)
   await prisma.user.upsert({
-    where: { email: TEST_EMAIL },
+    where: { username: TEST_USERNAME },
     update: {},
     create: {
       name: "Người dùng thử",
-      email: TEST_EMAIL,
+      username: TEST_USERNAME,
       passwordHash: "seed-placeholder",
     },
   });
-  const user = await prisma.user.findUniqueOrThrow({ where: { email: TEST_EMAIL } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { username: TEST_USERNAME } });
 
   // 2. Family test
   const family = await prisma.family.upsert({

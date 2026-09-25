@@ -1,11 +1,11 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAuthStore } from "../core/authStore";
 import { useThemeStore } from "../core/themeStore";
 import MePage from "../features/me/MePage";
 
-const USER = { id: "u1", name: "An", email: "an@test.com" };
+const USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY = {
   id: "f1",
   name: "Nhà An",
@@ -21,6 +21,7 @@ function renderMe() {
       <Routes>
         <Route path="/me" element={<MePage />} />
         <Route path="/login" element={<div>LOGIN MARKER</div>} />
+        <Route path="/categories" element={<div>CATEGORIES MARKER</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -39,7 +40,6 @@ describe("Màn Tôi", () => {
       status: "authenticated",
       logout: vi.fn(async () => undefined),
     });
-    vi.stubGlobal("confirm", vi.fn(() => true));
     Object.defineProperty(navigator, "clipboard", {
       value: { writeText: writeTextMock },
       configurable: true,
@@ -58,7 +58,7 @@ describe("Màn Tôi", () => {
 
     // Assert
     expect(screen.getByText("An")).toBeInTheDocument();
-    expect(screen.getByText("an@test.com")).toBeInTheDocument();
+    expect(screen.getByText("an2310")).toBeInTheDocument();
     expect(screen.getByText("Nhà An")).toBeInTheDocument();
     expect(screen.getByText("ABC123")).toBeInTheDocument();
     expect(screen.getByText("Chủ gia đình")).toBeInTheDocument();
@@ -84,7 +84,7 @@ describe("Màn Tôi", () => {
     expect(document.documentElement.classList.contains("dark")).toBe(false);
   });
 
-  it("bấm Copy mã mời → ghi inviteCode vào clipboard", async () => {
+  it("bấm Copy mã mời → ghi inviteCode vào clipboard, không mở modal", async () => {
     // Arrange + Act
     renderMe();
     fireEvent.click(screen.getByRole("button", { name: "Copy" }));
@@ -92,19 +92,38 @@ describe("Màn Tôi", () => {
     // Assert
     expect(await screen.findByText("Đã copy")).toBeInTheDocument();
     expect(writeTextMock).toHaveBeenCalledWith("ABC123");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("đăng xuất có xác nhận → gọi logout + chuyển về /login", async () => {
+  it("clipboard fail → không hiện 'Đã copy', không mở prompt (mã hiển thị sẵn trong card)", async () => {
+    // Arrange
+    renderMe();
+    const promptSpy = vi.fn();
+    vi.stubGlobal("prompt", promptSpy);
+    writeTextMock.mockRejectedValueOnce(new Error("denied"));
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    await act(async () => {});
+
+    // Assert
+    expect(screen.queryByText("Đã copy")).not.toBeInTheDocument();
+    expect(promptSpy).not.toHaveBeenCalled();
+    expect(screen.getByText("ABC123")).toBeInTheDocument();
+  });
+
+  it("đăng xuất qua dialog xác nhận → gọi logout + chuyển về /login", async () => {
     // Arrange
     const logoutMock = vi.fn(async () => undefined);
     useAuthStore.setState({ logout: logoutMock });
     renderMe();
 
     // Act
-    fireEvent.click(screen.getByRole("button", { name: /Đăng xuất/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Đăng xuất" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Đăng xuất" }));
 
     // Assert
-    expect(confirm).toHaveBeenCalledWith("Đăng xuất khỏi ứng dụng?");
     expect(logoutMock).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("LOGIN MARKER")).toBeInTheDocument();
   });
@@ -124,18 +143,29 @@ describe("Màn Tôi", () => {
     expect(await screen.findByRole("button", { name: /Cài ứng dụng/ })).toBeInTheDocument();
   });
 
-  it("huy xác nhận đăng xuất → không gọi logout", () => {
+  it("huy xác nhận đăng xuất trong dialog → không gọi logout", async () => {
     // Arrange
-    vi.stubGlobal("confirm", vi.fn(() => false));
     const logoutMock = vi.fn(async () => undefined);
     useAuthStore.setState({ logout: logoutMock });
     renderMe();
 
     // Act
-    fireEvent.click(screen.getByRole("button", { name: /Đăng xuất/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Đăng xuất" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Huỷ" }));
 
     // Assert
     expect(logoutMock).not.toHaveBeenCalled();
     expect(screen.queryByText("LOGIN MARKER")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("hàng 'Danh mục chi tiêu' → điều hướng /categories", async () => {
+    // Arrange + Act
+    renderMe();
+    fireEvent.click(screen.getByRole("button", { name: "Danh mục chi tiêu" }));
+
+    // Assert
+    expect(await screen.findByText("CATEGORIES MARKER")).toBeInTheDocument();
   });
 });

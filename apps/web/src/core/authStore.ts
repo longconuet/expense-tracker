@@ -38,8 +38,8 @@ interface AuthState {
   status: AuthStatus;
 
   bootstrap: () => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  register: (name: string, username: string, password: string) => Promise<void>;
   joinFamily: (code: string) => Promise<Family>;
   createFamily: (name: string) => Promise<Family>;
   refreshMe: () => Promise<void>;
@@ -92,20 +92,20 @@ export const useAuthStore = create<AuthState>()(
         return bootstrapPromise;
       },
 
-      login: async (email, password) => {
+      login: async (username, password) => {
         const data = await apiFetch<AuthSessionData>("/api/auth/login", {
           method: "POST",
-          body: { email, password },
+          body: { username, password },
           auth: false,
         });
         setAccessToken(data.accessToken);
         await get().refreshMe();
       },
 
-      register: async (name, email, password) => {
+      register: async (name, username, password) => {
         const data = await apiFetch<AuthSessionData>("/api/auth/register", {
           method: "POST",
-          body: { name, email, password },
+          body: { name, username, password },
           auth: false,
         });
         setAccessToken(data.accessToken);

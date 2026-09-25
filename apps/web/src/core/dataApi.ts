@@ -31,6 +31,52 @@ export async function fetchCategories(familyId: string): Promise<Category[]> {
   return data.categories;
 }
 
+/**
+ * CRUD category (mọi member được quyền — API enforce).
+ * Mutation KHÔNG đi qua read cache; caller tự refetch categories
+ * sau thao tác thành công để đồng bộ cache.
+ */
+export interface CreateCategoryInput {
+  name: string;
+  icon: string;
+}
+
+export interface UpdateCategoryInput {
+  name?: string;
+  icon?: string;
+  order?: number;
+}
+
+/** Thêm danh mục tự tạo — order = max + 1 (hiện cuối list). 409 khi trùng tên. */
+export async function createCategory(
+  familyId: string,
+  input: CreateCategoryInput,
+): Promise<Category> {
+  const data = await apiFetch<{ category: Category }>(`/api/families/${familyId}/categories`, {
+    method: "POST",
+    body: input,
+  });
+  return data.category;
+}
+
+/** Sửa danh mục (mọi danh mục đều sửa được — kể cả preset khởi tạo). */
+export async function updateCategory(
+  familyId: string,
+  categoryId: string,
+  input: UpdateCategoryInput,
+): Promise<Category> {
+  const data = await apiFetch<{ category: Category }>(
+    `/api/families/${familyId}/categories/${categoryId}`,
+    { method: "PUT", body: input },
+  );
+  return data.category;
+}
+
+/** Xoá danh mục — 409 khi đang có khoản chi (CATEGORY_IN_USE); mọi danh mục (kể cả preset) đều xoá được. */
+export async function deleteCategory(familyId: string, categoryId: string): Promise<void> {
+  await apiFetch(`/api/families/${familyId}/categories/${categoryId}`, { method: "DELETE" });
+}
+
 // ---------------------------------------------------------------------------
 // Expenses
 // ---------------------------------------------------------------------------

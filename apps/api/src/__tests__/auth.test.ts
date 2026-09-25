@@ -25,10 +25,10 @@ function fullRefreshCookie(setCookie: SetCookie): string | undefined {
   return allCookies(setCookie).find((c) => c.startsWith("etracker_refresh="));
 }
 
-async function registerUser(name: string, email: string) {
+async function registerUser(name: string, username: string) {
   const res = await request(app)
     .post("/api/auth/register")
-    .send({ name, email, password: PASSWORD });
+    .send({ name, username, password: PASSWORD });
   expect(res.status).toBe(201);
   return {
     accessToken: res.body.data.accessToken,
@@ -50,7 +50,7 @@ describe("POST /api/auth/register", () => {
     // Act
     const res = await request(app)
       .post("/api/auth/register")
-      .send({ name: "Nguyễn Văn A", email: "a1@test.com", password: PASSWORD });
+      .send({ name: "Nguyễn Văn A", username: "user_a1", password: PASSWORD });
 
     // Assert
     expect(res.status).toBe(201);
@@ -58,7 +58,7 @@ describe("POST /api/auth/register", () => {
     expect(res.body.data.user).toEqual({
       id: expect.any(String),
       name: "Nguyễn Văn A",
-      email: "a1@test.com",
+      username: "user_a1",
     });
     expect(typeof res.body.data.accessToken).toBe("string");
     const fullCookie = fullRefreshCookie(res.headers["set-cookie"]);
@@ -66,60 +66,60 @@ describe("POST /api/auth/register", () => {
     expect(fullCookie).toMatch(/httponly/i);
   });
 
-  it("từ chối email trùng (kể cả khác hoa thường, thừa khoảng trắng) với 409", async () => {
-    await registerUser("Nguyễn Văn A", "a2@test.com");
+  it("từ chối username trùng (kể cả khác hoa thường, thừa khoảng trắng) với 409", async () => {
+    await registerUser("Nguyễn Văn A", "user_a2");
 
     const res = await request(app)
       .post("/api/auth/register")
-      .send({ name: "Nguyễn Văn B", email: " A2@test.com ", password: PASSWORD });
+      .send({ name: "Nguyễn Văn B", username: " User_A2 ", password: PASSWORD });
 
     expect(res.status).toBe(409);
     expect(res.body.success).toBe(false);
-    expect(res.body.error.code).toBe("EMAIL_EXISTS");
+    expect(res.body.error.code).toBe("USERNAME_TAKEN");
   });
 
   it("từ chối dữ liệu không hợp lệ với 400 VALIDATION_ERROR", async () => {
     const res = await request(app)
       .post("/api/auth/register")
-      .send({ name: "A", email: "khong-phai-email", password: "ngan" });
+      .send({ name: "A", username: "x", password: "ngan" });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
     expect(res.body.error.message).toContain("name");
-    expect(res.body.error.message).toContain("email");
+    expect(res.body.error.message).toContain("username");
     expect(res.body.error.message).toContain("password");
   });
 });
 
 describe("POST /api/auth/login", () => {
   it("đăng nhập đúng → access token + refresh cookie", async () => {
-    await registerUser("Trần Thị B", "b1@test.com");
+    await registerUser("Trần Thị B", "user_b1");
 
     const res = await request(app)
       .post("/api/auth/login")
-      .send({ email: "b1@test.com", password: PASSWORD });
+      .send({ username: "user_b1", password: PASSWORD });
 
     expect(res.status).toBe(200);
-    expect(res.body.data.user.email).toBe("b1@test.com");
+    expect(res.body.data.user.username).toBe("user_b1");
     expect(typeof res.body.data.accessToken).toBe("string");
     expect(extractRefreshCookie(res.headers["set-cookie"])).toMatch(/^etracker_refresh=/);
   });
 
   it("sai mật khẩu → 401 INVALID_CREDENTIALS", async () => {
-    await registerUser("Trần Thị C", "b2@test.com");
+    await registerUser("Trần Thị C", "user_b2");
 
     const res = await request(app)
       .post("/api/auth/login")
-      .send({ email: "b2@test.com", password: "sai-mat-khau" });
+      .send({ username: "user_b2", password: "sai-mat-khau" });
 
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
   });
 
-  it("email không tồn tại → 401 INVALID_CREDENTIALS", async () => {
+  it("username không tồn tại → 401 INVALID_CREDENTIALS (cùng message, không tiết lộ tồn tại)", async () => {
     const res = await request(app)
       .post("/api/auth/login")
-      .send({ email: "khong-ton-tai@test.com", password: PASSWORD });
+      .send({ username: "user_khong_ton_tai", password: PASSWORD });
 
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
@@ -128,12 +128,12 @@ describe("POST /api/auth/login", () => {
 
 describe("GET /api/me", () => {
   it("trả user + danh sách family rỗng khi vừa đăng ký", async () => {
-    const { accessToken } = await registerUser("Lê Văn C", "c@test.com");
+    const { accessToken } = await registerUser("Lê Văn C", "user_c");
 
     const res = await request(app).get("/api/me").set("Authorization", `Bearer ${accessToken}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.user.email).toBe("c@test.com");
+    expect(res.body.data.user.username).toBe("user_c");
     expect(res.body.data.families).toEqual([]);
   });
 
@@ -154,7 +154,7 @@ describe("GET /api/me", () => {
 
 describe("POST /api/auth/refresh", () => {
   it("đổi refresh cookie thành cặp token mới (rotation)", async () => {
-    const { accessToken, refreshCookie } = await registerUser("Phạm Thị D", "d@test.com");
+    const { accessToken, refreshCookie } = await registerUser("Phạm Thị D", "user_d");
     expect(refreshCookie).toBeTruthy();
 
     const res = await request(app).post("/api/auth/refresh").set("Cookie", refreshCookie);
@@ -185,7 +185,7 @@ describe("POST /api/auth/refresh", () => {
 
 describe("POST /api/auth/logout", () => {
   it("xoá refresh cookie (giá trị rỗng + hết hạn)", async () => {
-    await registerUser("Hoàng Văn E", "e@test.com");
+    await registerUser("Hoàng Văn E", "user_e");
 
     const res = await request(app).post("/api/auth/logout");
 

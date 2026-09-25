@@ -21,7 +21,7 @@ beforeAll(async () => {
 
   const ownerReg = await request(app)
     .post("/api/auth/register")
-    .send({ name: "Chủ Stats", email: "stats-owner@test.com", password: PASSWORD });
+    .send({ name: "Chủ Stats", username: "stats_owner", password: PASSWORD });
   ownerToken = ownerReg.body.data.accessToken;
 
   const fam = await request(app)
@@ -32,7 +32,7 @@ beforeAll(async () => {
 
   const memberReg = await request(app)
     .post("/api/auth/register")
-    .send({ name: "Member Stats", email: "stats-member@test.com", password: PASSWORD });
+    .send({ name: "Member Stats", username: "stats_member", password: PASSWORD });
   memberToken = memberReg.body.data.accessToken;
   await request(app)
     .post("/api/families/join")
@@ -41,7 +41,7 @@ beforeAll(async () => {
 
   const strangerReg = await request(app)
     .post("/api/auth/register")
-    .send({ name: "Lạ Stats", email: "stats-stranger@test.com", password: PASSWORD });
+    .send({ name: "Lạ Stats", username: "stats_stranger", password: PASSWORD });
   strangerToken = strangerReg.body.data.accessToken;
 
   const cats = await request(app)

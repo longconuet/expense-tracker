@@ -33,7 +33,7 @@ export type UserRole = "OWNER" | "MEMBER";
 export interface User {
   id: string;
   name: string;
-  email: string;
+  username: string;
 }
 
 export interface Family {
@@ -64,6 +64,7 @@ export interface Category {
   id: string;
   name: string;
   icon: string;
+  /** Chỉ ghi nhận nguồn gốc (danh mục khởi tạo khi lập family) — không có hành vi riêng. */
   isPreset: boolean;
   order: number;
 }

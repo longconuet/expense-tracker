@@ -1,9 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchCategories, fetchExpenses, deleteExpense } from "../core/dataApi";
 import { useAuthStore } from "../core/authStore";
+import { ApiError } from "../core/api";
 import { addMonths, currentMonth, today, yesterday } from "../core/dates";
+import { SYNCED_EVENT } from "../core/syncQueue";
 import HistoryPage from "../features/history/HistoryPage";
 
 vi.mock("../core/dataApi", () => ({
@@ -16,7 +18,7 @@ const fetchCategoriesMock = vi.mocked(fetchCategories);
 const fetchExpensesMock = vi.mocked(fetchExpenses);
 const deleteExpenseMock = vi.mocked(deleteExpense);
 
-const USER = { id: "u1", name: "An", email: "an@test.com" };
+const USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY = {
   id: "f1",
   name: "Nhà An",
@@ -28,13 +30,7 @@ const FAMILY = {
 
 const CAT = { id: "c1", name: "Ăn uống", icon: "🍜", isPreset: true, order: 0 };
 
-function expense(
-  id: string,
-  note: string,
-  amount: number,
-  createdByName = "An",
-  date = today(),
-) {
+function expense(id: string, note: string, amount: number, createdByName = "An", date = today()) {
   return {
     id,
     amount,
@@ -79,7 +75,6 @@ describe("Lịch sử chi tiêu", () => {
     fetchExpensesMock.mockReset();
     deleteExpenseMock.mockReset();
     fetchCategoriesMock.mockResolvedValue([CAT]);
-    vi.stubGlobal("confirm", vi.fn(() => true));
   });
 
   afterEach(() => {
@@ -107,16 +102,16 @@ describe("Lịch sử chi tiêu", () => {
     fireEvent.click(loadMore);
 
     expect(await screen.findByText("thuốc")).toBeInTheDocument();
-    expect(fetchExpensesMock).toHaveBeenLastCalledWith(
-      "f1",
-      expect.objectContaining({ page: 2 }),
-    );
+    expect(fetchExpensesMock).toHaveBeenLastCalledWith("f1", expect.objectContaining({ page: 2 }));
     expect(screen.getByRole("button", { name: /Tải thêm \(3\/5\)/ })).toBeInTheDocument();
   });
 
   it("lùi tháng → gọi API với tháng trước", async () => {
     // Arrange
-    fetchExpensesMock.mockResolvedValue({ expenses: [], meta: { page: 1, pageSize: 20, total: 0 } });
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [],
+      meta: { page: 1, pageSize: 20, total: 0 },
+    });
     renderHistory();
     await screen.findByText("Chưa có khoản chi tháng này");
 
@@ -134,7 +129,10 @@ describe("Lịch sử chi tiêu", () => {
 
   it("tháng hiện tại → nút tháng sau bị disable", async () => {
     // Arrange
-    fetchExpensesMock.mockResolvedValue({ expenses: [], meta: { page: 1, pageSize: 20, total: 0 } });
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [],
+      meta: { page: 1, pageSize: 20, total: 0 },
+    });
     renderHistory();
     await screen.findByText("Chưa có khoản chi tháng này");
 
@@ -144,7 +142,10 @@ describe("Lịch sử chi tiêu", () => {
 
   it("bấm chip danh mục → lọc lại theo categoryId", async () => {
     // Arrange
-    fetchExpensesMock.mockResolvedValue({ expenses: [], meta: { page: 1, pageSize: 20, total: 0 } });
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [],
+      meta: { page: 1, pageSize: 20, total: 0 },
+    });
     renderHistory();
     await screen.findByText("Chưa có khoản chi tháng này");
 
@@ -160,35 +161,87 @@ describe("Lịch sử chi tiêu", () => {
     });
   });
 
-  it("xoá khoản có xác nhận → gọi API + gỡ khỏi danh sách", async () => {
+  it("xoá khoản qua dialog → gọi API + gỡ khỏi danh sách", async () => {
     // Arrange
-    fetchExpensesMock.mockResolvedValue({ expenses: PAGE1, meta: { page: 1, pageSize: 20, total: 2 } });
+    fetchExpensesMock.mockResolvedValue({
+      expenses: PAGE1,
+      meta: { page: 1, pageSize: 20, total: 2 },
+    });
     deleteExpenseMock.mockResolvedValue(undefined);
     renderHistory();
     await screen.findByText("cơm trưa");
 
-    // Act
+    // Act — mở dialog rồi bấm Xoá
     fireEvent.click(screen.getByRole("button", { name: /Xoá khoản cơm trưa/ }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText(/Xoá khoản "cơm trưa" \(50.000 ₫\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Xoá" }));
 
     // Assert
     expect(deleteExpenseMock).toHaveBeenCalledWith("e1");
     expect(await screen.findByText("xăng")).toBeInTheDocument();
     expect(screen.queryByText("cơm trưa")).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("huy xác nhận xoá → không gọi API", async () => {
+  it("huy xác nhận xoá trong dialog → không gọi API", async () => {
     // Arrange
-    vi.stubGlobal("confirm", vi.fn(() => false));
-    fetchExpensesMock.mockResolvedValue({ expenses: PAGE1, meta: { page: 1, pageSize: 20, total: 2 } });
+    fetchExpensesMock.mockResolvedValue({
+      expenses: PAGE1,
+      meta: { page: 1, pageSize: 20, total: 2 },
+    });
     renderHistory();
     await screen.findByText("cơm trưa");
 
     // Act
     fireEvent.click(screen.getByRole("button", { name: /Xoá khoản cơm trưa/ }));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "Huỷ" }));
 
     // Assert
     expect(deleteExpenseMock).not.toHaveBeenCalled();
     expect(screen.getByText("cơm trưa")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("xoá khoản API fail → dialog đóng + hiện lỗi trên màn, khoản vẫn còn", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: PAGE1,
+      meta: { page: 1, pageSize: 20, total: 2 },
+    });
+    deleteExpenseMock.mockRejectedValue(new ApiError("NETWORK_ERROR", "Xoá không thành công.", 0));
+    renderHistory();
+    await screen.findByText("cơm trưa");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: /Xoá khoản cơm trưa/ }));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "Xoá" }));
+
+    // Assert
+    expect(await screen.findByRole("alert")).toHaveTextContent("Xoá không thành công.");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("cơm trưa")).toBeInTheDocument();
+  });
+
+  it("đóng dialog xoá bằng Escape → không gọi API", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: PAGE1,
+      meta: { page: 1, pageSize: 20, total: 2 },
+    });
+    renderHistory();
+    await screen.findByText("cơm trưa");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: /Xoá khoản cơm trưa/ }));
+    await screen.findByRole("dialog");
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    // Assert
+    expect(deleteExpenseMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("chạm khoản (owner) → điều hướng sang màn sửa /expenses/:id/edit", async () => {
@@ -211,7 +264,7 @@ describe("Lịch sử chi tiêu", () => {
   it("member không phải người tạo → khoản không phải link, không có nút xoá", async () => {
     // Arrange
     useAuthStore.setState({
-      user: { id: "u2", name: "Bình", email: "binh@test.com" },
+      user: { id: "u2", name: "Bình", username: "binh99" },
       families: [{ ...FAMILY, myRole: "MEMBER" }],
       activeFamilyId: FAMILY.id,
     });
@@ -225,5 +278,78 @@ describe("Lịch sử chi tiêu", () => {
     expect(await screen.findByText("cơm trưa")).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Xoá khoản/ })).not.toBeInTheDocument();
+  });
+
+  it("tải lần đầu → skeleton (không spinner), giữ tiêu đề + selector + chip lọc", async () => {
+    // Arrange — fetch không bao giờ resolve
+    fetchExpensesMock.mockImplementation(() => new Promise(() => {}));
+    renderHistory();
+
+    // Assert
+    expect(await screen.findByRole("status", { name: "Đang tải" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Lịch sử chi tiêu" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tháng trước" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Ăn uống" })).toBeInTheDocument();
+    expect(document.querySelector(".animate-spin")).toBeNull();
+  });
+
+  it("đổi tháng → skeleton lại (query mới), fetch pending không giữ list cũ", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: PAGE1,
+      meta: { page: 1, pageSize: 20, total: 2 },
+    });
+    renderHistory();
+    await screen.findByText("cơm trưa");
+
+    // Act — fetch tháng mới pending
+    fetchExpensesMock.mockImplementationOnce(() => new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: "Tháng trước" }));
+
+    // Assert
+    expect(screen.getByRole("status", { name: "Đang tải" })).toBeInTheDocument();
+    expect(screen.queryByText("cơm trưa")).not.toBeInTheDocument();
+  });
+
+  it("sync offline → refetch lặng lẽ, GIỮ list cũ (không flicker)", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: PAGE1,
+      meta: { page: 1, pageSize: 20, total: 2 },
+    });
+    renderHistory();
+    await screen.findByText("cơm trưa");
+
+    // Act — fetch mới pending + event sync
+    fetchExpensesMock.mockImplementationOnce(() => new Promise(() => {}));
+    act(() => {
+      window.dispatchEvent(new Event(SYNCED_EVENT));
+    });
+
+    // Assert — list cũ vẫn hiển thị, không có skeleton
+    expect(screen.getByText("cơm trưa")).toBeInTheDocument();
+    expect(document.querySelector(".animate-pulse")).toBeNull();
+    expect(fetchExpensesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("sync offline → refetch lỗi nhưng đã có data → giữ list + banner lỗi", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: PAGE1,
+      meta: { page: 1, pageSize: 20, total: 2 },
+    });
+    renderHistory();
+    await screen.findByText("cơm trưa");
+
+    // Act — fetch mới lỗi
+    fetchExpensesMock.mockRejectedValueOnce(new ApiError("NETWORK_ERROR", "Mất kết nối.", 0));
+    act(() => {
+      window.dispatchEvent(new Event(SYNCED_EVENT));
+    });
+
+    // Assert — list cũ vẫn hiển thị + banner lỗi, không có skeleton
+    expect(await screen.findByRole("alert")).toHaveTextContent("Mất kết nối.");
+    expect(screen.getByText("cơm trưa")).toBeInTheDocument();
+    expect(document.querySelector(".animate-pulse")).toBeNull();
   });
 });

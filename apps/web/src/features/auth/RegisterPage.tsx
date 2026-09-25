@@ -9,8 +9,9 @@ import { completeAfterAuth } from "./afterAuth";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -30,12 +31,17 @@ export default function RegisterPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setUsernameError(null);
     setSubmitting(true);
     try {
-      await register(name.trim(), email.trim(), password);
+      await register(name.trim(), username.trim(), password);
       navigate(await completeAfterAuth(code), { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra, vui lòng thử lại.");
+      if (err instanceof ApiError && err.code === "USERNAME_TAKEN") {
+        setUsernameError(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Có lỗi xảy ra, vui lòng thử lại.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -59,13 +65,20 @@ export default function RegisterPage() {
         />
         <div className="mt-4">
           <Input
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="ban@gmail.com"
-            autoComplete="email"
+            label="Tên đăng nhập"
+            type="text"
+            value={username}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              if (usernameError) setUsernameError(null);
+            }}
+            placeholder="an2310"
+            autoComplete="username"
+            minLength={2}
+            maxLength={20}
             required
+            hint="2-20 ký tự: chữ thường, số, dấu . _"
+            error={usernameError}
           />
         </div>
         <div className="mt-4">

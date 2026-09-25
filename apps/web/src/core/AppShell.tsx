@@ -129,7 +129,7 @@ export function AppShell() {
             <span className="max-w-40 truncate font-semibold text-ink">{activeFamily.name}</span>
             <ChevronDownIcon className="h-4 w-4 text-ink-muted" />
           </button>
-          <span className="truncate text-sm text-ink-muted" title={user?.email}>
+          <span className="truncate text-sm text-ink-muted" title={user?.username}>
             {user?.name}
           </span>
         </div>

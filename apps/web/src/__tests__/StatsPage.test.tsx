@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchStats } from "../core/dataApi";
 import { useAuthStore } from "../core/authStore";
 import { ApiError } from "../core/api";
 import { addMonths, currentMonth } from "../core/dates";
+import { SYNCED_EVENT } from "../core/syncQueue";
 import StatsPage from "../features/stats/StatsPage";
 
 vi.mock("../core/dataApi", () => ({
@@ -117,5 +118,67 @@ describe("Thống kê", () => {
 
     // Assert
     expect(await screen.findByRole("alert")).toHaveTextContent("Mất kết nối.");
+  });
+
+  it("tải lần đầu → skeleton (không spinner), selector tháng vẫn hoạt động", async () => {
+    // Arrange — fetch không bao giờ resolve
+    fetchStatsMock.mockImplementation(() => new Promise(() => {}));
+    renderStats();
+
+    // Assert
+    expect(await screen.findByRole("status", { name: "Đang tải" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tháng trước" })).toBeEnabled();
+    expect(document.querySelector(".animate-spin")).toBeNull();
+  });
+
+  it("đổi tháng → skeleton lại (query mới), fetch pending không giữ data cũ", async () => {
+    // Arrange
+    fetchStatsMock.mockResolvedValue(stats(1_000_000, 500_000));
+    renderStats();
+    await screen.findByText("1.000.000 ₫");
+
+    // Act — fetch tháng mới pending
+    fetchStatsMock.mockImplementationOnce(() => new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: "Tháng trước" }));
+
+    // Assert
+    expect(screen.getByRole("status", { name: "Đang tải" })).toBeInTheDocument();
+    expect(screen.queryByText("1.000.000 ₫")).not.toBeInTheDocument();
+  });
+
+  it("sync offline → refetch lặng lẽ, GIỮ data cũ (không flicker)", async () => {
+    // Arrange
+    fetchStatsMock.mockResolvedValue(stats(1_000_000, 500_000));
+    renderStats();
+    await screen.findByText("1.000.000 ₫");
+
+    // Act — fetch mới pending + event sync
+    fetchStatsMock.mockImplementationOnce(() => new Promise(() => {}));
+    act(() => {
+      window.dispatchEvent(new Event(SYNCED_EVENT));
+    });
+
+    // Assert — data cũ vẫn hiển thị, không có skeleton
+    expect(screen.getByText("1.000.000 ₫")).toBeInTheDocument();
+    expect(document.querySelector(".animate-pulse")).toBeNull();
+    expect(fetchStatsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("sync offline → refetch lỗi nhưng đã có data → giữ data + banner lỗi", async () => {
+    // Arrange
+    fetchStatsMock.mockResolvedValue(stats(1_000_000, 500_000));
+    renderStats();
+    await screen.findByText("1.000.000 ₫");
+
+    // Act — fetch mới lỗi
+    fetchStatsMock.mockRejectedValueOnce(new ApiError("NETWORK_ERROR", "Mất kết nối.", 0));
+    act(() => {
+      window.dispatchEvent(new Event(SYNCED_EVENT));
+    });
+
+    // Assert — data cũ vẫn hiển thị + banner lỗi, không có skeleton
+    expect(await screen.findByRole("alert")).toHaveTextContent("Mất kết nối.");
+    expect(screen.getByText("1.000.000 ₫")).toBeInTheDocument();
+    expect(document.querySelector(".animate-pulse")).toBeNull();
   });
 });

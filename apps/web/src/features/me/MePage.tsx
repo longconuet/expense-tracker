@@ -4,8 +4,9 @@ import { useAuthStore } from "../../core/authStore";
 import { useThemeStore } from "../../core/themeStore";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
+import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { RoleBadge } from "../../shared/ui/RoleBadge";
-import { CheckIcon, CopyIcon, DownloadIcon, LogoutIcon, MoonIcon, SunIcon, UsersIcon } from "../../shared/ui/icons";
+import { CheckIcon, ChevronRightIcon, CopyIcon, DownloadIcon, LogoutIcon, MoonIcon, SunIcon, TagIcon, UsersIcon } from "../../shared/ui/icons";
 import { useInstallPrompt } from "./useInstallPrompt";
 
 /**
@@ -26,6 +27,7 @@ export default function MePage() {
 
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
 
   const activeFamily = families.find((f) => f.id === activeFamilyId);
 
@@ -36,13 +38,12 @@ export default function MePage() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Môi trường không cho clipboard (non-secure context) → fallback prompt
-      window.prompt("Copy mã mời:", activeFamily.inviteCode);
+      // Môi trường không cho clipboard (non-secure context) — mã mời hiển thị
+      // sẵn trong card, user chọn text để copy tay
     }
   }
 
   async function handleLogout() {
-    if (!window.confirm("Đăng xuất khỏi ứng dụng?")) return;
     setLoggingOut(true);
     try {
       await logout();
@@ -57,7 +58,7 @@ export default function MePage() {
 
       <Card className="mt-4">
         <p className="text-lg font-semibold text-ink">{user?.name}</p>
-        <p className="text-sm text-ink-muted">{user?.email}</p>
+        <p className="text-sm text-ink-muted">{user?.username}</p>
       </Card>
 
       <Card className="mt-4">
@@ -123,6 +124,22 @@ export default function MePage() {
         </Card>
       )}
 
+      {activeFamily && (
+        <Card className="mt-4">
+          <button
+            type="button"
+            onClick={() => navigate("/categories")}
+            className="flex w-full items-center justify-between"
+          >
+            <span className="flex items-center gap-3">
+              <TagIcon className="h-5 w-5 text-ink-muted" />
+              <span className="font-medium text-ink">Danh mục chi tiêu</span>
+            </span>
+            <ChevronRightIcon className="h-5 w-5 text-ink-muted" />
+          </button>
+        </Card>
+      )}
+
       {canInstall && (
         <div className="mt-4">
           <Button variant="secondary" size="lg" className="w-full" onClick={promptInstall}>
@@ -137,13 +154,24 @@ export default function MePage() {
           variant="danger"
           size="lg"
           className="w-full"
-          onClick={handleLogout}
+          onClick={() => setConfirmLogout(true)}
           loading={loggingOut}
         >
           <LogoutIcon className="h-5 w-5" />
           Đăng xuất
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmLogout}
+        title="Đăng xuất"
+        message="Đăng xuất khỏi ứng dụng?"
+        confirmLabel="Đăng xuất"
+        danger
+        loading={loggingOut}
+        onConfirm={handleLogout}
+        onCancel={() => setConfirmLogout(false)}
+      />
     </div>
   );
 }

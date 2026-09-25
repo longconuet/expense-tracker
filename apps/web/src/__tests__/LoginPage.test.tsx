@@ -17,7 +17,7 @@ import LoginPage from "../features/auth/LoginPage";
 
 const apiFetchMock = vi.mocked(apiFetch);
 
-const MOCK_USER = { id: "u1", name: "An", email: "an@test.com" };
+const MOCK_USER = { id: "u1", name: "An", username: "an2310" };
 
 function renderLoginPage() {
   return render(
@@ -61,8 +61,8 @@ describe("Màn đăng nhập", () => {
     renderLoginPage();
 
     // Act
-    fireEvent.change(screen.getByPlaceholderText("ban@gmail.com"), {
-      target: { value: "an@test.com" },
+    fireEvent.change(screen.getByPlaceholderText("an2310"), {
+      target: { value: "an2310" },
     });
     fireEvent.change(screen.getByPlaceholderText("••••••••"), {
       target: { value: "MatKhau123" },
@@ -72,7 +72,7 @@ describe("Màn đăng nhập", () => {
     // Assert
     expect(apiFetchMock).toHaveBeenCalledWith("/api/auth/login", {
       method: "POST",
-      body: { email: "an@test.com", password: "MatKhau123" },
+      body: { username: "an2310", password: "MatKhau123" },
       auth: false,
     });
     // Chưa có family → về onboarding
@@ -82,13 +82,13 @@ describe("Màn đăng nhập", () => {
   it("API trả lỗi sai mật khẩu → hiển thị thông báo lỗi", async () => {
     // Arrange
     apiFetchMock.mockRejectedValue(
-      new ApiError("INVALID_CREDENTIALS", "Email hoặc mật khẩu không đúng", 401),
+      new ApiError("INVALID_CREDENTIALS", "Tên đăng nhập hoặc mật khẩu không đúng", 401),
     );
     renderLoginPage();
 
     // Act
-    fireEvent.change(screen.getByPlaceholderText("ban@gmail.com"), {
-      target: { value: "an@test.com" },
+    fireEvent.change(screen.getByPlaceholderText("an2310"), {
+      target: { value: "an2310" },
     });
     fireEvent.change(screen.getByPlaceholderText("••••••••"), {
       target: { value: "sai-mat-khau" },
@@ -96,7 +96,9 @@ describe("Màn đăng nhập", () => {
     fireEvent.click(screen.getByRole("button", { name: "Đăng nhập" }));
 
     // Assert
-    expect(await screen.findByRole("alert")).toHaveTextContent("Email hoặc mật khẩu không đúng");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Tên đăng nhập hoặc mật khẩu không đúng",
+    );
     // Không nhảy màn
     expect(screen.queryByText("TRANG ONBOARDING")).not.toBeInTheDocument();
   });

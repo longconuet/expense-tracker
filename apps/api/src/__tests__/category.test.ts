@@ -16,7 +16,7 @@ beforeAll(async () => {
   app = createApp();
   const reg = await request(app)
     .post("/api/auth/register")
-    .send({ name: "Chủ Cat", email: "cat-owner@test.com", password: PASSWORD });
+    .send({ name: "Chủ Cat", username: "cat_owner", password: PASSWORD });
   ownerToken = reg.body.data.accessToken;
 
   const fam = await request(app)
@@ -78,19 +78,13 @@ describe("PUT /api/families/:id/categories/:categoryId", () => {
     customId = list.body.data.categories.find((c: { name: string }) => c.name === "Sách").id;
   });
 
-  it("preset không đổi được tên/icon (403) nhưng đổi order được", async () => {
+  it("preset sửa tên/icon/order được như danh mục thường", async () => {
     const rename = await request(app)
       .put(`/api/families/${family.id}/categories/${presetId}`)
       .set(auth(ownerToken))
-      .send({ name: "Đổi tên preset" });
-    expect(rename.status).toBe(403);
-    expect(rename.body.error.code).toBe("PRESET_LOCKED");
-
-    const reicon = await request(app)
-      .put(`/api/families/${family.id}/categories/${presetId}`)
-      .set(auth(ownerToken))
-      .send({ icon: "🚀" });
-    expect(reicon.status).toBe(403);
+      .send({ name: "Đổi tên preset", icon: "🚀" });
+    expect(rename.status).toBe(200);
+    expect(rename.body.data.category).toMatchObject({ name: "Đổi tên preset", icon: "🚀" });
 
     const reorder = await request(app)
       .put(`/api/families/${family.id}/categories/${presetId}`)
@@ -122,7 +116,7 @@ describe("PUT /api/families/:id/categories/:categoryId", () => {
 });
 
 describe("DELETE /api/families/:id/categories/:categoryId", () => {
-  it("preset không xoá được (403)", async () => {
+  it("preset xoá được khi không có khoản chi", async () => {
     const list = await request(app).get(`/api/families/${family.id}/categories`).set(auth(ownerToken));
     const preset = list.body.data.categories.find((c: { isPreset: boolean }) => c.isPreset);
 
@@ -130,8 +124,33 @@ describe("DELETE /api/families/:id/categories/:categoryId", () => {
       .delete(`/api/families/${family.id}/categories/${preset.id}`)
       .set(auth(ownerToken));
 
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe("PRESET_LOCKED");
+    expect(res.status).toBe(200);
+    expect(res.body.data.ok).toBe(true);
+  });
+
+  it("preset đang có khoản chi thì không xoá (409) — guard duy nhất còn lại", async () => {
+    const list = await request(app).get(`/api/families/${family.id}/categories`).set(auth(ownerToken));
+    const preset = list.body.data.categories.find((c: { isPreset: boolean }) => c.isPreset);
+
+    const exp = await request(app)
+      .post("/api/expenses")
+      .set(auth(ownerToken))
+      .send({
+        familyId: family.id,
+        categoryId: preset.id,
+        amount: 5000,
+        date: "2026-09-23",
+      });
+    expect(exp.status).toBe(201);
+
+    const blocked = await request(app)
+      .delete(`/api/families/${family.id}/categories/${preset.id}`)
+      .set(auth(ownerToken));
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.code).toBe("CATEGORY_IN_USE");
+
+    // dọn khoản chi để không ảnh hưởng test khác
+    await request(app).delete(`/api/expenses/${exp.body.data.expense.id}`).set(auth(ownerToken));
   });
 
   it("có khoản chi thì không xoá (409), hết khoản chi thì xoá được", async () => {

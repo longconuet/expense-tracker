@@ -3,6 +3,16 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
+## Cập nhật: 25/09/2026 — **Đăng nhập bằng username thay cho email** (commit `3655604` + docs `452a28e` trên `develop`, đã push): username 2-20 ký tự `a-z 0-9 . _` (unique, tự lowercase) là định danh login, email nullable chỉ ghi nhận nguồn gốc — migration backfill từ phần trước `@` email cũ (trùng → hậu tố `_2`), api 61/61 + web 154/154 pass (219/219), review agent "DUYỆT" (0 CRITICAL/HIGH, 5 LOW: 2 fix luôn + 3 deferred), verified browser thật đủ 8 luồng · **INCIDENT production (đã fix sau ~10 phút)**: Vercel git-integration **auto-deploy `develop` lên prod không qua migrate** → login/register 500 (code mới, DB thiếu cột) → user duyệt + chạy `prisma migrate deploy` tay vào Supabase → OK; **pipeline gap chưa quyết định** (xem "Chi tiết Đăng nhập bằng username")
+
+## Cập nhật: 24/09/2026 — **Bình đẳng hoá danh mục — bỏ khoá preset** (commit `1c7003d` trên `develop`, đã push): preset giờ sửa/xoá được như danh mục thường (bỏ guard PRESET_LOCKED API + nhãn "Danh mục mặc định" + ẩn nút FE), `isPreset` chỉ còn ghi nhận nguồn gốc khởi tạo, api 61/61 + web 151/151 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (0 CRITICAL/HIGH, 4 LOW đã xử lý 3 — 1 issue có sẵn deferred: PUT không pre-check trùng tên → P2002 500)
+
+## Cập nhật: 24/09/2026 — **Quản lý danh mục chi tiêu** (2 commit `d6880dd` + `0c33ae9` trên `develop`, đã push): trang `/categories` (thêm/sửa/xoá/đổi thứ tự, emoji picker, preset khoá), web unit 151/151 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: guard `activeFamilyId` cho refetchSilent), verified browser thật đủ 5 luồng
+
+## Cập nhật: 24/09/2026 — **Modal xác nhận đồng nhất UI thay thế window.confirm** (commit `22f9471` trên `develop`, đã push): 15 test mới + 5 cập nhật, web unit 133/133 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix 1 MEDIUM focus-trap + 3 LOW), verified browser thật (mở/xoá/đóng/đăng xuất modal)
+
+## Cập nhật: 24/09/2026 — **Skeleton loading Home/History/Stats + refetch không flicker** (commit `906d576` trên `develop`, đã push): 13 test mới, web unit 118/118 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (đã fix MEDIUM: silent refetch History chỉ khi page 1). **Keep-warm XONG**: UptimeRobot free monitor ping 5 phút đã xanh đều (user tạo + verify) → `keep-warm.yml` đã xoá (scheduler GitHub không tự fire; run tay xanh chứng tỏ job OK — không cần giữ)
+
 ## Cập nhật: 23/09/2026 — **TẤT CẢ 5 PHASE DEPLOY XONG ✅**: CI/CD GitHub Actions chạy thật (test → migrate Supabase → vercel deploy --prod) — production sau CD **verify 9/9** (`P5_FINAL_VERIFY_ALL_PASS`) — app lên production `https://expense-tracker-py2qaofkm-long-7bf1.vercel.app`
 
 > Trước đó (cùng ngày): Phase 3 XONG (deployment Vercel xanh, verify thật) · WBS 14 hoàn tất — toàn bộ 14 WBS + guide deploy xong.
@@ -137,7 +147,75 @@
 - **Fix `cbc9526` (PR #5)**: `vercel.json` thêm `"regions": ["sin1"]` → function chạy Singapore. **Kết quả đo lại**: register 2932→367ms · login 1509→193ms · me 1607→132ms · health warm 260→~98ms
 - **Keep-warm (cùng commit)**: `.github/workflows/keep-warm.yml` — cron `*/5 * * * *` ping `GET /api/health` production (repo public → miễn phí Actions minutes) để giảm cold start request đầu sau khi idle
 - **Docs**: `deploy-vercel.md` §3.2 (regions trong config + bẫy region) + 2 dòng Troubleshooting mới (API chậm do region, cold start)
-- **Tiếp theo (tuỳ chọn)**: custom domain → cập nhật URL trong `keep-warm.yml` · Vercel Speed Insights nếu muốn giám sát liên tục
+- **Tiếp theo (tuỳ chọn)**: custom domain → cập nhật URL ở **monitor UptimeRobot** + `docs` (keep-warm.yml đã xoá 24/09 — scheduler GitHub không tự fire, UptimeRobot thay thế) · Vercel Speed Insights nếu muốn giám sát liên tục
+
+### Chi tiết Đăng nhập bằng username thay cho email (25/09/2026)
+- **Quyết định user** (spec duyệt, 4 điểm chốt): username 2-20 ký tự `a-z 0-9 . _` bắt đầu/kết thúc bằng chữ hoặc số, tự lowercase · tài khoản cũ tự sinh username từ phần trước `@` email trong migration (trùng → hậu tố `_2`, `_3`) · cột email **giữ trong DB, chuyển nullable**, bỏ khỏi UI/API (user mới email = NULL) · **không** làm tính năng đổi username sau (YAGNI)
+- **Schema + migration**: `User` thêm `username String @unique`, `email String? @unique`; migration `20260925120000_add_username` (SQL custom viết tay): ADD COLUMN nullable → backfill `regexp_replace(split_part(email,'@',1), '[^a-z0-9._]','_','g')` + trim `._` đầu/cuối + fallback `user`+8 ký tự id nếu <2 ký tự → dedup `ROW_NUMBER() OVER (PARTITION BY username)` + hậu tố `_<rn>` → `SET NOT NULL` + `CREATE UNIQUE INDEX "User_username_key"` → email `DROP NOT NULL`. Đã apply dev DB + verify backfill (`final@test.com`→`final`, `sk-muf01glb@test.com`→`sk_muf01glb`)
+- **API** (`auth.routes.ts`): register `{name, username, password}` → 409 `USERNAME_TAKEN` · login `{username, password}` → 401 `INVALID_CREDENTIALS` "Tên đăng nhập hoặc mật khẩu không đúng" (1 message chung cho sai pass + không tồn tại — chống enumeration) · zod `usernameField` = trim + lowercase + regex `/^[a-z0-9][a-z0-9._]{0,18}[a-z0-9]$/` · `publicUser` → `{id, name, username}` · `me.routes.ts` /me trả username
+- **FE**: `authStore` login/register theo username · `LoginPage` ô "Tên đăng nhập" (`type=text`, `autocomplete=username`, placeholder `an2310`) · `RegisterPage` ô username + hint "2-20 ký tự: chữ thường, số, dấu . _" + **`usernameError` 409 hiện ngay dưới ô** (Input `error` prop, tự reset khi gõ lại) · `MePage` hàng email → username · `AppShell` tooltip username
+- **Tests**: `auth.test.ts` viết lại (register 201 shape, 409 khác hoa thường/thừa khoảng trắng, 400 validate 3 field, login 200/401 sai pass/401 không tồn tại, /me username, refresh/logout) · helper + call sites `family`/`expense`/`stats`/`category` test đổi sang username (bẫy: username **không có dấu gạch** — giá trị test ban đầu `fam-owner`… sai rule, sửa về `fam_owner`…) · fixtures FE `MOCK_USER`/`USER` các page + `api.test` body + `LoginPage.test` (placeholder/payload/401) · **`RegisterPage.test.tsx` MỚI** (3 test: payload không email, 409 dưới ô, reset lỗi khi gõ lại) · E2E `helpers.ts` (`e2e_<token>`, label "Tên đăng nhập") + `auth.spec.ts` (message 401 mới) · `seed.ts` upsert theo username `test_user`
+- **Verified browser thật** (dev server): form login đúng label/autocomplete · login `sk_muf01glb` (backfill) OK → home · MePage name + username (không email) · register `test_verify_9x` mới → onboarding · 409 trùng → "Tên đăng nhập đã được sử dụng" **ngay dưới ô** · sai pass → 401 · username không tồn tại (hợp lệ) → 401 **cùng message** · response user `{id, name, username}`
+- **Review** (agent riêng): DUYỆT — 0 CRITICAL/HIGH · LOW đã fix: message cosmetic `api.test.ts` · thiếu test reset `usernameError` (đã thêm) · LOW deferred (xem "Issue deferred")
+- **Kết quả**: full suite **219/219** (web 154, api 61, shared 4), lint + build xanh; commit `3655604` push `develop` (CD migrate prod + deploy — thiết bị đã đăng nhập giữ phiên, token JWT theo userId)
+- **⚠ INCIDENT production + pipeline gap (25/09, cần user quyết định)**:
+  - **Thực tế pipeline hiện tại**: Vercel project **git-integration với GitHub, Production Branch = branch mặc định (`develop`)** → **mọi push `develop` tự auto-deploy production** (không chạy test gate, không chạy migrate). Workflow `deploy.yml` (test → migrate → vercel deploy) chỉ trigger trên **`main`** — chưa bao giờ chạy kể từ release v1.0 (`main` = `f6bae94` đứng yên). Giả định checkpoint cũ "mỗi push develop → CD migrate ~3-4 phút" là **SAI** (các task trước không có migration nên không lộ)
+  - **Incident**: push `3655604`+`452a28e` lúc 03:28Z → Vercel auto-deploy code mới lên prod lúc 03:30Z (`dpl_3Ni42bi...`, PROMOTED) trong khi DB prod chưa có cột `username` → login/register/**/me trả 500** ~10 phút (verify probe: 500 INTERNAL_ERROR). **Fix (user duyệt trước)**: chạy `prisma migrate deploy` tay vào Supabase `:5432` (~10:40 VN) → 401 đúng, backfill prod OK (12 tài khoản, tài khoản thật duy nhất: `nice231096` ← nice231096@gmail.com; 11 còn lại là smoke/verify/perf test 23-24/09 — **chưa xoá**, user muốn dọn thì cần lệnh duyệt riêng)
+  - **Tuỳ chọn sửa pipeline (chưa làm — user chọn)**:
+    - (A) **Giữ auto-deploy develop, thêm migrate vào build Vercel**: `vercel.json` buildCommand chạy `prisma migrate deploy` trước build **chỉ khi `VERCEL_ENV=production`** (preview no-op) — cần thêm env `DIRECT_URL` (`:5432`) vào Vercel project; ưu: đơn giản, luôn migrate-trước-code; nhược: migrate chạy trên infra Vercel
+    - (B) **Tắt auto-deploy develop**: Vercel dashboard → Settings → Git → Production Branch = `main` (hoặc gỡ git-integration — khi đó chỉ còn đường `vercel deploy --prod` của Actions) → quay về kiến trúc gốc: release = PR `develop→main` → Actions (test → migrate → deploy), push develop chỉ chạy CI
+    - (C) Bỏ `deploy.yml` + giữ auto-deploy develop, chấp nhận migrate tay mỗi lần có migration (không nên — dễ quên như vừa xảy ra)
+  - **Lưu ý đi kèm**: GitHub PAT `github_pat_11AFUQQB...` **hết hạn 25/09** (API 401, push vẫn OK vì credential riêng) — nếu cần API (tạo PR, đọc Actions) phải phát token mới
+
+### Chi tiết Skeleton loading (24/09/2026)
+- **Yêu cầu**: thay spinner bằng skeleton loading hiện đại hơn trên mobile (user duyệt spec trước khi code)
+- `shared/ui/Skeleton.tsx` (mới) — primitive khối pulse `animate-pulse rounded-lg bg-ink/10` (token theme → tự đúng light/dark), `aria-hidden`; container màn hình chịu `role="status" aria-label="Đang tải"`
+- `features/home/HomeSkeleton.tsx` · `features/stats/StatsSkeleton.tsx` · `features/history/HistorySkeleton.tsx` — mô phỏng card thật (chiều cao khớp layout để data về không giật); phần không phụ thuộc data (tiêu đề, tháng, selector, chip lọc) do page giữ, **luôn hiện thật**
+- **Chống flicker — refetch lặng lẽ** (core của task): mỗi page theo dõi `lastQuery` (key `familyId|month[|categoryId]`) + `lastOk` (useRef, set trong `.then` có guard `cancelled`); query không đổi + lần fetch trước OK (VD sau `SYNCED_EVENT` offline sync) → **GIỮ data cũ, không reset** → không skeleton giữa chừng. Đổi query → reset + skeleton
+- **History thêm điều kiện page 1** (fix MEDIUM từ review agent): đã "Tải thêm" (page > 1) thì refetch sẽ co list về trang đầu → không silent, hiện skeleton làm tín hiệu. Đọc `meta` qua `metaRef` (pattern ref-giá-trị-mới-nhất, tránh thêm vào deps — page đổi khi load-more không được trigger refetch)
+- **Home**: lỗi khi đã có data (refetch ngầm fail) → giữ data + banner `role="alert"`; lỗi lần tải đầu → màn lỗi như cũ
+- Không đổi: Button loading, FullPageSpinner, Suspense fallback, Add/EditPage
+- **Tests 13 mới** (web 105 → 118): `Skeleton`(2) · mỗi page: skeleton lần tải đầu (không spinner) · đổi query → skeleton lại · sync → refetch lặng lẽ giữ data · `Stats`+`History`+`Home`: refetch ngầm lỗi có data → giữ data + banner
+- **Verified browser thật** (dev server + wrap `fetch` delay 5s API data): Home h1+tháng thật + 23 khối pulse · Stats selector thật + 9 khối · History chip thật + 20 khối · **0 spinner**; dispatch `SYNCED_EVENT` khi đang có data → data giữ nguyên, không skeleton
+- **Bẫy gặp**: skeleton chứa h1 trùng content → React remount cây khi data về → node h1 mà `findByRole` đã tìm bị detached (test fail "element could not be found") → **khắc phục: h1 + tháng thuộc về page (luôn render), skeleton chỉ chứa vùng data**
+- **Bẫy 2 (môi trường)**: `tsx watch` (API dev) watch luôn `node_modules/.prisma/client/*` → `prisma generate` trong `pnpm build` viết file → tsx restart API → giữ lock DLL → **EPERM rename** build fail. Fix: tắt dev server trước khi build (không cần fix config — chỉ xảy ra khi dev + build song song)
+- **Bẫy 3 (format)**: repo KHÔNG có `.prettierrc`/`.gitattributes` — `pnpm format` (prettier default `endOfLine: "lf"`) đã reformat 37 file không liên quan → đã **revert**; chỉ 11 file task nằm trong commit. Nếu muốn format toàn repo → làm 1 commit `style:` riêng sau khi user duyệt
+- **Review** (agent riêng): DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · 1 MEDIUM (load-more reset im lặng — đã fix) · 3 LOW (class `rounded-lg`/`rounded-full` trong Skeleton phụ thuộc thứ tự Tailwind — chấp nhận; indentation — đã chạy prettier cho file task; 2 test edge thiếu — đã bổ sung 2)
+- **Kết quả**: unit web **118/118** (api 60 + shared 4 không đổi), lint + build xanh; commit `906d576` (11 file) push `develop`
+
+### Chi tiết Bình đẳng hoá danh mục — bỏ khoá preset (24/09/2026)
+- **Yêu cầu user**: bỏ nhãn "Danh mục mặc định" khỏi bảng, không phân biệt preset/tự tạo ở UI — **preset sửa/xoá được bình đẳng** như danh mục thường. "Mặc định" chỉ còn nghĩa: 7 danh mục tạo tự động khi lập family mới
+- **API** (`category.routes.ts`): xoá guard `PRESET_LOCKED` ở PUT (preset giờ đổi được name/icon/order) và DELETE (preset giờ xoá được) — guard duy nhất còn lại cho mọi danh mục: 409 `CATEGORY_IN_USE` khi đang có khoản chi · 404 `CATEGORY_NOT_FOUND`
+- **Giữ field `isPreset`** (schema + type shared + response): chỉ còn ghi nhận nguồn gốc, không có hành vi riêng — KHÔNG cần migration (reviewer đồng ý defer việc xoá field → task riêng nếu cần)
+- **FE**: `CategoriesPage` bỏ nhãn + bỏ điều kiện `!category.isPreset &&` ở nút sửa/xoá → mọi hàng đủ 4 nút (↑ ↓ ✏️ 🗑) · `CategoriesSkeleton` bỏ 1 dòng (từng mô phỏng nhãn) · comment `dataApi.updateCategory`/`deleteCategory` cập nhật · JSDoc `Category.isPreset` (shared): "chỉ ghi nhận nguồn gốc"
+- **Tests**: API — 2 test viết lại (preset sửa 200, preset xoá 200) + 1 mới (preset **đang có khoản chi** → 409 CATEGORY_IN_USE, ghim guard duy nhất còn lại) · FE — test render viết lại (mọi hàng đủ 4 nút, `queryAllByText("Danh mục mặc định")` = 0) · **api 61/61, web 151/151** (full 215+1=216/216 với shared 4), lint + build xanh
+- **Verified browser thật** (dev DB "Nhà Skeleton"): 7 hàng đều đủ 4 nút, không nhãn mặc định · **rename preset** "Ăn uống" → "Ăn uống & giải khát" OK (trước đây 403) · **xoá preset** "Khác" OK (trước đây 403) → sau đó khôi phục DB (đổi tên lại + thêm "Khác" 📦)
+- **Review** (agent riêng): DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · LOW đã xử lý: comment lỗi thời `deleteCategory` · test 409 xoá preset · plan.md "preset khoá" → "bình đẳng" · JSDoc `isPreset` · **Issue có sẵn DEFERRED (ngoài scope)**: PUT không pre-check trùng tên trong family → Prisma P2002 → 500 INTERNAL_ERROR (trước đây đã reachable với danh mục tự tạo, task này chỉ mở rộng mặt kích hoạt) — muốn fix: pre-check như POST → 409 `CATEGORY_EXISTS`, hoặc map P2002 trong errorHandler
+- **Kết quả**: commit `1c7003d` push `develop`
+
+### Chi tiết Quản lý danh mục chi tiêu (24/09/2026)
+- **Quyết định user**: mọi member được quản lý (không đổi API) · có reorder (nút lên/xuống) · trang riêng `/categories` (vào từ MePage)
+- **API đã sẵn từ Task 5** (không sửa): GET/POST/PUT/DELETE `/api/families/:id/categories` — model có `order` + `isPreset`; POST tên 2-30 unique trong family (409 CATEGORY_EXISTS) · PUT preset chỉ đổi được `order` (403 PRESET_LOCKED) · DELETE chặn preset + đang có khoản (409 CATEGORY_IN_USE)
+- `dataApi.ts` (commit `d6880dd`): `createCategory`/`updateCategory`/`deleteCategory` — mutation không đi read cache
+- `features/categories/CategoriesPage.tsx` + `CategoriesSkeleton.tsx` (commit `0c33ae9`): list hàng (icon + tên + nhãn "Danh mục mặc định") với 4 nút ↑↓ (mọi hàng) ✏️ 🗑 (không preset) · Modal thêm/sửa: tên (validate client 2-30) + lưới 24 emoji gợi ý (gồm 7 icon preset) + ô nhập emoji tự (1-8) · ConfirmDialog xoá (danger) · reorder = swap `order` 2 hàng liền kề (2 PUT song song, giữ invariant order duy nhất)
+- **refetchSilent**: sau mỗi mutation OK → cập nhật list từ response + `fetchCategories` ngầm đồng bộ read cache; **guard `activeFamilyId` ở thời điểm resolve** (fix MEDIUM review — đổi family giữa chừng không ghi đè list family khác)
+- MePage: card "Danh mục chi tiêu" sau card family → `/categories`; route mới trong AppShell (không bottom nav, precedent `/expenses/:id/edit`); `icons.tsx` +TagIcon/PencilIcon/ArrowUpIcon/ArrowDownIcon
+- **Tests 13 mới** (web 137 → 151): `CategoriesPage`(12: render + ẩn nút preset, skeleton, fetch lỗi + retry, thêm OK/validate/409/offline, sửa pre-fill, xoá confirm/cancel/409 in-use, reorder swap + fail) · `MePage`(+1: nav)
+- **Verified browser thật**: MePage → /categories (7 preset đúng thứ tự, ẩn nút preset) · thêm "Tiền điện" 💧 (validate chặn khi chưa chọn icon) · reorder lên · sửa pre-fill (name + icon) · xoá confirm danger → 7 preset
+- **Review** (agent riêng, cả 2 commit): DUYỆT / DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · MEDIUM (refetchSilent không guard family — đã fix) · LOW đã xử lý: assert refetch ngầm trong test + test reorder fail · a11y grid emoji (role=group + aria-labelledby) · LOW để nghiên cứu sau: partial-failure 2 PUT reorder → order trùng (cần endpoint swap hoặc `@@unique([familyId, order])` phía API — ngoài scope)
+- **Kết quả**: full suite **215/215** (web 151, api 60, shared 4), lint + build xanh; commit `d6880dd` + `0c33ae9` push `develop`
+
+### Chi tiết Modal xác nhận (24/09/2026)
+- **Yêu cầu**: thay dialog mặc định (window.confirm/prompt) bằng modal đồng nhất UI app. User chốt: **centered card mọi kích thước** (không bottom sheet) + **không modal cho mã mời** (bỏ fallback prompt — mã hiển thị sẵn trong card để copy tay)
+- `shared/ui/Modal.tsx` (mới) — card giữa màn mọi kích thước: overlay `fixed inset-0 z-50 bg-ink/40 p-4` + card `bg-card rounded-2xl shadow-lg max-w-sm p-5`, `role="dialog" aria-modal` + `aria-labelledby` (useId), đóng bằng Esc + click overlay (check `e.target === e.currentTarget`), focus vào dialog khi mở (trả về trigger khi đóng), focus trap (Tab wrap), khoá scroll body, `disableDismiss` chặn mọi đường đóng khi chờ API
+- `shared/ui/ConfirmDialog.tsx` (mới) — title + message + hàng 2 nút flex-1 (Huỷ=secondary, confirm=primary|`danger`), `loading` → cả 2 disable + spinner, truyền `disableDismiss={loading}`
+- `index.css` — `--animate-fade-in` + `--animate-modal-in` (150ms) vào block `@theme` (Tailwind v4)
+- `HistoryPage` — `deleteTarget: Expense | null`; 🗑 → mở dialog; đóng trong `finally` **guard theo id** (`setDeleteTarget(t => t?.id === expense.id ? null : t)` + tương tự `deletingId`) tránh race giữa 2 lần mở
+- `MePage` — đăng xuất qua dialog (danger); bỏ fallback `window.prompt` (clipboard fail → do nothing, mã mời hiển thị sẵn trong card)
+- **Tests 15 mới + 5 cập nhật** (web 118 → 133): `Modal`(8: render/aria, không render khi đóng, click overlay vs thân, Esc, khoá scroll, **Tab-wrap kể cả focus ở container** (MEDIUM review), **trả focus về trigger**, disableDismiss) · `ConfirmDialog`(4: render, onConfirm/onCancel, danger/primary, loading) · `HistoryPage`(+2: API fail → dialog đóng + banner + khoản còn, Esc → không gọi API) · `MePage`(+1: clipboard fail → không prompt, không "Đã copy", mã vẫn hiện)
+- **Verified browser thật** (dev server, tài khoản test): modal đăng xuất (role/aria-modal/danger/overlay/body-lock; đóng bằng Esc + Huỷ; mở lại OK) · tạo khoản 50.000 Ăn uống → History → dialog `Xoá khoản "Ăn uống" (50.000 ₫)?` → bấm Xoá → khoản xoá + dialog đóng, không lỗi
+- **Review** (agent riêng): DUYỆT CÓ ĐIỀU KIỆN — 0 CRITICAL/HIGH · 1 MEDIUM (focus ban đầu ở container `tabIndex=-1` → Tab văng ra ngoài modal; bẫy: **`Node.contains()` trả true cho chính node** nên guard `!contains(activeElement)` không khớp → fix: check "active không nằm trong danh sách focusable của dialog" rồi kéo về first/last) · LOW đã fix: `disableDismiss` khi loading, race `finally` (guard id), bỏ `stopPropagation` no-op, bổ sung test Tab-wrap + focus-restore; LOW chấp nhận: drag-select từ card ra overlay (edge hiếm)
+- **Kết quả**: unit web **133/133** (api 60 + shared 4 không đổi), lint + build xanh; commit `22f9471` (9 file) push `develop`
 
 ### Chi tiết Polish WBS 9 — keypad số to cho `/add`
 - **`features/expenses/Keypad.tsx`** — bàn phím số **64px+** (11 phím: 1-9, ⌫, 0 nằm ngang 2 ô), presentational (prop `onKey`, `disabled`), feedback `active:scale` + màu primary khi chạm. Phím ⌫ có `aria-label="Xoá 1 chữ số"`
@@ -202,27 +280,16 @@
 - **Sửa khoản offline**: `PUT /expenses/:id` khi server không đạt → hiện lỗi (chưa có queue cho edit — queue chỉ support create)
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
-## Trạng thái Git (cập nhật 23/09/2026)
-- 14 commits trên `develop`, **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git):
-  - `998dd6e` — `feat: API Fastify + Prisma + shared types (auth, expenses, categories, stats)` (47 file: config gốc + packages/shared + apps/api)
-  - `de915a7` — `feat: web app — 5 màn, dark mode, PWA offline, keypad nhập chi` (70 file: apps/web + docs)
-  - `89f6c4f` — `docs: cập nhật checkpoint — 2 commit đầu đã push lên origin/develop`
-  - (WBS 10) — `feat: WBS 10 — Home/History nhóm theo ngày có tiểu kết + màn sửa khoản chi` — xem `git log --oneline`
-  - (WBS 13) — `feat: WBS 13 — E2E Playwright (auth, khoản chi, offline) + fix sync lúc khởi động` — xem `git log --oneline`
-  - (WBS 14) — `feat: WBS 14 — Polish (lazy StatsPage) + README hướng dẫn local + deploy guide (Docker self-host đã test, Vercel/Supabase)` — xem `git log --oneline`
-  - (post-WBS) — `feat: chuẩn bị deploy Vercel + Supabase — vercel.json + entry serverless + workflows CI/CD + hướng dẫn 5 phase`
-  - (post-WBS) — `refactor: Phase 1 — chuyển toàn bộ project từ SQLite sang PostgreSQL (schema, dev/test/e2e DB, self-host compose) + docs`
-  - (post-WBS) — `docs: Phase 2 — verify kết nối Supabase (connection string working + bẫy DNS/pgbouncer)` — xem `git log --oneline`
-  - (post-WBS) — `fix: Phase 3 — Vercel deployment (shared build sang dist + vercel.json outputDirectory/functions)`
-  - (post-WBS) — `fix: Phase 3 — prisma generate trước tsc trong build API (cloud build không có client sẵn)`
-  - (post-WBS) — `fix: Phase 3 — deploy Vercel xanh: rewrite /api/* + api/package.json ESM + postinstall prisma generate`
-  - (post-WBS) — `fix: Phase 3 — DATABASE_URL thêm ?pgbouncer=true (pooler transaction mode)`
-  - (post-WBS) — `docs: Phase 3 XONG — guide đánh dấu ✅ + checkpoint verify production`
+## Trạng thái Git + Production (cập nhật 25/09/2026)
+- `develop` = `452a28e` (docs checkpoint username; code ở `3655604`) — **đã push**; `main` = `f6bae94` (release v1.0, đứng yên — CD `deploy.yml` chưa chạy lần nào sau release)
+- **Production** (`https://expense-tracker-long-7bf1.vercel.app`) = **code username mới** (auto-deploy develop `452a28e`) + **DB đã migrate** (`20260925120000_add_username` apply tay sau incident) — login/register bằng username hoạt động, 12 tài khoản đã backfill
+- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog) · `d6880dd` + `0c33ae9` (quản lý danh mục) · `1c7003d` (bình đẳng hoá preset) · `3655604` (username thay email) + `452a28e` (docs)
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
+- Baseline test hiện tại: **web 154** · api 61 · shared 4 (tổng 219)
 
 ## Đang làm
-- (không) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**
+- (không) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**; keep-warm đã chuyển xong sang UptimeRobot (monitor ping 5 phút xanh đều + cảnh báo down)
 
 ## Task kế tiếp: (không có WBS nào còn lại)
 Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gốc):
@@ -236,12 +303,19 @@ Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gố
 - Access token: in-memory; chỉ persist `activeFamilyId` (key `etracker-auth`)
 - Category mặc định: Ăn uống 🍜 · Đi lại 🚗 · Gia đình ⚡ · Sức khỏe 💊 · Vui chơi 🎬 · Mua sắm 🛒 · Khác 📦
 - Quyền sửa/xoá khoản chi: người tạo + owner (API enforce; FE chỉ hiện nút khi `owner || createdByName === user.name`)
-- Auth: JWT access (in-memory FE) + refresh cookie httpOnly, rotation, stateless
+- Auth: JWT access (in-memory FE) + refresh cookie httpOnly, rotation, stateless — token theo `userId`, không phụ thuộc username/email (đổi định danh không phá phiên)
+- **Đăng nhập bằng username** (25/09): username 2-20 ký tự `a-z 0-9 . _` bắt đầu/kết thúc bằng chữ hoặc số, tự lowercase, unique — định danh login duy nhất; email nullable chỉ ghi nhận nguồn gốc (backfill từ phần trước @ của email cũ); không có tính năng đổi username sau (YAGNI)
 - DB: SQLite dev → PostgreSQL prod (Prisma 6.19)
 - API envelope: `{ success, data, error, meta }`
 - **Offline (Task 12)**: ghi offline trigger = `ApiError` status 0 (mạng) hoặc ≥ 500 (5xx); 4xx **không** bao giờ ghi offline / fallback cache. Read cache = stale-while-error, không TTL. Sync trigger = khởi động app + event `online` + interval 30s khi còn khoản chờ. IndexedDB DB `etracker-offline` (stores `expenses`, `cache`)
 - **Icon PWA**: sinh bằng `scripts/generate-icons.mjs` (chạy lại nếu đổi design: donut trắng trên nền teal), file PNG commit vào repo
 - Commit: Conventional Commits, thẳng `develop`, 1 task = 1 commit; remote `origin` = https://github.com/longconuet/expense-tracker.git
+
+## Issue deferred (không chặn — làm khi cần)
+- **Map Prisma P2002 trong `errorHandler`** (lấp chung 2 case): (1) PUT category đổi tên trùng trong family → 500 thay vì 409 (có sẵn từ task quản lý danh mục); (2) race register: `findUnique` + `create` không nguyên tử, 2 request trùng username song song → P2002 → 500 thay vì 409 (unique index vẫn chặn vỡ dữ liệu). Fix: map `code === "P2002"` → 409 code thích hợp, hoặc pre-check như POST category
+- **Rate limit `/api/auth/*`** (brute force): chưa có; username ngắn dễ đoán hơn email — follow-up `express-rate-limit`. (Side-channel timing nhỏ khi user không tồn tại — bỏ qua)
+- **Reorder 2 PUT song song** (task quản lý danh mục): partial-failure → order trùng; cần endpoint swap hoặc `@@unique([familyId, order])` phía API
+- **Migration backfill edge pathological**: 2 email trùng prefix + user thứ 3 đã có sẵn username đúng bằng hậu tố (VD `a@x`, `a@y`, `a_2@z`) → unique index fail khi migrate (rollback sạch, không nửa vời) — gần như không thể xảy ra với quy mô app
 
 ## Ghi chú kỹ thuật (môi trường)
 - Node 24, pnpm 12.5.1, git 2.55 (nhánh `develop` tracking `origin/develop` trên GitHub)
@@ -254,15 +328,18 @@ Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gố
 - **jsdom không có IndexedDB** — test db/syncQueue/readCache mock `core/db` (vi.hoisted Map) hoặc stub fake IDB (xem `__tests__/db.test.ts` — fake đủ dùng: open/createObjectStore/transaction/put/get/getAll/delete)
 - **jsdom chặn form submit** khi có input `required` rỗng → field validate bằng JS thì không dùng `required`
 - **recharts 3 + tab ẩn**: shape (sector/bar) rỗng do rAF không chạy trong tab hidden (Review pane) — **artifact môi trường, không phải bug**; shim `requestAnimationFrame = setTimeout(cb,16)` để verify; tab visible render bình thường
-- **Dev server** (đang chạy background bằng `pnpm dev`, session WBS 14): api :3001 · web dev :5173 · **preview PWA :4173** (build + SW + proxy API — chỉ khi chạy `vite preview` sau build)
+- **Vercel (bắt buộc nhớ)**: project git-integration với GitHub, **Production Branch = mặc định (`develop`) → push `develop` = auto-deploy production** (không test gate, không migrate). `deploy.yml` (test → migrate → deploy) chỉ chạy trên `main` (= v1.0, chưa dùng lại). **Mọi migration mới phải được apply vào prod TRƯỚC hoặc KHI code lên** — chi tiết + tuỳ chọn sửa pipeline xem mục "Chi tiết Đăng nhập bằng username" (incident 25/09)
+- **GitHub PAT** `github_pat_11AFUQQB...` hết hạn 25/09 (API 401; git push vẫn hoạt động qua credential riêng) — cần token mới khi phải dùng GitHub API
+- **Dev server** (đang **TẮT** sau task username 25/09 — user chạy `pnpm dev` khi cần): api :3001 · web dev :5173 · **preview PWA :4173** (build + SW + proxy API — chỉ khi chạy `vite preview` sau build)
 - **E2E (Playwright)**: `pnpm test:e2e` (root) — tự bật API :3101 + `e2e.db` (reset mỗi lần) + web :5199 (proxy qua `VITE_API_PROXY_TARGET`), không đụng dev :3001/dev.db. Chromium đã cài sẵn máy
-- **Test account dev DB**: final@test.com / `MatKhau123!` (family "Nhà Final", owner, name "User Final"); còn smoke@test.com, smoke2, smoke3 (cùng mật khẩu). Nhà Final hiện **0 khoản chi**
+- **Test account dev DB** (sau migration username 25/09 — mật khẩu chung `MatKhau123!`): `sk_muf01glb` (family "Nhà Skeleton", owner) · `final` (family "Nhà Final", owner) · `test_verify_9x` (tài khoản verify browser, không có family) — username = phần trước @ của email cũ (gạch → `_`); email cũ vẫn giữ trong DB (nullable)
 - **Windows**: `del`/`node -e` path absolute hay lỗi quote (cmd) → viết file `.cjs` tạm rồi `node <file>`; findstr quote cũng hay hỏng → để output nguyên, grep tay
 - **Browser tool**: gọi qua Code Mode (`tools.browser["tabs.open"]`...), không gọi trực tiếp; `browser.screenshot` fail "needs a visible tab" → verify bằng `browser.evaluate`; input id tiếng Việt (VD `input-số-tiền`) hay lệch normalization khi truyền qua script → chọn input bằng `inputMode`/vị trí; click `a[href="/add"]` để SPA nav (giữ state page)
 
 ## Bản đồ API hoàn chỉnh (cho FE gọi)
-- `POST /api/auth/register` {name,email,password} → 201 {user, accessToken} — 409 EMAIL_EXISTS
-- `POST /api/auth/login` {email,password} → {user, accessToken} — 401 INVALID_CREDENTIALS
+- `POST /api/auth/register` {name,username,password} → 201 {user, accessToken} — 409 USERNAME_TAKEN
+- `POST /api/auth/login` {username,password} → {user, accessToken} — 401 INVALID_CREDENTIALS (1 message chung, không tiết lộ tài khoản tồn tại)
+- user trong mọi response: `{id, name, username}` (không có email) · username: 2-20 ký tự, `a-z 0-9 . _`, bắt đầu/kết thúc bằng chữ hoặc số, tự lowercase
 - `POST /api/auth/refresh` (cookie tự gửi) → {user, accessToken} — 401 UNAUTHORIZED
 - `POST /api/auth/logout`
 - `GET /api/me` → {user, families: Family[]} — family có `myRole`

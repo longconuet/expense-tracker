@@ -37,7 +37,7 @@ test.describe("Luồng auth (E2E)", () => {
     const context = await browser.newContext();
     const fresh = await context.newPage();
     await fresh.goto("/login");
-    await fresh.getByLabel("Email").fill(account.email);
+    await fresh.getByLabel("Tên đăng nhập").fill(account.username);
     await fresh.getByLabel("Mật khẩu").fill("MatKhau-sai-999");
 
     // Act
@@ -45,7 +45,7 @@ test.describe("Luồng auth (E2E)", () => {
 
     // Assert
     await expect(fresh.getByRole("alert")).toContainText(
-      "Email hoặc mật khẩu không đúng",
+      "Tên đăng nhập hoặc mật khẩu không đúng",
     );
     expect(fresh.url()).toContain("/login");
     await context.close();

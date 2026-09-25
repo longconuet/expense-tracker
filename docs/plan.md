@@ -21,7 +21,7 @@
 | Test | Vitest (unit) · supertest (integration) · Playwright (E2E) — coverage ≥ 80% |
 
 ## 3. Data model
-- `User`: id, name, email (unique), passwordHash
+- `User`: id, name, username (unique, 2-20 ký tự a-z0-9._), email (nullable, chỉ ghi nhận — không dùng), passwordHash
 - `Family`: id, name, inviteCode (6 ký tự, unique)
 - `FamilyMember`: familyId, userId, role (OWNER/MEMBER), joinedAt
 - `Category`: familyId, name, icon, isPreset, order
@@ -31,7 +31,7 @@
 ## 4. API (envelope `{ success, data, error, meta }`)
 - **Auth**: `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `GET /me`
 - **Family**: `POST /families` (tạo, trả về mã) · `POST /families/join` {code} · `GET /families/:id` (thành viên) · `POST /families/:id/regenerate-code` · xoá/thoát thành viên
-- **Category**: CRUD theo family (preset khoá, tự do thêm/bớt)
+- **Category**: CRUD theo family — mọi danh mục bình đẳng (preset chỉ là danh mục khởi tạo khi lập family, không có hành vi riêng); xoá chặn 409 khi đang có khoản chi
 - **Expense**: `GET /families/:id/expenses?month=&categoryId=&page=` (phân trang `meta`) · `POST /expenses` · `PUT/DELETE /expenses/:id`
 - **Stats**: `GET /families/:id/stats?month=` → tổng tháng, theo danh mục (%), theo ngày, so tháng trước
 

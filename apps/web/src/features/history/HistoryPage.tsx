@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { ApiMeta, Category, Expense } from "@expense-tracker/shared";
 import { formatVnd } from "@expense-tracker/shared";
@@ -10,8 +10,9 @@ import { groupByDay } from "../../core/expenseGroups";
 import { useRefetchOnSync } from "../../core/useRefetchOnSync";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
-import { Spinner } from "../../shared/ui/Spinner";
+import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { ChevronLeftIcon, ChevronRightIcon, TrashIcon } from "../../shared/ui/icons";
+import { HistorySkeleton } from "./HistorySkeleton";
 
 const PAGE_SIZE = 20;
 
@@ -35,7 +36,14 @@ export default function HistoryPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const lastQuery = useRef("");
+  const lastOk = useRef(false);
+  // Giá trị `meta` mới nhất cho effect đọc (tránh thêm vào deps — page đổi
+  // khi load-more không được trigger refetch).
+  const metaRef = useRef<ApiMeta | null>(null);
+  metaRef.current = meta;
 
   // Khoản offline vừa sync về server → refetch
   useRefetchOnSync(() => setReloadKey((k) => k + 1));
@@ -60,7 +68,18 @@ export default function HistoryPage() {
   useEffect(() => {
     if (!activeFamilyId) return;
     let cancelled = false;
-    setLoading(true);
+    // Refetch lặng lẽ (query không đổi + lần fetch trước OK + đang ở page 1)
+    // → GIỮ list cũ, không hiện skeleton. Đổi tháng/chip = query mới.
+    // Đã "Tải thêm" (page > 1) thì refetch sẽ co list về 20 dòng đầu →
+    // thay đổi lớn, xứng đáng có skeleton làm tín hiệu.
+    const query = `${activeFamilyId}|${month}|${categoryId ?? ""}`;
+    const isSilent =
+      lastQuery.current === query && lastOk.current && (metaRef.current?.page ?? 1) === 1;
+    lastQuery.current = query;
+    if (!isSilent) {
+      lastOk.current = false;
+      setLoading(true);
+    }
     setError(null);
 
     fetchExpenses(activeFamilyId, {
@@ -71,6 +90,7 @@ export default function HistoryPage() {
     })
       .then((result) => {
         if (!cancelled) {
+          lastOk.current = true;
           setExpenses(result.expenses);
           setMeta(result.meta);
         }
@@ -140,8 +160,6 @@ export default function HistoryPage() {
   }
 
   async function handleDelete(expense: Expense) {
-    const label = expense.note || expense.category.name;
-    if (!window.confirm(`Xoá khoản "${label}" (${formatVnd(expense.amount)})?`)) return;
     setDeletingId(expense.id);
     setError(null);
     try {
@@ -151,7 +169,10 @@ export default function HistoryPage() {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Xoá không thành công, vui lòng thử lại.");
     } finally {
-      setDeletingId(null);
+      // Guard theo id — tránh xoá state thuộc về lần mở dialog khác
+      // (VD mở dialog xoá B khi request xoá A vẫn đang chạy)
+      setDeletingId((d) => (d === expense.id ? null : d));
+      setDeleteTarget((t) => (t?.id === expense.id ? null : t));
     }
   }
 
@@ -224,9 +245,7 @@ export default function HistoryPage() {
       )}
 
       {loading ? (
-        <div className="flex justify-center py-16">
-          <Spinner />
-        </div>
+        <HistorySkeleton />
       ) : expenses.length === 0 ? (
         <Card className="mt-4 text-center">
           <p className="text-4xl" aria-hidden>
@@ -270,7 +289,7 @@ export default function HistoryPage() {
                           {modifiable && (
                             <button
                               type="button"
-                              onClick={() => handleDelete(expense)}
+                              onClick={() => setDeleteTarget(expense)}
                               disabled={deletingId === expense.id}
                               aria-label={`Xoá khoản ${expense.note || expense.category.name}`}
                               className="rounded-lg p-1.5 text-ink-muted transition hover:bg-danger/10 hover:text-danger disabled:opacity-40"
@@ -289,12 +308,30 @@ export default function HistoryPage() {
 
           {meta && expenses.length < meta.total && (
             <div className="mt-4">
-              <Button variant="secondary" className="w-full" loading={loadingMore} onClick={loadMore}>
+              <Button
+                variant="secondary"
+                className="w-full"
+                loading={loadingMore}
+                onClick={loadMore}
+              >
                 Tải thêm ({expenses.length}/{meta.total})
               </Button>
             </div>
           )}
         </>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          open
+          title="Xoá khoản chi"
+          message={`Xoá khoản "${deleteTarget.note || deleteTarget.category.name}" (${formatVnd(deleteTarget.amount)})?`}
+          confirmLabel="Xoá"
+          danger
+          loading={deletingId === deleteTarget.id}
+          onConfirm={() => handleDelete(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );

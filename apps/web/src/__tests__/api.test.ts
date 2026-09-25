@@ -111,14 +111,14 @@ describe("core/api", () => {
   it("401 ở request auth: false (VD login sai) → không refresh, ném luôn", async () => {
     // Arrange
     fetchMock.mockResolvedValueOnce(
-      fakeResponse(errorEnvelope("INVALID_CREDENTIALS", "Email hoặc mật khẩu không đúng"), 401),
+      fakeResponse(errorEnvelope("INVALID_CREDENTIALS", "Tên đăng nhập hoặc mật khẩu không đúng"), 401),
     );
 
     // Act + Assert
     await expect(
       apiFetch("/api/auth/login", {
         method: "POST",
-        body: { email: "a@b.c", password: "x" },
+        body: { username: "ab", password: "x" },
         auth: false,
       }),
     ).rejects.toMatchObject({ code: "INVALID_CREDENTIALS", status: 401 });
