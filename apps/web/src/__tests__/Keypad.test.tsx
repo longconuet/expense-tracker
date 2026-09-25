@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Keypad } from "../features/expenses/Keypad";
 
-describe("Keypad (bàn phím số to)", () => {
+describe("Keypad (bàn phím số)", () => {
   afterEach(() => {
     cleanup();
   });
@@ -29,6 +29,23 @@ describe("Keypad (bàn phím số to)", () => {
     // Assert
     expect(onKey).toHaveBeenNthCalledWith(1, "7");
     expect(onKey).toHaveBeenNthCalledWith(2, "back");
+  });
+
+  it("size md → phím cao 56px + chữ/icon/gap nhỏ hơn; mặc định lg → 64px", () => {
+    // Arrange + Act — mặc định lg
+    const { unmount } = render(<Keypad onKey={vi.fn()} />);
+    expect(screen.getByRole("group", { name: "Bàn phím số" })).toHaveClass("gap-2");
+    expect(screen.getByRole("button", { name: "7" })).toHaveClass("h-16", "text-2xl");
+    unmount();
+
+    render(<Keypad onKey={vi.fn()} size="md" />);
+
+    // Assert
+    expect(screen.getByRole("group", { name: "Bàn phím số" })).toHaveClass("gap-1.5");
+    expect(screen.getByRole("button", { name: "7" })).toHaveClass("h-14", "text-xl");
+    expect(screen.getByRole("button", { name: "Xoá 1 chữ số" }).querySelector("svg")).toHaveClass(
+      "h-6",
+    );
   });
 
   it("disabled → toàn bộ phím không bấm được", () => {
