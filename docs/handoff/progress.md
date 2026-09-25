@@ -3,7 +3,7 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
-## Cập nhật: 25/09/2026 — **Đăng nhập bằng username thay cho email** (commit `3655604` trên `develop`, đã push): username 2-20 ký tự `a-z 0-9 . _` (unique, tự lowercase) là định danh login, email nullable chỉ ghi nhận nguồn gốc — migration backfill từ phần trước `@` email cũ (trùng → hậu tố `_2`), api 61/61 + web 154/154 pass (219/219), review agent "DUYỆT" (0 CRITICAL/HIGH, 5 LOW: 2 fix luôn + 3 deferred), verified browser thật đủ 8 luồng (login backfill, register, 409 dưới ô, 401 message chung, MePage)
+## Cập nhật: 25/09/2026 — **Đăng nhập bằng username thay cho email** (commit `3655604` + docs `452a28e` trên `develop`, đã push): username 2-20 ký tự `a-z 0-9 . _` (unique, tự lowercase) là định danh login, email nullable chỉ ghi nhận nguồn gốc — migration backfill từ phần trước `@` email cũ (trùng → hậu tố `_2`), api 61/61 + web 154/154 pass (219/219), review agent "DUYỆT" (0 CRITICAL/HIGH, 5 LOW: 2 fix luôn + 3 deferred), verified browser thật đủ 8 luồng · **INCIDENT production (đã fix sau ~10 phút)**: Vercel git-integration **auto-deploy `develop` lên prod không qua migrate** → login/register 500 (code mới, DB thiếu cột) → user duyệt + chạy `prisma migrate deploy` tay vào Supabase → OK; **pipeline gap chưa quyết định** (xem "Chi tiết Đăng nhập bằng username")
 
 ## Cập nhật: 24/09/2026 — **Bình đẳng hoá danh mục — bỏ khoá preset** (commit `1c7003d` trên `develop`, đã push): preset giờ sửa/xoá được như danh mục thường (bỏ guard PRESET_LOCKED API + nhãn "Danh mục mặc định" + ẩn nút FE), `isPreset` chỉ còn ghi nhận nguồn gốc khởi tạo, api 61/61 + web 151/151 pass, review agent "DUYỆT CÓ ĐIỀU KIỆN" (0 CRITICAL/HIGH, 4 LOW đã xử lý 3 — 1 issue có sẵn deferred: PUT không pre-check trùng tên → P2002 500)
 
@@ -158,6 +158,14 @@
 - **Verified browser thật** (dev server): form login đúng label/autocomplete · login `sk_muf01glb` (backfill) OK → home · MePage name + username (không email) · register `test_verify_9x` mới → onboarding · 409 trùng → "Tên đăng nhập đã được sử dụng" **ngay dưới ô** · sai pass → 401 · username không tồn tại (hợp lệ) → 401 **cùng message** · response user `{id, name, username}`
 - **Review** (agent riêng): DUYỆT — 0 CRITICAL/HIGH · LOW đã fix: message cosmetic `api.test.ts` · thiếu test reset `usernameError` (đã thêm) · LOW deferred (xem "Issue deferred")
 - **Kết quả**: full suite **219/219** (web 154, api 61, shared 4), lint + build xanh; commit `3655604` push `develop` (CD migrate prod + deploy — thiết bị đã đăng nhập giữ phiên, token JWT theo userId)
+- **⚠ INCIDENT production + pipeline gap (25/09, cần user quyết định)**:
+  - **Thực tế pipeline hiện tại**: Vercel project **git-integration với GitHub, Production Branch = branch mặc định (`develop`)** → **mọi push `develop` tự auto-deploy production** (không chạy test gate, không chạy migrate). Workflow `deploy.yml` (test → migrate → vercel deploy) chỉ trigger trên **`main`** — chưa bao giờ chạy kể từ release v1.0 (`main` = `f6bae94` đứng yên). Giả định checkpoint cũ "mỗi push develop → CD migrate ~3-4 phút" là **SAI** (các task trước không có migration nên không lộ)
+  - **Incident**: push `3655604`+`452a28e` lúc 03:28Z → Vercel auto-deploy code mới lên prod lúc 03:30Z (`dpl_3Ni42bi...`, PROMOTED) trong khi DB prod chưa có cột `username` → login/register/**/me trả 500** ~10 phút (verify probe: 500 INTERNAL_ERROR). **Fix (user duyệt trước)**: chạy `prisma migrate deploy` tay vào Supabase `:5432` (~10:40 VN) → 401 đúng, backfill prod OK (12 tài khoản, tài khoản thật duy nhất: `nice231096` ← nice231096@gmail.com; 11 còn lại là smoke/verify/perf test 23-24/09 — **chưa xoá**, user muốn dọn thì cần lệnh duyệt riêng)
+  - **Tuỳ chọn sửa pipeline (chưa làm — user chọn)**:
+    - (A) **Giữ auto-deploy develop, thêm migrate vào build Vercel**: `vercel.json` buildCommand chạy `prisma migrate deploy` trước build **chỉ khi `VERCEL_ENV=production`** (preview no-op) — cần thêm env `DIRECT_URL` (`:5432`) vào Vercel project; ưu: đơn giản, luôn migrate-trước-code; nhược: migrate chạy trên infra Vercel
+    - (B) **Tắt auto-deploy develop**: Vercel dashboard → Settings → Git → Production Branch = `main` (hoặc gỡ git-integration — khi đó chỉ còn đường `vercel deploy --prod` của Actions) → quay về kiến trúc gốc: release = PR `develop→main` → Actions (test → migrate → deploy), push develop chỉ chạy CI
+    - (C) Bỏ `deploy.yml` + giữ auto-deploy develop, chấp nhận migrate tay mỗi lần có migration (không nên — dễ quên như vừa xảy ra)
+  - **Lưu ý đi kèm**: GitHub PAT `github_pat_11AFUQQB...` **hết hạn 25/09** (API 401, push vẫn OK vì credential riêng) — nếu cần API (tạo PR, đọc Actions) phải phát token mới
 
 ### Chi tiết Skeleton loading (24/09/2026)
 - **Yêu cầu**: thay spinner bằng skeleton loading hiện đại hơn trên mobile (user duyệt spec trước khi code)
@@ -272,9 +280,10 @@
 - **Sửa khoản offline**: `PUT /expenses/:id` khi server không đạt → hiện lỗi (chưa có queue cho edit — queue chỉ support create)
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
-## Trạng thái Git (cập nhật 25/09/2026)
-- `develop` = `3655604` (đăng nhập bằng username thay cho email) — **đã push** lên `origin` (https://github.com/longconuet/expense-tracker.git); `main` = `f6bae94` (release v1.0, chờ PR kế tiếp nếu user muốn)
-- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog) · `d6880dd` + `0c33ae9` (quản lý danh mục) · `1c7003d` (bình đẳng hoá preset) · `3655604` (username thay email)
+## Trạng thái Git + Production (cập nhật 25/09/2026)
+- `develop` = `452a28e` (docs checkpoint username; code ở `3655604`) — **đã push**; `main` = `f6bae94` (release v1.0, đứng yên — CD `deploy.yml` chưa chạy lần nào sau release)
+- **Production** (`https://expense-tracker-long-7bf1.vercel.app`) = **code username mới** (auto-deploy develop `452a28e`) + **DB đã migrate** (`20260925120000_add_username` apply tay sau incident) — login/register bằng username hoạt động, 12 tài khoản đã backfill
+- Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog) · `d6880dd` + `0c33ae9` (quản lý danh mục) · `1c7003d` (bình đẳng hoá preset) · `3655604` (username thay email) + `452a28e` (docs)
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
 - Working tree clean
 - Baseline test hiện tại: **web 154** · api 61 · shared 4 (tổng 219)
@@ -319,6 +328,8 @@ Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gố
 - **jsdom không có IndexedDB** — test db/syncQueue/readCache mock `core/db` (vi.hoisted Map) hoặc stub fake IDB (xem `__tests__/db.test.ts` — fake đủ dùng: open/createObjectStore/transaction/put/get/getAll/delete)
 - **jsdom chặn form submit** khi có input `required` rỗng → field validate bằng JS thì không dùng `required`
 - **recharts 3 + tab ẩn**: shape (sector/bar) rỗng do rAF không chạy trong tab hidden (Review pane) — **artifact môi trường, không phải bug**; shim `requestAnimationFrame = setTimeout(cb,16)` để verify; tab visible render bình thường
+- **Vercel (bắt buộc nhớ)**: project git-integration với GitHub, **Production Branch = mặc định (`develop`) → push `develop` = auto-deploy production** (không test gate, không migrate). `deploy.yml` (test → migrate → deploy) chỉ chạy trên `main` (= v1.0, chưa dùng lại). **Mọi migration mới phải được apply vào prod TRƯỚC hoặc KHI code lên** — chi tiết + tuỳ chọn sửa pipeline xem mục "Chi tiết Đăng nhập bằng username" (incident 25/09)
+- **GitHub PAT** `github_pat_11AFUQQB...` hết hạn 25/09 (API 401; git push vẫn hoạt động qua credential riêng) — cần token mới khi phải dùng GitHub API
 - **Dev server** (đang **TẮT** sau task username 25/09 — user chạy `pnpm dev` khi cần): api :3001 · web dev :5173 · **preview PWA :4173** (build + SW + proxy API — chỉ khi chạy `vite preview` sau build)
 - **E2E (Playwright)**: `pnpm test:e2e` (root) — tự bật API :3101 + `e2e.db` (reset mỗi lần) + web :5199 (proxy qua `VITE_API_PROXY_TARGET`), không đụng dev :3001/dev.db. Chromium đã cài sẵn máy
 - **Test account dev DB** (sau migration username 25/09 — mật khẩu chung `MatKhau123!`): `sk_muf01glb` (family "Nhà Skeleton", owner) · `final` (family "Nhà Final", owner) · `test_verify_9x` (tài khoản verify browser, không có family) — username = phần trước @ của email cũ (gạch → `_`); email cũ vẫn giữ trong DB (nullable)
