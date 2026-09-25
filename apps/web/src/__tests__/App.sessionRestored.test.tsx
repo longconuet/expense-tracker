@@ -44,6 +44,7 @@ describe("App — phiên đăng nhập (còn refresh cookie)", () => {
             previousMonthTotal: 0,
             byCategory: [],
             byDay: [],
+            byMember: [],
           },
           error: null,
         }),

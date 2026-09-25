@@ -212,5 +212,10 @@ export async function fetchFamilyDetail(familyId: string): Promise<FamilyDetail>
 
 export async function fetchStats(familyId: string, month?: string): Promise<MonthlyStats> {
   const path = `/api/families/${familyId}/stats${month ? `?month=${month}` : ""}`;
-  return withReadCache<MonthlyStats>(`GET ${path}`, () => apiFetch<MonthlyStats>(path));
+  // Normalise byMember 1 nơi: read-cache offline có thể trả payload cũ (đúng phiên bản
+  // trước khi có field) → consumer tin được type MonthlyStats (byMember luôn là array)
+  const stats = await withReadCache<MonthlyStats>(`GET ${path}`, () =>
+    apiFetch<MonthlyStats>(path),
+  );
+  return { ...stats, byMember: Array.isArray(stats.byMember) ? stats.byMember : [] };
 }

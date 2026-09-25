@@ -55,6 +55,7 @@ describe("Trang chủ", () => {
       previousMonthTotal: 500_000,
       byCategory: [{ category: CAT, total: 600_000, percent: 60 }],
       byDay: [],
+      byMember: [],
     });
     fetchExpensesMock.mockResolvedValue({
       expenses: [EXPENSE],
@@ -84,6 +85,7 @@ describe("Trang chủ", () => {
       previousMonthTotal: 0,
       byCategory: [{ category: CAT, total: 140_000, percent: 100 }],
       byDay: [],
+      byMember: [],
     });
     fetchExpensesMock.mockResolvedValue({
       expenses: [
@@ -150,6 +152,7 @@ describe("Trang chủ", () => {
       previousMonthTotal: 0,
       byCategory: [],
       byDay: [],
+      byMember: [],
     });
     fetchExpensesMock.mockResolvedValue({ expenses: [], meta: { page: 1, pageSize: 5, total: 0 } });
     renderHome();
@@ -194,6 +197,7 @@ describe("Trang chủ", () => {
       previousMonthTotal: 500_000,
       byCategory: [{ category: CAT, total: 600_000, percent: 60 }],
       byDay: [],
+      byMember: [],
     });
     fetchExpensesMock.mockResolvedValue({
       expenses: [EXPENSE],
@@ -223,6 +227,7 @@ describe("Trang chủ", () => {
       previousMonthTotal: 500_000,
       byCategory: [{ category: CAT, total: 600_000, percent: 60 }],
       byDay: [],
+      byMember: [],
     });
     fetchExpensesMock.mockResolvedValue({
       expenses: [EXPENSE],

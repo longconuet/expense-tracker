@@ -161,6 +161,23 @@ export default function StatsPage() {
                 % so với tháng trước
               </p>
             )}
+            {/* Theo thành viên — mọi member (kể cả 0 chi); byMember đã được fetchStats
+                normalize luôn là array (payload offline cũ thiếu field → []) */}
+            {stats.byMember.length > 0 && (
+              <div className="mt-3 border-t border-border pt-3">
+                <p className="text-sm text-ink-muted">Theo thành viên</p>
+                <ul className="mt-2 space-y-1.5">
+                  {stats.byMember.map((member, index) => (
+                    <li key={`${member.name}-${index}`} className="flex items-center gap-2 text-sm">
+                      <span className="truncate font-medium text-ink">{member.name}</span>
+                      <span className="ml-auto shrink-0 text-ink-muted">
+                        {formatVnd(member.total)} · {member.percent}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </Card>
 
           {/* Theo danh mục — donut + chú thích */}

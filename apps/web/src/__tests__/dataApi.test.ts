@@ -326,6 +326,7 @@ describe("core/dataApi", () => {
       previousMonthTotal: 50,
       byCategory: [],
       byDay: [],
+      byMember: [],
     };
     fetchMock
       .mockResolvedValueOnce(fakeResponse(envelope(stats)))
@@ -392,6 +393,7 @@ describe("core/dataApi", () => {
       previousMonthTotal: 50,
       byCategory: [],
       byDay: [],
+      byMember: [],
     };
     fetchMock
       .mockResolvedValueOnce(fakeResponse(envelope(stats)))
@@ -403,6 +405,28 @@ describe("core/dataApi", () => {
 
     // Assert
     expect(second).toEqual(stats);
+  });
+
+  it("fetchStats: payload cũ thiếu byMember → normalize về [] (type MonthlyStats luôn đúng)", async () => {
+    // Arrange — payload như phiên bản API trước khi có field byMember
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse(
+        envelope({
+          month: "2026-09",
+          total: 100,
+          previousMonthTotal: 0,
+          byCategory: [],
+          byDay: [],
+        }),
+      ),
+    );
+
+    // Act
+    const stats = await fetchStats("f1", "2026-09");
+
+    // Assert
+    expect(stats.byMember).toEqual([]);
+    expect(stats.total).toBe(100);
   });
 
   it("read cache: lỗi 4xx → ném lỗi, không fallback bản lưu", async () => {

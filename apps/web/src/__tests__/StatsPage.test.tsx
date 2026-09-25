@@ -36,6 +36,14 @@ function stats(total: number, previousMonthTotal: number) {
             { date: `${currentMonth()}-10`, total: 600_000 },
           ]
         : [],
+    // Số tiền khác byCategory để test không đụng nhau khi getByText
+    byMember:
+      total > 0
+        ? [
+            { name: "An", total: 550_000, percent: 55 },
+            { name: "Bình", total: 450_000, percent: 45 },
+          ]
+        : [],
   };
 }
 
@@ -81,6 +89,47 @@ describe("Thống kê", () => {
     // Assert
     expect(await screen.findByRole("heading", { name: "Thống kê" })).toBeInTheDocument();
     expect(screen.getByText(/Giảm 50% so với tháng trước/)).toBeInTheDocument();
+  });
+
+  it("card tổng hiện section Theo thành viên: tên + tổng + % từng member", async () => {
+    // Arrange
+    fetchStatsMock.mockResolvedValue(stats(1_000_000, 0));
+    renderStats();
+
+    // Assert
+    expect(await screen.findByText("Theo thành viên")).toBeInTheDocument();
+    expect(screen.getByText("An")).toBeInTheDocument();
+    expect(screen.getByText("550.000 ₫ · 55%")).toBeInTheDocument();
+    expect(screen.getByText("Bình")).toBeInTheDocument();
+    expect(screen.getByText("450.000 ₫ · 45%")).toBeInTheDocument();
+  });
+
+  it("thành viên không có chi trong tháng vẫn hiện với 0 ₫", async () => {
+    // Arrange
+    const data = stats(1_000_000, 0);
+    data.byMember = [
+      { name: "An", total: 1_000_000, percent: 100 },
+      { name: "Bình", total: 0, percent: 0 },
+    ];
+    fetchStatsMock.mockResolvedValue(data);
+    renderStats();
+
+    // Assert
+    expect(await screen.findByText("Theo thành viên")).toBeInTheDocument();
+    expect(screen.getByText("1.000.000 ₫ · 100%")).toBeInTheDocument();
+    expect(screen.getByText("0 ₫ · 0%")).toBeInTheDocument();
+  });
+
+  it("byMember rỗng → không render section, card tổng vẫn bình thường", async () => {
+    // Arrange — payload byMember = [] (trường hợp fetchStats normalize payload offline cũ)
+    const data = stats(1_000_000, 0);
+    data.byMember = [];
+    fetchStatsMock.mockResolvedValue(data);
+    renderStats();
+
+    // Assert
+    expect(await screen.findByText("1.000.000 ₫")).toBeInTheDocument();
+    expect(screen.queryByText("Theo thành viên")).not.toBeInTheDocument();
   });
 
   it("tháng không có data → empty state, không gọi chi tiết", async () => {
@@ -129,6 +178,10 @@ describe("Thống kê", () => {
     expect(await screen.findByRole("status", { name: "Đang tải" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Tháng trước" })).toBeEnabled();
     expect(document.querySelector(".animate-spin")).toBeNull();
+    // Skeleton đủ 3 card + section theo thành viên trong card tổng (≥ 12 khối)
+    expect(document.querySelectorAll('[role="status"] .animate-pulse').length).toBeGreaterThanOrEqual(
+      12,
+    );
   });
 
   it("đổi tháng → skeleton lại (query mới), fetch pending không giữ data cũ", async () => {
