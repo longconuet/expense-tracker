@@ -19,6 +19,8 @@ import { addMonths, currentMonth, monthLabel } from "../../core/dates";
 import { useRefetchOnSync } from "../../core/useRefetchOnSync";
 import { Card } from "../../shared/ui/Card";
 import { ChevronLeftIcon, ChevronRightIcon } from "../../shared/ui/icons";
+import { DayDetailModal } from "./DayDetailModal";
+import { StatsCalendar } from "./StatsCalendar";
 import { StatsSkeleton } from "./StatsSkeleton";
 
 /** Palette cố định cho các lát donut — độ sáng vừa phải, đọc được cả 2 theme. */
@@ -51,6 +53,8 @@ export default function StatsPage() {
   const [stats, setStats] = useState<MonthlyStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  /** Ngày đang mở popup chi tiết (null = chưa chọn). */
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const lastQuery = useRef("");
   const lastOk = useRef(false);
 
@@ -70,6 +74,8 @@ export default function StatsPage() {
     if (!isSilent) {
       lastOk.current = false;
       setStats(null);
+      // Tháng mới → ngày đang chọn không còn thuộc view (đóng popup)
+      setSelectedDate(null);
     }
     setError(null);
 
@@ -95,6 +101,7 @@ export default function StatsPage() {
     const next = addMonths(month, delta);
     if (next <= currentMonth()) {
       setMonth(next);
+      setSelectedDate(null);
     }
   }
 
@@ -180,6 +187,14 @@ export default function StatsPage() {
             )}
           </Card>
 
+          {/* Lịch chi tiêu theo ngày — click ngày có chi → popup chi tiết */}
+          <Card className="mt-4">
+            <h2 className="font-semibold text-ink">Lịch chi tiêu</h2>
+            <div className="mt-2">
+              <StatsCalendar month={month} byDay={stats.byDay} onDayClick={setSelectedDate} />
+            </div>
+          </Card>
+
           {/* Theo danh mục — donut + chú thích */}
           <Card className="mt-4">
             <h2 className="font-semibold text-ink">Theo danh mục</h2>
@@ -252,6 +267,14 @@ export default function StatsPage() {
           </Card>
         </>
       ) : null}
+
+      {/* Popup chi tiết 1 ngày (mở từ Lịch chi tiêu) */}
+      <DayDetailModal
+        open={selectedDate !== null}
+        date={selectedDate}
+        familyId={activeFamilyId ?? ""}
+        onClose={() => setSelectedDate(null)}
+      />
     </div>
   );
 }

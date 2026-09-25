@@ -1,7 +1,7 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchStats } from "../core/dataApi";
+import { fetchExpenses, fetchStats } from "../core/dataApi";
 import { useAuthStore } from "../core/authStore";
 import { ApiError } from "../core/api";
 import { addMonths, currentMonth } from "../core/dates";
@@ -10,9 +10,11 @@ import StatsPage from "../features/stats/StatsPage";
 
 vi.mock("../core/dataApi", () => ({
   fetchStats: vi.fn(),
+  fetchExpenses: vi.fn(),
 }));
 
 const fetchStatsMock = vi.mocked(fetchStats);
+const fetchExpensesMock = vi.mocked(fetchExpenses);
 
 const CAT_A = { id: "c1", name: "Ăn uống", icon: "🍜", isPreset: true, order: 0 };
 const CAT_B = { id: "c2", name: "Đi lại", icon: "🚗", isPreset: true, order: 1 };
@@ -59,6 +61,7 @@ describe("Thống kê", () => {
   beforeEach(() => {
     useAuthStore.setState({ activeFamilyId: "f1" });
     fetchStatsMock.mockReset();
+    fetchExpensesMock.mockReset();
   });
 
   afterEach(() => {
@@ -167,6 +170,74 @@ describe("Thống kê", () => {
 
     // Assert
     expect(await screen.findByRole("alert")).toHaveTextContent("Mất kết nối.");
+  });
+
+  it("lịch: click ngày có chi → mở popup chi tiết + fetch đúng ngày; đóng lại được", async () => {
+    // Arrange
+    fetchStatsMock.mockResolvedValue(stats(1_000_000, 0));
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [
+        {
+          id: "e1",
+          amount: 350_000,
+          date: `${currentMonth()}-10`,
+          note: "Tiệc liên hoan",
+          category: CAT_A,
+          createdByName: "An",
+          createdAt: "2026-09-10T04:00:00.000Z",
+        },
+        {
+          id: "e2",
+          amount: 250_000,
+          date: `${currentMonth()}-10`,
+          note: null,
+          category: CAT_B,
+          createdByName: "Bình",
+          createdAt: "2026-09-10T05:00:00.000Z",
+        },
+      ],
+      meta: { page: 1, pageSize: 100, total: 2 },
+    });
+    renderStats();
+    await screen.findByText("1.000.000 ₫");
+
+    // Act — click ngày 10 (byDay có 600k)
+    fireEvent.click(screen.getByRole("button", { name: "Ngày 10, chi tiêu 600.000 ₫" }));
+
+    // Assert — popup hiện, fetch đúng ngày, list chi tiết đủ 2 khoản
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Tổng")).toBeInTheDocument();
+    expect(within(dialog).getByText("600.000 ₫")).toBeInTheDocument();
+    expect(within(dialog).getByText("Tiệc liên hoan")).toBeInTheDocument();
+    expect(within(dialog).getByText("350.000 ₫")).toBeInTheDocument();
+    expect(within(dialog).getByText("250.000 ₫")).toBeInTheDocument();
+    expect(fetchExpensesMock).toHaveBeenCalledWith("f1", {
+      date: `${currentMonth()}-10`,
+      page: 1,
+      pageSize: 100,
+    });
+
+    // Act — đóng popup
+    fireEvent.click(screen.getByRole("button", { name: "Đóng" }));
+
+    // Assert
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("đổi tháng khi đang mở popup → đóng popup (ngày cũ không thuộc view)", async () => {
+    // Arrange
+    fetchStatsMock.mockResolvedValue(stats(1_000_000, 0));
+    fetchExpensesMock.mockResolvedValue({ expenses: [], meta: { page: 1, pageSize: 100, total: 0 } });
+    renderStats();
+    await screen.findByText("1.000.000 ₫");
+    fireEvent.click(screen.getByRole("button", { name: "Ngày 10, chi tiêu 600.000 ₫" }));
+    await screen.findByRole("dialog");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Tháng trước" }));
+
+    // Assert
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("tải lần đầu → skeleton (không spinner), selector tháng vẫn hoạt động", async () => {

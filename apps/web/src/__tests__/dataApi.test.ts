@@ -90,6 +90,17 @@ describe("core/dataApi", () => {
     expect(result.meta).toEqual({ page: 2, pageSize: 10, total: 25 });
   });
 
+  it("fetchExpenses lọc theo date → query string có date (không kèm month)", async () => {
+    // Arrange
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ expenses: [EXPENSE] })));
+
+    // Act
+    await fetchExpenses("f1", { date: "2026-09-09", pageSize: 100 });
+
+    // Assert
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/expenses?date=2026-09-09&pageSize=100");
+  });
+
   it("fetchExpenses không có filter → không có query string", async () => {
     // Arrange
     fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ expenses: [] }, { page: 1, pageSize: 20, total: 0 })));

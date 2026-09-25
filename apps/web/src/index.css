@@ -11,6 +11,7 @@
 @theme {
   --color-primary: #0d9488;
   --color-primary-soft: #ccfbf1;
+  --color-on-primary: #0f172a;
   --color-surface: #f8fafa;
   --color-card: #ffffff;
   --color-ink: #0f172a;
@@ -44,6 +45,7 @@
 .dark {
   --color-primary: #2dd4bf;
   --color-primary-soft: #134e4a;
+  --color-on-primary: #0f172a;
   --color-surface: #0f172a;
   --color-card: #1e293b;
   --color-ink: #f1f5f9;
