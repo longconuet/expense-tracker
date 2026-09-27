@@ -112,4 +112,17 @@ describe("core/AppShell", () => {
     // Assert
     expect(screen.getByText("ONBOARDING PAGE")).toBeInTheDocument();
   });
+
+  it("PWA iOS: root + bottom nav + banner có safe-area (nội dung không chui vào vùng status bar/home indicator bị iOS blur)", () => {
+    // Arrange — bật banner để header render
+    useSyncStore.setState({ pendingCount: 1 });
+
+    // Act
+    renderShell();
+
+    // Assert — neo class safe-area (env() = 0 trên desktop nên không đổi layout thường)
+    expect(screen.getByRole("main").parentElement).toHaveClass("pt-[env(safe-area-inset-top)]");
+    expect(screen.getByRole("navigation")).toHaveClass("pb-[env(safe-area-inset-bottom)]");
+    expect(screen.getByRole("banner")).toHaveClass("top-[env(safe-area-inset-top)]");
+  });
 });

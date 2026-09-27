@@ -33,6 +33,12 @@ const NAV_ITEMS: NavItem[] = [
  * Shell cho các màn chính: bottom nav + banner trạng thái (offline / khoản
  * chờ đồng bộ). Tên family và tên tài khoản KHÔNG còn ở header — hiển thị
  * và đổi family tại card trên tab "Tôi". Header chỉ render khi có banner.
+ *
+ * PWA iOS (standalone, viewport-fit=cover): iOS phủ lớp frosted-glass lên
+ * vùng status bar và HOME INDICATOR — nội dung chui vào đó bị mờ/lộ. Root
+ * có `pt-[env(safe-area-inset-top)]` đẩy nội dung xuống dưới status bar,
+ * bottom nav có `pb-[env(safe-area-inset-bottom)]`, banner sticky neo
+ * `top-[env(safe-area-inset-top)]`. Trên desktop/browser thường env() = 0.
  */
 export function AppShell() {
   const families = useAuthStore((s) => s.families);
@@ -47,9 +53,9 @@ export function AppShell() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-surface">
+    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-surface pt-[env(safe-area-inset-top)]">
       {(!online || pendingCount > 0) && (
-        <header className="sticky top-0 z-10 border-b border-border bg-surface/95 backdrop-blur">
+        <header className="sticky top-[env(safe-area-inset-top)] z-10 border-b border-border bg-surface/95 backdrop-blur">
           {!online && (
             <p className="border-t border-border bg-danger/10 px-4 py-1.5 text-center text-xs font-medium text-danger">
               Không có mạng — đang xem dữ liệu lưu trước
@@ -67,7 +73,7 @@ export function AppShell() {
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-card">
+      <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
         <div className="mx-auto flex max-w-md items-end justify-around px-2 py-1.5">
           {NAV_ITEMS.map((item) => {
             const ItemIcon = item.icon;
