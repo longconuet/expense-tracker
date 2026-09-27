@@ -156,6 +156,7 @@ describe("Màn thêm khoản chi (keypad)", () => {
 
     // Assert — cùng 1 node DOM, giờ chứa nhóm gợi ý
     expect(screen.getByTestId("suggestions-frame")).toBe(frame);
+    expect(frame).toHaveClass("h-[34px]");
     expect(frame).toContainElement(screen.getByRole("group", { name: "Gợi ý số tiền" }));
   });
 
