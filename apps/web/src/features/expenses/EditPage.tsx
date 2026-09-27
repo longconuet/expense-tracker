@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import type { Category, Expense } from "@expense-tracker/shared";
+import { formatVnd, formatVndCompact, type Category, type Expense } from "@expense-tracker/shared";
 import { ApiError } from "../../core/api";
 import { useAuthStore } from "../../core/authStore";
 import { fetchCategories, fetchExpense, updateExpense } from "../../core/dataApi";
@@ -9,15 +9,26 @@ import { Card } from "../../shared/ui/Card";
 import { Input } from "../../shared/ui/Input";
 import { Spinner } from "../../shared/ui/Spinner";
 import { haptic } from "./haptic";
+import { suggestAmounts } from "./amountSuggestions";
 import { Keypad, type KeypadKey } from "./Keypad";
 
 const MAX_AMOUNT_DIGITS = 9; // 999.999.999 ₫
 
+/** Số gợi ý → class cột grid (class đầy đủ để Tailwind quét được). */
+const SUGGEST_COLS: Record<number, string> = {
+  1: "grid-cols-1",
+  2: "grid-cols-2",
+  3: "grid-cols-3",
+  4: "grid-cols-4",
+};
+
 /**
- * Màn sửa khoản chi (WBS 10): cùng bố cục màn nhập chi — số tiền hiển thị
- * lớn gõ bằng keypad, danh mục cuộn ngang, ngày + ghi chú — pre-fill từ
- * `GET /expenses/:id`, lưu bằng `PUT /expenses/:id`. Chỉ người tạo hoặc
- * owner sửa được (API enforce quyền).
+ * Màn sửa khoản chi (WBS 10) — CÙNG bố cục mới nhất với màn Tạo khoản chi
+ * (AddPage): KHÔNG có heading, số tiền lớn + chip gợi ý số tròn (khung cố
+ * định 34px), danh mục cuộn ngang viên tròn (không tiêu đề), keypad md +
+ * phím "C" đặt TRÊN khu vực ngày + ghi chú. Khác biệt riêng: pre-fill từ
+ * `GET /expenses/:id`, lưu bằng `PUT /expenses/:id`, nút "Lưu thay đổi".
+ * Chỉ người tạo hoặc owner sửa được (API enforce quyền).
  */
 export default function EditPage() {
   const { id = "" } = useParams();
@@ -60,6 +71,7 @@ export default function EditPage() {
 
   const parsedAmount = parseInt(amount || "0", 10);
   const ready = parsedAmount > 0 && categoryId !== null;
+  const suggestions = suggestAmounts(amount);
 
   function pressKey(key: KeypadKey) {
     if (submitting) return;
@@ -149,14 +161,41 @@ export default function EditPage() {
 
   return (
     <div role="form" aria-label="Sửa khoản chi" className="flex flex-col">
-      <h1 className="text-xl font-bold text-ink">Sửa khoản chi</h1>
-
-      {/* Số tiền — hiển thị lớn, gõ bằng keypad bên dưới */}
-      <div className="mt-3 rounded-2xl border border-border bg-card px-4 py-5 text-center">
+      {/* Số tiền — hiển thị lớn, gõ bằng keypad (cùng màn Tạo khoản chi) */}
+      <div className="rounded-2xl border border-border bg-card px-4 py-5 text-center">
         <span aria-live="polite" className="text-5xl font-bold tracking-tight text-ink tabular-nums">
           {amount ? Number(amount).toLocaleString("vi-VN") : "0"}
         </span>
         <span className="ml-1.5 text-2xl font-semibold text-ink-muted">₫</span>
+      </div>
+
+      {/* Gợi ý số tròn khi đang gõ dở — chạm chip điền luôn giá trị.
+          Khối DUY TRÌ CHIỀU CAO CỐ ĐỊNH 34px (= chiều cao chip) dù không
+          có gợi ý — tránh giao diện nhảy lên/xuống khi ẩn/hiện. */}
+      <div className="mt-2 h-[34px]" data-testid="suggestions-frame">
+        {suggestions.length > 0 ? (
+          <div
+            role="group"
+            aria-label="Gợi ý số tiền"
+            className={`grid gap-2 ${SUGGEST_COLS[suggestions.length]}`}
+          >
+            {suggestions.map((value) => (
+              <button
+                key={value}
+                type="button"
+                disabled={submitting}
+                aria-label={`Gợi ý ${formatVnd(value)}`}
+                onClick={() => {
+                  haptic(8);
+                  setAmount(String(value));
+                }}
+                className="rounded-full border border-border bg-card px-2 py-1.5 text-sm font-medium text-ink transition active:border-primary active:bg-primary-soft active:text-primary disabled:opacity-50"
+              >
+                {formatVndCompact(value)}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {/* Danh mục — viên tròn cuộn ngang (không tiêu đề, icon gọn để hiện nhiều hơn) */}
@@ -196,6 +235,20 @@ export default function EditPage() {
         </div>
       </div>
 
+      {/* Keypad ngay dưới danh mục (trên khu vực ngày + ghi chú) —
+          mobile không phải cuộn để thấy cả bàn phím, size md (56px). */}
+      <div className="mt-4">
+        <Keypad
+          onKey={pressKey}
+          disabled={submitting}
+          size="md"
+          onClearAll={() => {
+            haptic(8);
+            setAmount("");
+          }}
+        />
+      </div>
+
       <Card className="mt-4">
         <Input label="Ngày" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
         <div className="mt-4">
@@ -215,10 +268,6 @@ export default function EditPage() {
           {formError}
         </p>
       ) : null}
-
-      <div className="mt-4">
-        <Keypad onKey={pressKey} disabled={submitting} />
-      </div>
 
       <Button
         size="lg"

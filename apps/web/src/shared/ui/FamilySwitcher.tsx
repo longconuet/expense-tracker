@@ -20,7 +20,7 @@ export function FamilySwitcher({
 }) {
   return (
     <div
-      className="fixed inset-0 z-20 flex items-end justify-center bg-black/50"
+      className="fixed inset-0 z-20 flex items-end justify-center modal-backdrop"
       onClick={onClose}
     >
       <div

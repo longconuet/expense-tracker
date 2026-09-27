@@ -125,6 +125,57 @@ describe("Màn sửa khoản chi", () => {
     expect(save).toBeDisabled();
   });
 
+  it("xoá số tiền rồi gõ dở → chip gợi ý hiện; bấm chip → điền luôn giá trị", async () => {
+    // Arrange
+    renderEdit();
+    await screen.findByText("50.000");
+
+    // Act — xoá hết số cũ, gõ "2"
+    pressBackspaces(5);
+    fireEvent.click(screen.getByRole("button", { name: "2" }));
+
+    // Assert — chip gợi ý nhãn compact, aria-label giá trị đầy đủ
+    expect(screen.getByRole("button", { name: "Gợi ý 2.000 ₫" }).textContent).toBe("2k");
+    expect(screen.getByRole("button", { name: "Gợi ý 20.000 ₫" }).textContent).toBe("20k");
+
+    // Act — bấm chip 20k
+    fireEvent.click(screen.getByRole("button", { name: "Gợi ý 20.000 ₫" }));
+
+    // Assert — số tiền được điền
+    expect(screen.getByText("20.000")).toBeInTheDocument();
+  });
+
+  it("bấm phím 'C' → xoá toàn bộ số tiền, nút Lưu disabled", async () => {
+    // Arrange
+    renderEdit();
+    await screen.findByText("50.000");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Xoá toàn bộ" }));
+
+    // Assert — hiển thị về 0 (đọc qua aria-live, tránh đụng phím "0" của keypad)
+    expect(screen.queryByText("50.000")).not.toBeInTheDocument();
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent("0");
+    expect(screen.getByRole("button", { name: "Lưu thay đổi" })).toBeDisabled();
+  });
+
+  it("khung gợi ý giữ chiều cao cố định — không nhảy layout khi ẩn/hiện gợi ý", async () => {
+    // Arrange — pre-fill 50000 → khung gợi ý có chip
+    renderEdit();
+    await screen.findByText("50.000");
+    const frame = screen.getByTestId("suggestions-frame");
+    expect(frame).toContainElement(screen.getByRole("group", { name: "Gợi ý số tiền" }));
+
+    // Act — xoá toàn bộ số tiền → không còn gợi ý
+    fireEvent.click(screen.getByRole("button", { name: "Xoá toàn bộ" }));
+
+    // Assert — nhóm gợi ý biến mất nhưng CÙNG khung (chiều cao cố định)
+    expect(screen.queryByRole("group", { name: "Gợi ý số tiền" })).not.toBeInTheDocument();
+    const fixedFrame = screen.getByTestId("suggestions-frame");
+    expect(fixedFrame).toBe(frame);
+    expect(fixedFrame).toHaveClass("h-[34px]");
+  });
+
   it("API trả 403 khi lưu → hiện thông báo, không rời màn hình", async () => {
     // Arrange
     updateExpenseMock.mockRejectedValue(

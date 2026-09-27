@@ -67,9 +67,9 @@ test.describe("Luồng khoản chi: keypad → trang chủ → lịch sử → s
     await addExpense(page, "32500", "Ăn uống");
     await page.goto("/history");
 
-    // Act — chạm khoản → màn sửa
+    // Act — chạm khoản → màn sửa (form aria-label — màn không còn heading)
     await page.locator('a[href*="/edit"]').first().click();
-    await expect(page.getByRole("heading", { name: "Sửa khoản chi" })).toBeVisible();
+    await expect(page.getByRole("form", { name: "Sửa khoản chi" })).toBeVisible();
 
     // Assert — pre-fill đúng giá trị cũ
     await expect(page.locator('[aria-live="polite"]')).toContainText("32.500");

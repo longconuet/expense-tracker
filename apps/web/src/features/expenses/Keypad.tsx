@@ -5,8 +5,8 @@ import { BackspaceIcon } from "../../shared/ui/icons";
  * (spec WBS 9: không dùng bàn phím hệ thống cho số tiền).
  * Presentational: không giữ state, cha truyền onKey.
  *
- * Size: "lg" (64px — mặc định, màn Sửa) / "md" (56px — màn Thêm,
- * tiết kiệm chiều cao mobile để keypad nằm trên khu vực ngày + ghi chú).
+ * Size: "lg" (64px — mặc định) / "md" (56px — màn Thêm + Sửa, tiết kiệm
+ * chiều cao mobile để keypad nằm trên khu vực ngày + ghi chú).
  */
 export type KeypadKey = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "back";
 export type KeypadSize = "lg" | "md";
@@ -52,7 +52,7 @@ interface KeypadProps {
   onKey: (key: KeypadKey) => void;
   /** Vô hiệu toàn bộ (VD đang gửi). */
   disabled?: boolean;
-  /** Mặc định "lg" (64px). "md" = 56px cho màn có ít chiều cao. */
+  /** Mặc định "lg" (64px). "md" = 56px cho màn có ít chiều cao (Thêm/Sửa). */
   size?: KeypadSize;
   /**
    * Callback xoá toàn bộ số tiền — khi truyền sẽ hiện nút "C" cạnh phím

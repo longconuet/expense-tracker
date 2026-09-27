@@ -36,6 +36,13 @@ test.describe("Thống kê: lịch chi tiêu theo ngày (E2E)", () => {
     // Assert — popup có tổng đầy đủ + 2 khoản chi tiết
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
+
+    // Assert — veil nền tối 60% + blur (utility `modal-backdrop` ở index.css)
+    // — regression: veil cũ `bg-ink/40` bị lòe sáng sai chiều ở dark mode
+    const overlay = page.locator(".modal-backdrop");
+    await expect(overlay).toHaveCSS("background-color", "rgba(0, 0, 0, 0.6)");
+    await expect(overlay).toHaveCSS("backdrop-filter", "blur(4px)");
+
     await expect(dialog).toContainText("Chi tiêu ngày " + day.label);
     await expect(dialog).toContainText("300.000 ₫");
     await expect(dialog).toContainText("250.000 ₫");

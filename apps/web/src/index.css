@@ -54,6 +54,18 @@
   --color-border: #334155;
 }
 
+/*
+ * Nền che phía sau modal / bottom-sheet: tối (đen 60%) + blur nhẹ 4px để
+ * làm nổi bật dialog. Dùng đen cố định THAY VÌ token `ink` — token này
+ * lật thành màu sáng trong dark mode nên veil sẽ bị "lòe sáng" sai chiều.
+ * Định nghĩa tập trung 1 chỗ — mọi overlay chỉ dùng class `modal-backdrop`.
+ */
+@utility modal-backdrop {
+  background-color: rgb(0 0 0 / 0.6);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
 @layer base {
   body {
     @apply antialiased bg-surface text-ink;

@@ -15,8 +15,9 @@ interface ModalProps {
 }
 
 /**
- * Modal card giữa màn (mọi kích thước) — nền tối `bg-ink/40`, card dùng
- * token theme (bg-card, rounded-2xl) nên tự đúng light/dark.
+ * Modal card giữa màn (mọi kích thước) — nền che tối + blur (utility
+ * `modal-backdrop` định nghĩa tập trung ở index.css, đúng cả light/dark),
+ * card dùng token theme (bg-card, rounded-2xl) nên tự đúng light/dark.
  *
  * A11y: role="dialog" + aria-modal, đóng bằng Escape / bấm ra ngoài
  * (trừ khi `disableDismiss`), focus vào dialog khi mở (trả về phần tử
@@ -93,7 +94,7 @@ export function Modal({
 
   return (
     <div
-      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center modal-backdrop p-4"
       onClick={(e) => {
         if (!disableDismiss && e.target === e.currentTarget) onClose();
       }}
