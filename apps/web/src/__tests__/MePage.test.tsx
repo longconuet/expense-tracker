@@ -86,6 +86,32 @@ describe("Màn Tôi", () => {
     expect(screen.getByText("Chủ gia đình")).toBeInTheDocument();
   });
 
+  it("bấm card family → mở dialog đổi gia đình; chọn family khác → setActiveFamily + đóng dialog", () => {
+    // Arrange — user thuộc 2 family (đổi family giờ chỉ ở tab Tôi, không còn ở header)
+    const FAMILY_2 = {
+      id: "f2",
+      name: "Công ty X",
+      inviteCode: "XYZ789",
+      ownerName: "Bình",
+      memberCount: 5,
+      myRole: "MEMBER",
+    } as const;
+    useAuthStore.setState({ families: [FAMILY, FAMILY_2] });
+    renderMe();
+
+    // Act — mở switcher từ card family rồi chọn family khác
+    fireEvent.click(screen.getByRole("button", { name: /Đổi gia đình/ }));
+    expect(screen.getByRole("dialog", { name: "Đổi gia đình" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Công ty X").closest("button")!);
+
+    // Assert — active family đổi, dialog đóng, card trỏ về family mới
+    expect(useAuthStore.getState().activeFamilyId).toBe(FAMILY_2.id);
+    expect(screen.queryByRole("dialog", { name: "Đổi gia đình" })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Đổi gia đình \(đang ở Công ty X/ }),
+    ).toBeInTheDocument();
+  });
+
   it("không có bản cập nhật mới → không hiện nút 'Cập nhật ngay'", async () => {
     // Arrange + Act (hasPendingUpdate mặc định false)
     renderMe();
