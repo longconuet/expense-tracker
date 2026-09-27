@@ -79,10 +79,10 @@ export default function HistoryPage() {
   // Khoản offline vừa sync về server → refetch
   useRefetchOnSync(() => setReloadKey((k) => k + 1));
 
-  // Đổi family (FamilySwitcher trên mọi màn): reset lọc member TRƯỚC khi render
-  // kế tiếp — memberId cũ trỏ member của family cũ → fetch sẽ 404 / filter
-  // "cơ" người không thuộc family mới. (CategoryId cũng có cùng gap — ngoài
-  // phạm vi task này.)
+  // Đổi family (giờ chỉ qua card gia đình trên tab Tôi): reset lọc member
+  // TRƯỚC khi render kế tiếp — memberId cũ trỏ member của family cũ →
+  // fetch sẽ 404 / filter "cơ" người không thuộc family mới. (CategoryId
+  // cũng có cùng gap — ngoài phạm vi task này.)
   const [prevFamilyId, setPrevFamilyId] = useState(activeFamilyId);
   if (activeFamilyId !== prevFamilyId) {
     setPrevFamilyId(activeFamilyId);

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AppShell } from "../core/AppShell";
@@ -52,12 +52,16 @@ describe("core/AppShell", () => {
     cleanup();
   });
 
-  it("hiện header tên family đang active + bottom nav 5 mục", () => {
+  it("header không hiện tên family/tài khoản (đã chuyển về tab Tôi) + bottom nav 5 mục", () => {
     // Arrange + Act
     renderShell();
 
-    // Assert
-    expect(screen.getByText("Nhà An")).toBeInTheDocument();
+    // Assert — thông tin header cũ không còn
+    expect(screen.queryByText("Nhà An")).not.toBeInTheDocument();
+    expect(screen.queryByText("an2310")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Đổi gia đình/)).not.toBeInTheDocument();
+
+    // bottom nav 5 mục
     expect(screen.getByText("Trang chủ")).toBeInTheDocument();
     expect(screen.getByText("Thống kê")).toBeInTheDocument();
     // Nút giữa chỉ có icon + aria-label, không có text
@@ -67,17 +71,12 @@ describe("core/AppShell", () => {
     expect(screen.getByText("HOME CONTENT")).toBeInTheDocument();
   });
 
-  it("mở switcher → chọn family khác → activeFamilyId đổi", async () => {
+  it("không có banner trạng thái → không render header (tiết kiệm diện tích)", () => {
     // Arrange + Act
     renderShell();
-    fireEvent.click(screen.getByLabelText(/Đổi gia đình/));
-    const familyB = await screen.findByText("Công ty X");
-    fireEvent.click(familyB.closest("button")!);
 
     // Assert
-    expect(useAuthStore.getState().activeFamilyId).toBe(FAMILY_B.id);
-    // Header hiển thị family mới
-    expect(screen.getByText("Công ty X")).toBeInTheDocument();
+    expect(screen.queryByRole("banner")).not.toBeInTheDocument();
   });
 
   it("có khoản chờ đồng bộ offline → hiện banner số lượng ở header", () => {

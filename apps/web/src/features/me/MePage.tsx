@@ -5,21 +5,36 @@ import { useThemeStore } from "../../core/themeStore";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
+import { FamilySwitcher } from "../../shared/ui/FamilySwitcher";
 import { RoleBadge } from "../../shared/ui/RoleBadge";
-import { CheckIcon, ChevronRightIcon, CopyIcon, DownloadIcon, LogoutIcon, MoonIcon, RefreshIcon, SunIcon, TagIcon, UsersIcon } from "../../shared/ui/icons";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  CopyIcon,
+  DownloadIcon,
+  LogoutIcon,
+  MoonIcon,
+  RefreshIcon,
+  SunIcon,
+  TagIcon,
+  UsersIcon,
+} from "../../shared/ui/icons";
 import { useInstallPrompt } from "./useInstallPrompt";
 import { useSwUpdate } from "./useSwUpdate";
 
 /**
- * Màn "Tôi": thông tin tài khoản, giao diện tối, gia đình hiện tại
- * (mã mời + copy) và đăng xuất. Có bản cập nhật PWA mới → hiện nút
- * "Cập nhật ngay" ở đầu màn.
+ * Màn "Tôi": thông tin tài khoản, giao diện tối, family đang active
+ * (bấm để đổi family + mã mời + copy) và đăng xuất. Có bản cập nhật PWA
+ * mới → hiện nút "Cập nhật ngay" ở đầu màn. Tên family + đổi family và
+ * tên tài khoản đã chuyển về đây từ header (AppShell).
  */
 export default function MePage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const families = useAuthStore((s) => s.families);
   const activeFamilyId = useAuthStore((s) => s.activeFamilyId);
+  const setActiveFamily = useAuthStore((s) => s.setActiveFamily);
   const logout = useAuthStore((s) => s.logout);
 
   const theme = useThemeStore((s) => s.theme);
@@ -31,8 +46,14 @@ export default function MePage() {
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
 
-  const activeFamily = families.find((f) => f.id === activeFamilyId);
+  const activeFamily = families.find((f) => f.id === activeFamilyId) ?? families[0];
+
+  function handleSelectFamily(id: string) {
+    setActiveFamily(id);
+    setSwitcherOpen(false);
+  }
 
   async function handleCopyCode() {
     if (!activeFamily) return;
@@ -116,18 +137,31 @@ export default function MePage() {
 
       {activeFamily && (
         <Card className="mt-4">
-          <div className="flex items-start justify-between">
+          {/* Bấm vào phần thông tin family để mở dialog đổi family.
+              aria-label đủ meta (thành viên/chủ) vì content của button
+              bị AT bỏ qua — SR vẫn đọc đầy đủ thông tin. */}
+          <button
+            type="button"
+            onClick={() => setSwitcherOpen(true)}
+            aria-label={`Đổi gia đình (đang ở ${activeFamily.name} · ${activeFamily.memberCount} thành viên · chủ ${activeFamily.ownerName})`}
+            aria-haspopup="dialog"
+            aria-expanded={switcherOpen}
+            className="flex w-full items-start justify-between gap-2"
+          >
             <div className="flex items-center gap-2">
-              <UsersIcon className="h-5 w-5 text-ink-muted" />
-              <div>
+              <UsersIcon className="h-5 w-5 shrink-0 text-ink-muted" />
+              <div className="text-left">
                 <p className="font-semibold text-ink">{activeFamily.name}</p>
                 <p className="text-xs text-ink-muted">
                   {activeFamily.memberCount} thành viên · chủ: {activeFamily.ownerName}
                 </p>
               </div>
             </div>
-            <RoleBadge role={activeFamily.myRole} />
-          </div>
+            <span className="flex shrink-0 items-center gap-1.5">
+              <RoleBadge role={activeFamily.myRole} />
+              <ChevronDownIcon className="h-4 w-4 text-ink-muted" />
+            </span>
+          </button>
 
           <div className="mt-4 flex items-center justify-between rounded-xl bg-surface px-3 py-2.5">
             <div>
@@ -142,6 +176,15 @@ export default function MePage() {
             </Button>
           </div>
         </Card>
+      )}
+
+      {activeFamily && switcherOpen && (
+        <FamilySwitcher
+          families={families}
+          activeFamilyId={activeFamily.id}
+          onSelect={handleSelectFamily}
+          onClose={() => setSwitcherOpen(false)}
+        />
       )}
 
       {activeFamily && (
