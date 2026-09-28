@@ -1,8 +1,16 @@
 import { Prisma } from "@prisma/client";
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import { z } from "zod";
+import { env } from "../env.js";
 import { AppError, sendOk } from "../lib/apiError.js";
 import { MONTH_RE, isValidDateStr, nextMonthStart } from "../lib/dates.js";
+import {
+  buildExpenseCsv,
+  buildExpenseXlsx,
+  expenseFileName,
+  type ExportFormat,
+  type ExportRow,
+} from "../lib/expenseExport.js";
 import { validateBody } from "../lib/validate.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { requireFamilyMember } from "../middlewares/requireFamily.js";
@@ -97,7 +105,10 @@ async function assertUserInFamily(familyId: string, userId: string) {
  * Tra khoản chi + enforce quyền sửa/xoá: chỉ NGƯỜI TẠO hoặc OWNER family.
  * Trả expense kèm relations để re-use cho response.
  */
-async function requireExpenseAccess(expenseId: string, userId: string): Promise<ExpenseWithRelations> {
+async function requireExpenseAccess(
+  expenseId: string,
+  userId: string,
+): Promise<ExpenseWithRelations> {
   const expense = await prisma.expense.findUnique({
     where: { id: expenseId },
     include: { category: true, user: { select: { name: true } } },
@@ -119,21 +130,19 @@ async function requireExpenseAccess(expenseId: string, userId: string): Promise<
   return expense;
 }
 
-// ---------------------------------------------------------------------------
-// Danh sách theo family: GET /api/families/:id/expenses (mount riêng)
-// ---------------------------------------------------------------------------
-
-export const expenseFamilyRouter = Router({ mergeParams: true });
-
-expenseFamilyRouter.get("/", requireAuth, requireFamilyMember(), async (req, res) => {
-  const { familyId } = req.family!;
-
-  const month = typeof req.query.month === "string" ? req.query.month : undefined;
-  const categoryId = typeof req.query.categoryId === "string" ? req.query.categoryId : undefined;
-  const date = typeof req.query.date === "string" ? req.query.date : undefined;
-  const userId = typeof req.query.userId === "string" ? req.query.userId : undefined;
-  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
-  const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? "20"), 10) || 20));
+/**
+ * Validate query params + build `where` cho list/export khoản chi — 1 nguồn
+ * filter duy nhất, dùng chung bởi list (GET /) và export (GET /export.*).
+ * `scope` (date > month > "toan-bo") dùng sinh tên file export.
+ */
+async function resolveExpenseFilter(
+  familyId: string,
+  query: Record<string, unknown>,
+): Promise<{ where: Prisma.ExpenseWhereInput; scope: string }> {
+  const month = typeof query.month === "string" ? query.month : undefined;
+  const categoryId = typeof query.categoryId === "string" ? query.categoryId : undefined;
+  const date = typeof query.date === "string" ? query.date : undefined;
+  const userId = typeof query.userId === "string" ? query.userId : undefined;
 
   if (month && !MONTH_RE.test(month)) {
     throw new AppError(400, "VALIDATION_ERROR", "month phải có dạng YYYY-MM");
@@ -142,11 +151,11 @@ expenseFamilyRouter.get("/", requireAuth, requireFamilyMember(), async (req, res
     throw new AppError(400, "VALIDATION_ERROR", "date phải có dạng YYYY-MM-DD và là ngày hợp lệ");
   }
   // `?date[]=...` (array/object) — từ chối rõ thay vì bỏ qua filter như tháng
-  if (req.query.date !== undefined && typeof req.query.date !== "string") {
+  if (query.date !== undefined && typeof query.date !== "string") {
     throw new AppError(400, "VALIDATION_ERROR", "date phải có dạng YYYY-MM-DD và là ngày hợp lệ");
   }
   // `?userId[]=...` (array/object) — từ chối rõ (precedent date)
-  if (req.query.userId !== undefined && typeof req.query.userId !== "string") {
+  if (query.userId !== undefined && typeof query.userId !== "string") {
     throw new AppError(400, "VALIDATION_ERROR", "userId không hợp lệ");
   }
   if (categoryId) {
@@ -170,6 +179,26 @@ expenseFamilyRouter.get("/", requireAuth, requireFamilyMember(), async (req, res
     where.userId = userId;
   }
 
+  // `||` chứ không phải `??` — month/date rỗng (`?month=`) vẫn coi như "toan-bo"
+  return { where, scope: date || month || "toan-bo" };
+}
+
+// ---------------------------------------------------------------------------
+// Danh sách theo family: GET /api/families/:id/expenses (mount riêng)
+// ---------------------------------------------------------------------------
+
+export const expenseFamilyRouter = Router({ mergeParams: true });
+
+expenseFamilyRouter.get("/", requireAuth, requireFamilyMember(), async (req, res) => {
+  const { familyId } = req.family!;
+  const { where } = await resolveExpenseFilter(familyId, req.query);
+
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
+  const pageSize = Math.min(
+    100,
+    Math.max(1, parseInt(String(req.query.pageSize ?? "20"), 10) || 20),
+  );
+
   const [total, items] = await Promise.all([
     prisma.expense.count({ where }),
     prisma.expense.findMany({
@@ -181,12 +210,78 @@ expenseFamilyRouter.get("/", requireAuth, requireFamilyMember(), async (req, res
     }),
   ]);
 
-  sendOk(
-    res,
-    { expenses: items.map(toExpenseDto) },
-    { page, pageSize, total },
-  );
+  sendOk(res, { expenses: items.map(toExpenseDto) }, { page, pageSize, total });
 });
+
+// ---------------------------------------------------------------------------
+// Export: GET /api/families/:id/expenses/export.<format> (mount riêng)
+// - xlsx: Excel · csv: mở thẳng lên Google Sheets (File → Import)
+// - Filter + quyền giống list; không phân trang; cap dòng = env.EXPORT_MAX_ROWS
+// - Thành công: file binary (Content-Disposition: attachment) — KHÔNG envelope JSON;
+//   lỗi (4xx) vẫn là envelope JSON qua errorHandler
+// ---------------------------------------------------------------------------
+
+function exportHandler(format: ExportFormat): RequestHandler {
+  return async (req, res) => {
+    const { familyId } = req.family!;
+    const { where, scope } = await resolveExpenseFilter(familyId, req.query);
+
+    // Cap dòng — 409 rõ ràng hơn là response khổng lồ bị Vercel cắt
+    const total = await prisma.expense.count({ where });
+    if (total > env.exportMaxRows) {
+      throw new AppError(
+        409,
+        "EXPORT_LIMIT_EXCEEDED",
+        `Số dòng dữ liệu (${total}) vượt quá giới hạn ${env.exportMaxRows}. Vui lòng lọc theo tháng hoặc danh mục hẹp hơn.`,
+      );
+    }
+
+    // take = cap — đóng khe TOCTOU giữa count và findMany: có thêm khoản mới
+    // trong lúc export thì file vẫn không vượt cap
+    const items = await prisma.expense.findMany({
+      where,
+      include: { category: true, user: { select: { name: true } } },
+      orderBy: [{ date: "desc" }, { createdAt: "desc" }],
+      take: env.exportMaxRows,
+    });
+
+    const rows: ExportRow[] = items.map((item) => ({
+      date: item.date,
+      amount: item.amount,
+      note: item.note,
+      category: item.category.name,
+      createdByName: item.user.name,
+      createdAt: item.createdAt,
+    }));
+
+    // Build file TRƯỚC khi set header — nếu exceljs lỗi, response 500 (envelope
+    // JSON) không dính header attachment
+    let body: string | Uint8Array;
+    if (format === "xlsx") {
+      body = await buildExpenseXlsx(rows);
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+    } else {
+      body = buildExpenseCsv(rows);
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    }
+    // Tên file do server sinh toàn bộ (không dính user input) → an toàn dùng thẳng
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${expenseFileName(scope, format)}"`,
+    );
+    res.setHeader(
+      "Content-Length",
+      typeof body === "string" ? Buffer.byteLength(body) : body.length,
+    );
+    res.send(body);
+  };
+}
+
+expenseFamilyRouter.get("/export.xlsx", requireAuth, requireFamilyMember(), exportHandler("xlsx"));
+expenseFamilyRouter.get("/export.csv", requireAuth, requireFamilyMember(), exportHandler("csv"));
 
 // ---------------------------------------------------------------------------
 // CRUD theo id: /api/expenses

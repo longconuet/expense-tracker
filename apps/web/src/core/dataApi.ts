@@ -1,12 +1,13 @@
 import type {
   ApiMeta,
+  ApiResponse,
   Category,
   Expense,
   Family,
   FamilyMemberDto,
   MonthlyStats,
 } from "@expense-tracker/shared";
-import { apiFetch, apiFetchWithMeta } from "./api";
+import { apiFetch, apiFetchBinary, apiFetchWithMeta, ApiError } from "./api";
 import { withReadCache } from "./readCache";
 import { enqueueExpense, isServerUnavailable } from "./syncQueue";
 
@@ -118,6 +119,61 @@ export async function fetchExpenses(
       meta: meta ?? { page: 1, pageSize: data.expenses.length, total: data.expenses.length },
     };
   });
+}
+
+export type ExportFormat = "xlsx" | "csv";
+
+export interface ExportExpensesParams {
+  month?: string;
+  categoryId?: string;
+  userId?: string;
+}
+
+export interface ExportExpensesResult {
+  blob: Blob;
+  /** Tên file từ Content-Disposition (do server sinh toàn bộ). */
+  filename: string;
+}
+
+/**
+ * Export lịch sử chi tiêu ra file (xlsx/csv) — đúng filter đang bật trên màn,
+ * không phân trang. Luôn gọi server trực tiếp (KHÔNG qua read cache);
+ * 401 tự refresh + retry 1 lần (dùng chung với apiFetch).
+ * Lỗi API vẫn trả envelope JSON — đọc để ném ApiError với message đúng.
+ */
+export async function exportExpenses(
+  familyId: string,
+  format: ExportFormat,
+  params: ExportExpensesParams = {},
+): Promise<ExportExpensesResult> {
+  const query = new URLSearchParams();
+  if (params.month) query.set("month", params.month);
+  if (params.categoryId) query.set("categoryId", params.categoryId);
+  if (params.userId) query.set("userId", params.userId);
+  const qs = query.toString();
+  const path = `/api/families/${familyId}/expenses/export.${format}${qs ? `?${qs}` : ""}`;
+
+  const response = await apiFetchBinary(path);
+  if (!response.ok) {
+    let code = "UNKNOWN_ERROR";
+    let message = `Xuất file thất bại (HTTP ${response.status})`;
+    try {
+      const body = (await response.json()) as ApiResponse<null>;
+      if (body?.error) {
+        code = body.error.code;
+        message = body.error.message;
+      }
+    } catch {
+      // Body không phải JSON (VD trang lỗi HTML của proxy) — giữ message mặc định
+    }
+    throw new ApiError(code, message, response.status);
+  }
+
+  const blob = await response.blob();
+  const filename =
+    /filename="([^"]+)"/.exec(response.headers.get("Content-Disposition") ?? "")?.[1] ??
+    `chi-tieu.${format === "csv" ? "csv" : "xlsx"}`;
+  return { blob, filename };
 }
 
 export interface CreateExpenseInput {

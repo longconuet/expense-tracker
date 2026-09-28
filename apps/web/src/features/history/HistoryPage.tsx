@@ -4,17 +4,37 @@ import type { ApiMeta, Category, Expense, FamilyMemberDto } from "@expense-track
 import { formatVnd } from "@expense-tracker/shared";
 import { ApiError } from "../../core/api";
 import { useAuthStore } from "../../core/authStore";
-import { deleteExpense, fetchCategories, fetchExpenses, fetchFamilyDetail } from "../../core/dataApi";
+import {
+  deleteExpense,
+  exportExpenses,
+  fetchCategories,
+  fetchExpenses,
+  fetchFamilyDetail,
+  type ExportFormat,
+} from "../../core/dataApi";
 import { addMonths, currentMonth, monthLabel } from "../../core/dates";
 import { groupByDay } from "../../core/expenseGroups";
 import { useRefetchOnSync } from "../../core/useRefetchOnSync";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
 import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
-import { ChevronLeftIcon, ChevronRightIcon, TrashIcon } from "../../shared/ui/icons";
+import { Modal } from "../../shared/ui/Modal";
+import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon, TrashIcon } from "../../shared/ui/icons";
 import { HistorySkeleton } from "./HistorySkeleton";
 
 const PAGE_SIZE = 20;
+
+/** Trigger trình duyệt download từ blob — delay revoke để không cắt đứt download. */
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 /** Chip lọc (thành viên/danh mục) — 2 trạng thái active/inactive. */
 function FilterChip({
@@ -66,6 +86,9 @@ export default function HistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState<ExportFormat | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // Bump khi member đang lọc biến mất khỏi family → refresh danh sách chip
   const [membersKey, setMembersKey] = useState(0);
@@ -122,9 +145,7 @@ export default function HistoryPage() {
         setMembers(detail.members);
         // memberId cũ (từ family trước / member đã bị xoá) không còn trong
         // danh sách mới → reset về "Tất cả"
-        setMemberId((cur) =>
-          cur && !detail.members.some((m) => m.userId === cur) ? null : cur,
-        );
+        setMemberId((cur) => (cur && !detail.members.some((m) => m.userId === cur) ? null : cur));
       })
       .catch(() => {
         // Không tải được thì bỏ qua chip lọc thành viên
@@ -214,6 +235,28 @@ export default function HistoryPage() {
     }
   }
 
+  /** Xuất file (xlsx/csv) theo đúng filter đang bật — server trả file binary. */
+  async function handleExport(format: ExportFormat) {
+    if (!activeFamilyId) return;
+    setExporting(format);
+    setExportError(null);
+    try {
+      const { blob, filename } = await exportExpenses(activeFamilyId, format, {
+        month,
+        categoryId: categoryId ?? undefined,
+        userId: memberId ?? undefined,
+      });
+      triggerDownload(blob, filename);
+      setExportOpen(false);
+    } catch (err) {
+      setExportError(
+        err instanceof ApiError ? err.message : "Xuất file thất bại, vui lòng thử lại.",
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+
   /** Quyền sửa/xoá (API enforce): owner family hoặc người tạo khoản. */
   function canModify(expense: Expense): boolean {
     return isOwner || expense.createdByName === user?.name;
@@ -255,7 +298,20 @@ export default function HistoryPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-ink">Lịch sử chi tiêu</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-ink">Lịch sử chi tiêu</h1>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
+            setExportError(null);
+            setExportOpen(true);
+          }}
+        >
+          <DownloadIcon className="h-4 w-4" />
+          Export
+        </Button>
+      </div>
 
       {/* Chọn tháng */}
       <div className="mt-3 flex items-center justify-between">
@@ -413,6 +469,46 @@ export default function HistoryPage() {
           onCancel={() => setDeleteTarget(null)}
         />
       )}
+
+      <Modal
+        open={exportOpen}
+        onClose={() => {
+          if (!exporting) setExportOpen(false);
+        }}
+        title="Xuất lịch sử chi tiêu"
+        showClose={!exporting}
+        disableDismiss={exporting !== null}
+      >
+        <p className="mt-1 text-sm text-ink-muted">
+          Xuất theo bộ lọc hiện tại: {monthLabel(month)}
+          {categoryId ? " + danh mục đang chọn" : ""}
+          {memberId ? " + thành viên đang chọn" : ""}
+        </p>
+        <div className="mt-4 space-y-2">
+          <Button
+            className="w-full"
+            loading={exporting === "xlsx"}
+            disabled={exporting === "csv"}
+            onClick={() => handleExport("xlsx")}
+          >
+            Excel (.xlsx)
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full"
+            loading={exporting === "csv"}
+            disabled={exporting === "xlsx"}
+            onClick={() => handleExport("csv")}
+          >
+            CSV — mở bằng Google Sheets
+          </Button>
+        </div>
+        {exportError && (
+          <p role="alert" className="mt-3 text-sm font-medium text-danger">
+            {exportError}
+          </p>
+        )}
+      </Modal>
     </div>
   );
 }
