@@ -45,7 +45,12 @@ export interface ApiFetchOptions {
   auth?: boolean;
 }
 
-async function doFetch(path: string, method: string, body: unknown, auth: boolean): Promise<Response> {
+async function doFetch(
+  path: string,
+  method: string,
+  body: unknown,
+  auth: boolean,
+): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(path, {
@@ -114,7 +119,12 @@ export function refreshAccessToken(): Promise<string | null> {
  * Refresh fail: xoá token, gọi onSessionExpired, trả về response 401 gốc
  * (parseEnvelope bên dưới sẽ ném ApiError).
  */
-async function fetchWithRetry(path: string, method: string, body: unknown, auth: boolean): Promise<Response> {
+async function fetchWithRetry(
+  path: string,
+  method: string,
+  body: unknown,
+  auth: boolean,
+): Promise<Response> {
   let response = await doFetch(path, method, body, auth);
 
   if (response.status === 401 && auth) {
@@ -154,4 +164,13 @@ export async function apiFetchWithMeta<T>(
     options.auth ?? true,
   );
   return parseEnvelope<T>(response);
+}
+
+/**
+ * Gọi API trả về file binary (VD export xlsx/csv) — hưởng chung 401-refresh
+ * + retry 1 lần với apiFetch, nhưng trả Response thô để caller tự đọc blob
+ * (KHÔNG parse envelope JSON).
+ */
+export async function apiFetchBinary(path: string): Promise<Response> {
+  return fetchWithRetry(path, "GET", undefined, true);
 }

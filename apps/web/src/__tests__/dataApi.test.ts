@@ -25,6 +25,7 @@ import {
   createCategory,
   createExpense,
   deleteCategory,
+  exportExpenses,
   fetchCategories,
   fetchExpense,
   fetchExpenses,
@@ -34,9 +35,7 @@ import {
 } from "../core/dataApi";
 
 function envelope(data: unknown, meta?: { page: number; pageSize: number; total: number }) {
-  return meta
-    ? { success: true, data, error: null, meta }
-    : { success: true, data, error: null };
+  return meta ? { success: true, data, error: null, meta } : { success: true, data, error: null };
 }
 
 function fakeResponse(body: unknown, status = 200) {
@@ -44,6 +43,18 @@ function fakeResponse(body: unknown, status = 200) {
     ok: status >= 200 && status < 300,
     status,
     json: async () => body,
+  } as unknown as Response;
+}
+
+function fileResponse(filename: string, body = "dummy") {
+  return {
+    ok: true,
+    status: 200,
+    headers: {
+      get: (name: string) =>
+        name.toLowerCase() === "content-disposition" ? `attachment; filename="${filename}"` : null,
+    },
+    blob: async () => new Blob([body]),
   } as unknown as Response;
 }
 
@@ -98,7 +109,9 @@ describe("core/dataApi", () => {
     await fetchExpenses("f1", { date: "2026-09-09", pageSize: 100 });
 
     // Assert
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/expenses?date=2026-09-09&pageSize=100");
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "/api/families/f1/expenses?date=2026-09-09&pageSize=100",
+    );
   });
 
   it("fetchExpenses lọc theo userId → query string có userId", async () => {
@@ -116,7 +129,9 @@ describe("core/dataApi", () => {
 
   it("fetchExpenses không có filter → không có query string", async () => {
     // Arrange
-    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ expenses: [] }, { page: 1, pageSize: 20, total: 0 })));
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse(envelope({ expenses: [] }, { page: 1, pageSize: 20, total: 0 })),
+    );
 
     // Act
     await fetchExpenses("f1");
@@ -207,7 +222,11 @@ describe("core/dataApi", () => {
     // Arrange
     fetchMock.mockResolvedValueOnce(
       fakeResponse(
-        { success: false, data: null, error: { code: "VALIDATION_ERROR", message: "amount phải > 0" } },
+        {
+          success: false,
+          data: null,
+          error: { code: "VALIDATION_ERROR", message: "amount phải > 0" },
+        },
         400,
       ),
     );
@@ -363,6 +382,80 @@ describe("core/dataApi", () => {
     // Assert
     expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/stats?month=2026-09");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/families/f1/stats");
+  });
+
+  // ---------------------------------------------------------------------
+  // exportExpenses (xlsx/csv)
+  // ---------------------------------------------------------------------
+
+  describe("exportExpenses", () => {
+    it("gộp đúng query string theo filter hiện tại (xlsx)", async () => {
+      // Arrange
+      fetchMock.mockResolvedValueOnce(fileResponse("chi-tieu-2026-09-20260928120000.xlsx"));
+
+      // Act
+      const result = await exportExpenses("f1", "xlsx", {
+        month: "2026-09",
+        categoryId: "c1",
+        userId: "u2",
+      });
+
+      // Assert
+      expect(fetchMock.mock.calls[0][0]).toBe(
+        "/api/families/f1/expenses/export.xlsx?month=2026-09&categoryId=c1&userId=u2",
+      );
+      expect(result.filename).toBe("chi-tieu-2026-09-20260928120000.xlsx");
+      expect(result.blob).toBeInstanceOf(Blob);
+    });
+
+    it("csv không có filter → không có query string", async () => {
+      // Arrange
+      fetchMock.mockResolvedValueOnce(fileResponse("chi-tieu-toan-bo.csv"));
+
+      // Act
+      await exportExpenses("f1", "csv");
+
+      // Assert
+      expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/expenses/export.csv");
+    });
+
+    it("API lỗi (409 envelope) → ném ApiError code + message đúng", async () => {
+      // Arrange
+      fetchMock.mockResolvedValueOnce(
+        fakeResponse(
+          {
+            success: false,
+            data: null,
+            error: {
+              code: "EXPORT_LIMIT_EXCEEDED",
+              message: "Quá nhiều dòng, vui lòng lọc hẹp hơn",
+            },
+          },
+          409,
+        ),
+      );
+
+      // Act + Assert
+      await expect(exportExpenses("f1", "xlsx")).rejects.toMatchObject({
+        code: "EXPORT_LIMIT_EXCEEDED",
+        message: "Quá nhiều dòng, vui lòng lọc hẹp hơn",
+        status: 409,
+      });
+    });
+
+    it("server lỗi 5xx (không JSON) → ném ApiError message mặc định kèm status", async () => {
+      // Arrange
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        json: async () => {
+          throw new Error("body là HTML, không phải JSON");
+        },
+      } as unknown as Response);
+
+      // Act + Assert
+      await expect(exportExpenses("f1", "csv")).rejects.toThrow("Xuất file thất bại (HTTP 502)");
+    });
   });
 
   // ---------------------------------------------------------------------

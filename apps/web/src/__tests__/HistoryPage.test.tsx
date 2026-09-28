@@ -1,7 +1,13 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchCategories, fetchExpenses, deleteExpense, fetchFamilyDetail } from "../core/dataApi";
+import {
+  fetchCategories,
+  fetchExpenses,
+  deleteExpense,
+  fetchFamilyDetail,
+  exportExpenses,
+} from "../core/dataApi";
 import { useAuthStore } from "../core/authStore";
 import { ApiError } from "../core/api";
 import { addMonths, currentMonth, today, yesterday } from "../core/dates";
@@ -13,12 +19,14 @@ vi.mock("../core/dataApi", () => ({
   fetchExpenses: vi.fn(),
   deleteExpense: vi.fn(),
   fetchFamilyDetail: vi.fn(),
+  exportExpenses: vi.fn(),
 }));
 
 const fetchCategoriesMock = vi.mocked(fetchCategories);
 const fetchExpensesMock = vi.mocked(fetchExpenses);
 const deleteExpenseMock = vi.mocked(deleteExpense);
 const fetchFamilyDetailMock = vi.mocked(fetchFamilyDetail);
+const exportExpensesMock = vi.mocked(exportExpenses);
 
 const USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY = {
@@ -41,8 +49,18 @@ const FAMILY2 = {
 
 const CAT = { id: "c1", name: "Ăn uống", icon: "🍜", isPreset: true, order: 0 };
 
-const MEMBER_AN = { userId: "u1", name: "An", role: "OWNER", joinedAt: "2026-09-01T00:00:00.000Z" } as const;
-const MEMBER_BINH = { userId: "u2", name: "Bình", role: "MEMBER", joinedAt: "2026-09-02T00:00:00.000Z" } as const;
+const MEMBER_AN = {
+  userId: "u1",
+  name: "An",
+  role: "OWNER",
+  joinedAt: "2026-09-01T00:00:00.000Z",
+} as const;
+const MEMBER_BINH = {
+  userId: "u2",
+  name: "Bình",
+  role: "MEMBER",
+  joinedAt: "2026-09-02T00:00:00.000Z",
+} as const;
 
 function expense(id: string, note: string, amount: number, createdByName = "An", date = today()) {
   return {
@@ -89,6 +107,15 @@ describe("Lịch sử chi tiêu", () => {
     fetchExpensesMock.mockReset();
     deleteExpenseMock.mockReset();
     fetchFamilyDetailMock.mockReset();
+    exportExpensesMock.mockReset();
+    exportExpensesMock.mockResolvedValue({
+      blob: new Blob(["x"]),
+      filename: "chi-tieu-2026-09.xlsx",
+    });
+    // jsdom không có URL.createObjectURL/revokeObjectURL — stub để triggerDownload
+    // (export file) chạy được; stub vô hại cho các test khác, không cần restore
+    URL.createObjectURL = vi.fn(() => "blob:mock-url");
+    URL.revokeObjectURL = vi.fn();
     fetchCategoriesMock.mockResolvedValue([CAT]);
     // Mặc định family 1 thành viên → hàng chip lọc thành viên ẩn (không đụng test cũ)
     fetchFamilyDetailMock.mockResolvedValue({ ...FAMILY, members: [MEMBER_AN] });
@@ -191,9 +218,18 @@ describe("Lịch sử chi tiêu", () => {
     const group = await screen.findByRole("group", { name: "Lọc theo thành viên" });
 
     // Assert — chip "Tất cả" active mặc định + 2 chip tên member
-    expect(within(group).getByRole("button", { name: "Tất cả" })).toHaveAttribute("aria-pressed", "true");
-    expect(within(group).getByRole("button", { name: "An" })).toHaveAttribute("aria-pressed", "false");
-    expect(within(group).getByRole("button", { name: "Bình" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(group).getByRole("button", { name: "Tất cả" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(group).getByRole("button", { name: "An" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(within(group).getByRole("button", { name: "Bình" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
 
     // 1 thành viên → không hiện hàng chip
     cleanup();
@@ -223,7 +259,10 @@ describe("Lịch sử chi tiêu", () => {
         expect.objectContaining({ userId: "u2" }),
       );
     });
-    expect(within(group).getByRole("button", { name: "Bình" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(group).getByRole("button", { name: "Bình" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
 
     // Act — bấm lại chip đang chọn → reset
     fireEvent.click(within(group).getByRole("button", { name: "Bình" }));
@@ -234,7 +273,10 @@ describe("Lịch sử chi tiêu", () => {
       expect(lastParams).toBeDefined();
       expect(lastParams?.userId).toBeUndefined();
     });
-    expect(within(group).getByRole("button", { name: "Tất cả" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(group).getByRole("button", { name: "Tất cả" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
   });
 
   it("kết hợp filter thành viên + danh mục → cả 2 param", async () => {
@@ -283,7 +325,10 @@ describe("Lịch sử chi tiêu", () => {
     fetchFamilyDetailMock.mockResolvedValue({ ...FAMILY, members: [MEMBER_AN, MEMBER_BINH] });
     fetchExpensesMock.mockImplementation(async (_fid, params) => {
       if (params?.page === 1) {
-        return { expenses: [expense("e1", "cơm trưa", 50_000)], meta: { page: 1, pageSize: 20, total: 3 } };
+        return {
+          expenses: [expense("e1", "cơm trưa", 50_000)],
+          meta: { page: 1, pageSize: 20, total: 3 },
+        };
       }
       return { expenses: [], meta: { page: 2, pageSize: 20, total: 3 } };
     });
@@ -565,5 +610,60 @@ describe("Lịch sử chi tiêu", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Mất kết nối.");
     expect(screen.getByText("cơm trưa")).toBeInTheDocument();
     expect(document.querySelector(".animate-pulse")).toBeNull();
+  });
+
+  it("bấm Export → modal 2 lựa chọn; chọn Excel → gọi API theo filter hiện tại + trigger download + đóng modal", async () => {
+    // Arrange
+    const exportBlob = new Blob(["x"]);
+    exportExpensesMock.mockResolvedValueOnce({
+      blob: exportBlob,
+      filename: "chi-tieu-2026-09.xlsx",
+    });
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [expense("e1", "cơm trưa", 50_000)],
+      meta: { page: 1, pageSize: 20, total: 1 },
+    });
+    renderHistory();
+    await screen.findByText("cơm trưa");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "Excel (.xlsx)" }));
+
+    // Assert
+    await waitFor(() => {
+      expect(exportExpensesMock).toHaveBeenCalledWith(
+        "f1",
+        "xlsx",
+        expect.objectContaining({ month: currentMonth() }),
+      );
+    });
+    expect(vi.mocked(URL.createObjectURL)).toHaveBeenCalledWith(exportBlob);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("export thất bại → hiện lỗi trong modal, modal không đóng", async () => {
+    // Arrange
+    fetchExpensesMock.mockResolvedValue({
+      expenses: [expense("e1", "cơm trưa", 50_000)],
+      meta: { page: 1, pageSize: 20, total: 1 },
+    });
+    exportExpensesMock.mockRejectedValueOnce(
+      new ApiError("EXPORT_LIMIT_EXCEEDED", "Quá nhiều dòng, vui lòng lọc hẹp hơn.", 409),
+    );
+    renderHistory();
+    await screen.findByText("cơm trưa");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: /CSV/ }));
+
+    // Assert
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Quá nhiều dòng, vui lòng lọc hẹp hơn.",
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
 });
