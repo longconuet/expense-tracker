@@ -23,10 +23,11 @@ export function FamilySwitcher({
       className="fixed inset-0 z-20 flex items-end justify-center modal-backdrop"
       onClick={onClose}
     >
+      {/* pb = max(safe-area, 20px) — mép sheet không chui vào home indicator (PWA iOS) */}
       <div
         role="dialog"
         aria-label="Đổi gia đình"
-        className="w-full max-w-md rounded-t-2xl bg-card p-5"
+        className="w-full max-w-md rounded-t-2xl bg-card px-5 pt-5 pb-[max(env(safe-area-inset-bottom),1.25rem)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">

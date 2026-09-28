@@ -102,4 +102,12 @@ describe("Màn đăng nhập", () => {
     // Không nhảy màn
     expect(screen.queryByText("TRANG ONBOARDING")).not.toBeInTheDocument();
   });
+
+  it("PWA iOS: khung AuthLayout có safe-area top (form không chui vào vùng status bar bị iOS blur)", () => {
+    // Arrange + Act
+    renderLoginPage();
+
+    // Assert — max() giữ đúng 40px (py-10 cũ) trên desktop
+    expect(screen.getByRole("main")).toHaveClass("pt-[max(env(safe-area-inset-top),2.5rem)]");
+  });
 });
