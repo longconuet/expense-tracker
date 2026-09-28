@@ -37,10 +37,6 @@ describe("shared/ui/FamilySwitcher", () => {
 
     // Assert
     expect(screen.getByRole("dialog", { name: "Đổi gia đình" })).toBeInTheDocument();
-    // Neo safe-area bottom (PWA iOS — home indicator), max() giữ 20px trên desktop
-    expect(screen.getByRole("dialog", { name: "Đổi gia đình" })).toHaveClass(
-      "pb-[max(env(safe-area-inset-bottom),1.25rem)]",
-    );
     expect(screen.getByText("Nhà An")).toBeInTheDocument();
     expect(screen.getByText("Công ty X")).toBeInTheDocument();
     expect(screen.getByText("2 thành viên · An")).toBeInTheDocument();

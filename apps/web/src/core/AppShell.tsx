@@ -35,10 +35,12 @@ const NAV_ITEMS: NavItem[] = [
  * và đổi family tại card trên tab "Tôi". Header chỉ render khi có banner.
  *
  * PWA iOS (standalone, viewport-fit=cover): iOS phủ lớp frosted-glass lên
- * vùng status bar và HOME INDICATOR — nội dung chui vào đó bị mờ/lộ. Root
- * có `pt-[env(safe-area-inset-top)]` đẩy nội dung xuống dưới status bar,
- * bottom nav có `pb-[env(safe-area-inset-bottom)]`, banner sticky neo
- * `top-[env(safe-area-inset-top)]`. Trên desktop/browser thường env() = 0.
+ * vùng status bar — root có `pt-[env(safe-area-inset-top)]` để nội dung
+ * không nằm dưới lớp đó, banner sticky neo `top-[env(safe-area-inset-top)]`
+ * khi cuộn. `main` có `pt-6` (thay pt-4) để khoảng hở trên cao hơn một
+ * chút, tách nội dung khỏi dải mờ. Cạnh dưới giữ sát mép màn như thiết kế
+ * cũ (user không muốn thêm khoảng trắng cho home indicator).
+ * Trên desktop/browser thường env() = 0.
  */
 export function AppShell() {
   const families = useAuthStore((s) => s.families);
@@ -69,11 +71,11 @@ export function AppShell() {
         </header>
       )}
 
-      <main className="flex-1 px-4 pb-28 pt-4">
+      <main className="flex-1 px-4 pb-28 pt-6">
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
+      <nav className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-card">
         <div className="mx-auto flex max-w-md items-end justify-around px-2 py-1.5">
           {NAV_ITEMS.map((item) => {
             const ItemIcon = item.icon;

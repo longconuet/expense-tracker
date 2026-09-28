@@ -24,10 +24,10 @@ interface ModalProps {
  * trigger khi đóng), focus trap (Tab không thoát), khoá scroll body
  * trong lúc mở.
  *
- * PWA iOS: overlay có padding safe-area (max(env, 16px) — giữ 16px cũ
- * trên desktop) + dialog `max-h-full overflow-y-auto` để card dài
- * (VD chi tiết ngày nhiều khoản) cuộn được, mép card không chui vào
- * vùng frosted-glass status bar / home indicator.
+ * PWA iOS: overlay có padding-top safe-area (max(env, 16px) — giữ 16px cũ
+ * trên desktop) để mép trên card không chạm dải frosted-glass status bar;
+ * cạnh dưới giữ 16px như thiết kế cũ. Dialog `max-h-full overflow-y-auto`
+ * để card dài (VD chi tiết ngày nhiều khoản) cuộn được.
  */
 export function Modal({
   open,
@@ -99,7 +99,7 @@ export function Modal({
 
   return (
     <div
-      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center modal-backdrop px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]"
+      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center modal-backdrop px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-4"
       onClick={(e) => {
         if (!disableDismiss && e.target === e.currentTarget) onClose();
       }}
