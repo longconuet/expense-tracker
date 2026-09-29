@@ -25,6 +25,7 @@ import {
   createCategory,
   createExpense,
   deleteCategory,
+  deleteExpense,
   exportExpenses,
   fetchCategories,
   fetchExpense,
@@ -256,12 +257,17 @@ describe("core/dataApi", () => {
     fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ expense: updated })));
 
     // Act
-    const expense = await updateExpense("e1", {
-      amount: 45_000,
-      categoryId: "c2",
-      date: "2026-09-02",
-      note: null,
-    });
+    const expense = await updateExpense(
+      "e1",
+      "f1",
+      {
+        amount: 45_000,
+        categoryId: "c2",
+        date: "2026-09-02",
+        note: null,
+      },
+      "2026-09-01",
+    );
 
     // Assert
     expect(fetchMock.mock.calls[0][0]).toBe("/api/expenses/e1");
@@ -560,5 +566,108 @@ describe("core/dataApi", () => {
     // Act + Assert
     await fetchCategories("f1");
     await expect(fetchCategories("f1")).rejects.toThrow("không có quyền");
+  });
+
+  // ---------------------------------------------------------------------
+  // Cache invalidation sau mutation (spec-cache.md §4)
+  // ---------------------------------------------------------------------
+
+  describe("cache invalidation sau mutation", () => {
+    const seed = (key: string) => {
+      mem.cache.set(key, { key, savedAt: new Date().toISOString(), value: { seeded: true } });
+    };
+
+    it("createExpense OK → xoá cache list/stats tháng + ngày của khoản, giữ phần khác", async () => {
+      // Arrange
+      seed("GET /api/families/f1/expenses?month=2026-09");
+      seed("GET /api/families/f1/stats?month=2026-09");
+      seed("GET /api/families/f1/expenses?month=2026-08");
+      seed("GET /api/families/f1/categories");
+      fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ expense: EXPENSE })));
+
+      // Act — EXPENSE.date = 2026-09-01
+      await createExpense({ familyId: "f1", category: CAT, amount: 50_000, date: "2026-09-01" });
+
+      // Assert
+      expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-09")).toBe(false);
+      expect(mem.cache.has("GET /api/families/f1/stats?month=2026-09")).toBe(false);
+      expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-08")).toBe(true);
+      expect(mem.cache.has("GET /api/families/f1/categories")).toBe(true);
+    });
+
+    it("updateExpense đổi tháng (09→10) → xoá cache cả tháng cũ lẫn tháng mới", async () => {
+      // Arrange
+      seed("GET /api/families/f1/expenses?month=2026-09");
+      seed("GET /api/families/f1/expenses?month=2026-10");
+      seed("GET /api/families/f1/stats?month=2026-10");
+      seed("GET /api/families/f1/expenses?month=2026-08");
+      fetchMock.mockResolvedValueOnce(
+        fakeResponse(envelope({ expense: { ...EXPENSE, date: "2026-10-05" } })),
+      );
+
+      // Act
+      await updateExpense("e1", "f1", { date: "2026-10-05" }, "2026-09-01");
+
+      // Assert
+      expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-09")).toBe(false);
+      expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-10")).toBe(false);
+      expect(mem.cache.has("GET /api/families/f1/stats?month=2026-10")).toBe(false);
+      expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-08")).toBe(true);
+    });
+
+    it("deleteExpense → xoá cache tháng + ngày của khoản bị xoá", async () => {
+      // Arrange
+      seed("GET /api/families/f1/expenses?month=2026-09");
+      seed("GET /api/families/f1/expenses?date=2026-09-05");
+      seed("GET /api/families/f2/expenses?month=2026-09");
+      fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ ok: true })));
+
+      // Act
+      await deleteExpense("e1", "f1", "2026-09-05");
+
+      // Assert
+      expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-09")).toBe(false);
+      expect(mem.cache.has("GET /api/families/f1/expenses?date=2026-09-05")).toBe(false);
+      expect(mem.cache.has("GET /api/families/f2/expenses?month=2026-09")).toBe(true);
+    });
+
+    it("updateCategory → xoá TOÀN BỘ cache của family (3 resource)", async () => {
+      // Arrange
+      seed("GET /api/families/f1/categories");
+      seed("GET /api/families/f1/expenses?month=2026-09");
+      seed("GET /api/families/f1/stats?month=2026-09");
+      seed("GET /api/families/f2/categories");
+      fetchMock.mockResolvedValueOnce(
+        fakeResponse(envelope({ category: { ...CAT, name: "Điện nước" } })),
+      );
+
+      // Act
+      await updateCategory("f1", "c1", { name: "Điện nước" });
+
+      // Assert
+      expect(mem.cache.has("GET /api/families/f1/categories")).toBe(false);
+      expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-09")).toBe(false);
+      expect(mem.cache.has("GET /api/families/f1/stats?month=2026-09")).toBe(false);
+      expect(mem.cache.has("GET /api/families/f2/categories")).toBe(true);
+    });
+
+    it("createExpense OFFLINE (vào hàng đợi) → KHÔNG xoá cache", async () => {
+      // Arrange
+      seed("GET /api/families/f1/expenses?month=2026-09");
+      fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+
+      // Act
+      const result = await createExpense({
+        familyId: "f1",
+        category: CAT,
+        amount: 50_000,
+        date: "2026-09-01",
+      });
+
+      // Assert
+      expect(result.savedOffline).toBe(true);
+      expect(mem.expenses.size).toBe(1);
+      expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-09")).toBe(true);
+    });
   });
 });

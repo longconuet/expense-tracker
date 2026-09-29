@@ -26,6 +26,20 @@ export function yesterday(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** "2026-09-22" -> "2026-09". */
+export function monthOf(date: string): string {
+  return date.slice(0, 7);
+}
+
+/** ISO -> "HH:mm" (24h, vi-VN) — cho thông báo "dữ liệu lưu lúc". */
+export function formatTimeShort(iso: string): string {
+  return new Date(iso).toLocaleTimeString("vi-VN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
 /** "2026-09" -> "Tháng 9/2026" — tiêu đề thân thiện. */
 export function monthLabel(month: string): string {
   const [year, mon] = month.split("-").map(Number);

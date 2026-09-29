@@ -1,6 +1,8 @@
 import type { Category } from "@expense-tracker/shared";
 import { create } from "zustand";
-import { ApiError, apiFetch, getAccessToken } from "./api";
+import { apiFetch, getAccessToken, isServerUnavailable } from "./api";
+import { invalidateExpenseCache } from "./cacheInvalidate";
+import { monthOf } from "./dates";
 import { idbDelete, idbGetAll, idbPut } from "./db";
 
 /**
@@ -29,11 +31,6 @@ function newId(): string {
     return crypto.randomUUID();
   }
   return `q-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** Server không đạt được (lỗi mạng hoặc 5xx) — chấp nhận ghi offline. */
-export function isServerUnavailable(err: unknown): boolean {
-  return err instanceof ApiError && (err.status === 0 || err.status >= 500);
 }
 
 export async function enqueueExpense(input: NewQueuedExpense): Promise<QueuedExpense> {
@@ -81,6 +78,8 @@ async function doFlush(): Promise<{ synced: number }> {
     return { synced: 0 }; // IndexedDB không khả dụng — không có gì để sync
   }
   let synced = 0;
+  // Tháng/ngày có khoản vừa sync (theo family) — để xoá cache liên quan
+  const touched = new Map<string, { months: Set<string>; dates: Set<string> }>();
 
   for (const entry of pending) {
     try {
@@ -96,6 +95,11 @@ async function doFlush(): Promise<{ synced: number }> {
       });
       await idbDelete("expenses", entry.id);
       synced += 1;
+      const fam =
+        touched.get(entry.familyId) ?? { months: new Set<string>(), dates: new Set<string>() };
+      fam.months.add(monthOf(entry.date));
+      fam.dates.add(entry.date);
+      touched.set(entry.familyId, fam);
     } catch (err) {
       if (isServerUnavailable(err)) break; // mạng chưa về — dừng vòng flush
       // 4xx: giữ khoản trong hàng đợi, thử khoản tiếp theo
@@ -103,6 +107,12 @@ async function doFlush(): Promise<{ synced: number }> {
   }
 
   if (synced > 0) {
+    // Xoá cache TRƯỚC KHI fire event — màn refetch theo SYNCED_EVENT gọi
+    // withReadCache; nếu event bay trước vòng xoá, GET 5xx có thể đọc cache
+    // cũ (thiếu khoản vừa sync) trong 1 chu kỳ.
+    for (const [familyId, t] of touched) {
+      await invalidateExpenseCache(familyId, [...t.months], [...t.dates]);
+    }
     window.dispatchEvent(new Event(SYNCED_EVENT));
   }
   void useSyncStore.getState().bump();

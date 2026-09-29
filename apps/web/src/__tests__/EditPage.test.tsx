@@ -101,12 +101,17 @@ describe("Màn sửa khoản chi", () => {
     fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
 
     // Assert
-    expect(updateExpenseMock).toHaveBeenCalledWith("e1", {
-      amount: 45_000,
-      categoryId: "c2",
-      date: "2026-09-21",
-      note: "xăng",
-    });
+    expect(updateExpenseMock).toHaveBeenCalledWith(
+      "e1",
+      "f1",
+      {
+        amount: 45_000,
+        categoryId: "c2",
+        date: "2026-09-21",
+        note: "xăng",
+      },
+      "2026-09-20",
+    );
     expect(await screen.findByText("HISTORY MARKER")).toBeInTheDocument();
   });
 

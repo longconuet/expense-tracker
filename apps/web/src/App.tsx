@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { setSessionExpiredHandler } from "./core/api";
 import { useAuthStore } from "./core/authStore";
+import { evictCache } from "./core/readCache";
 import { flushQueue } from "./core/syncQueue";
 import { initSync } from "./core/syncManager";
 import { router } from "./router";
@@ -22,6 +23,8 @@ export default function App() {
   // đăng ký ngay trong initSync (doFlush tự guard khi chưa có token).
   useEffect(() => {
     initSync();
+    // Dọn cache entry quá tuổi / vượt cap khi mở app (không chặn khởi động)
+    void evictCache();
     void useAuthStore.getState().bootstrap().then(() => {
       void flushQueue();
     });

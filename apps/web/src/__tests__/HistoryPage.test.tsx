@@ -437,7 +437,7 @@ describe("Lịch sử chi tiêu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Xoá" }));
 
     // Assert
-    expect(deleteExpenseMock).toHaveBeenCalledWith("e1");
+    expect(deleteExpenseMock).toHaveBeenCalledWith("e1", FAMILY.id, today());
     expect(await screen.findByText("xăng")).toBeInTheDocument();
     expect(screen.queryByText("cơm trưa")).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Family, FamilyMemberDto, User } from "@expense-tracker/shared";
 import { getAccessToken, refreshAccessToken, setAccessToken, apiFetch } from "./api";
+import { idbClear } from "./db";
 
 // ---------------------------------------------------------------------------
 // Shape response API (phần FE dùng)
@@ -164,6 +165,9 @@ export const useAuthStore = create<AuthState>()(
 
       clearSession: () => {
         setAccessToken(null);
+        // Xoá cache đọc (best-effort) — không để lại dữ liệu chi tiêu của family
+        // cũ trên browser dùng chung khi người khác đăng nhập sau
+        void idbClear("cache").catch(() => undefined);
         set({ user: null, families: [], activeFamilyId: null, status: "guest" });
       },
     }),

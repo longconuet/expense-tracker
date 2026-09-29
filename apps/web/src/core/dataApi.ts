@@ -7,9 +7,11 @@ import type {
   FamilyMemberDto,
   MonthlyStats,
 } from "@expense-tracker/shared";
-import { apiFetch, apiFetchBinary, apiFetchWithMeta, ApiError } from "./api";
+import { apiFetch, apiFetchBinary, apiFetchWithMeta, ApiError, isServerUnavailable } from "./api";
+import { invalidateExpenseCache, invalidateFamilyCache } from "./cacheInvalidate";
+import { monthOf } from "./dates";
 import { withReadCache } from "./readCache";
-import { enqueueExpense, isServerUnavailable } from "./syncQueue";
+import { enqueueExpense } from "./syncQueue";
 
 /**
  * Lớp endpoint API cho FE — 1 nơi duy nhất map path + shape,
@@ -34,8 +36,8 @@ export async function fetchCategories(familyId: string): Promise<Category[]> {
 
 /**
  * CRUD category (mọi member được quyền — API enforce).
- * Mutation KHÔNG đi qua read cache; caller tự refetch categories
- * sau thao tác thành công để đồng bộ cache.
+ * Mutation KHÔNG đi qua read cache; sau thao tác thành công tự xoá cache
+ * của family (tên/icon danh mục nằm trong cả payload list expense + stats).
  */
 export interface CreateCategoryInput {
   name: string;
@@ -57,6 +59,7 @@ export async function createCategory(
     method: "POST",
     body: input,
   });
+  await invalidateFamilyCache(familyId);
   return data.category;
 }
 
@@ -70,12 +73,14 @@ export async function updateCategory(
     `/api/families/${familyId}/categories/${categoryId}`,
     { method: "PUT", body: input },
   );
+  await invalidateFamilyCache(familyId);
   return data.category;
 }
 
 /** Xoá danh mục — 409 khi đang có khoản chi (CATEGORY_IN_USE); mọi danh mục (kể cả preset) đều xoá được. */
 export async function deleteCategory(familyId: string, categoryId: string): Promise<void> {
   await apiFetch(`/api/families/${familyId}/categories/${categoryId}`, { method: "DELETE" });
+  await invalidateFamilyCache(familyId);
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +213,10 @@ export async function createExpense(input: CreateExpenseInput): Promise<CreateEx
       method: "POST",
       body,
     });
-    return { expense: data.expense, savedOffline: false };
+    const expense = data.expense;
+    // Server đã nhận khoản — xoá cache list/stats của tháng + ngày đó
+    await invalidateExpenseCache(input.familyId, [monthOf(expense.date)], [expense.date]);
+    return { expense, savedOffline: false };
   } catch (err) {
     if (isServerUnavailable(err)) {
       await enqueueExpense({
@@ -225,8 +233,13 @@ export async function createExpense(input: CreateExpenseInput): Promise<CreateEx
   }
 }
 
-export async function deleteExpense(expenseId: string): Promise<void> {
+export async function deleteExpense(
+  expenseId: string,
+  familyId: string,
+  date: string,
+): Promise<void> {
   await apiFetch(`/api/expenses/${expenseId}`, { method: "DELETE" });
+  await invalidateExpenseCache(familyId, [monthOf(date)], [date]);
 }
 
 export async function fetchExpense(expenseId: string): Promise<Expense> {
@@ -248,13 +261,22 @@ export interface UpdateExpenseInput {
  */
 export async function updateExpense(
   expenseId: string,
+  familyId: string,
   input: UpdateExpenseInput,
+  /** Ngày của khoản TRƯỚC khi sửa — để xoá cache tháng cũ khi đổi ngày. */
+  previousDate: string,
 ): Promise<Expense> {
   const data = await apiFetch<{ expense: Expense }>(`/api/expenses/${expenseId}`, {
     method: "PUT",
     body: input,
   });
-  return data.expense;
+  const expense = data.expense;
+  await invalidateExpenseCache(
+    familyId,
+    [monthOf(previousDate), monthOf(expense.date)],
+    [previousDate, expense.date],
+  );
+  return expense;
 }
 
 // ---------------------------------------------------------------------------
