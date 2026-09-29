@@ -218,3 +218,84 @@ describe("Màn sửa khoản chi", () => {
     );
   });
 });
+
+describe("Gợi ý ghi chú nhanh theo danh mục (màn sửa)", () => {
+  const CATS_NOTES = [
+    { id: "c1", name: "Ăn uống", icon: "🍜", isPreset: true, order: 0 },
+    {
+      id: "c2",
+      name: "Đi lại",
+      icon: "🚗",
+      isPreset: true,
+      order: 1,
+      noteSuggestions: ["Đổ xăng", "Đặt xe"],
+    },
+  ];
+  const EXPENSE_CAR = {
+    ...EXPENSE,
+    category: { id: "c2", name: "Đi lại", icon: "🚗", isPreset: true, order: 1 },
+  };
+
+  beforeEach(() => {
+    useAuthStore.setState({ activeFamilyId: "f1" });
+    fetchCategoriesMock.mockReset();
+    fetchExpenseMock.mockReset();
+    updateExpenseMock.mockReset();
+    fetchCategoriesMock.mockResolvedValue(CATS_NOTES);
+    fetchExpenseMock.mockResolvedValue(EXPENSE_CAR);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("khoản thuộc danh mục có gợi ý → hiện chips; chạm chip → thay nội dung Ghi chú", async () => {
+    // Arrange + Act
+    renderEdit();
+    await screen.findByText("50.000");
+
+    // Assert — chips của "Đi lại" hiện; note pre-fill "xăng"
+    expect(screen.getByRole("group", { name: "Gợi ý ghi chú" })).toBeInTheDocument();
+    const note = screen.getByLabelText("Ghi chú (không bắt buộc)");
+    expect(note).toHaveValue("xăng");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Gợi ý ghi chú Đổ xăng" }));
+
+    // Assert — note bị thay thế, không phải "xăngĐổ xăng"
+    expect(note).toHaveValue("Đổ xăng");
+  });
+
+  it("đổi sang danh mục không gợi ý → chips ẩn", async () => {
+    // Arrange
+    renderEdit();
+    await screen.findByText("50.000");
+    expect(screen.getByRole("group", { name: "Gợi ý ghi chú" })).toBeInTheDocument();
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Ăn uống" }));
+
+    // Assert
+    expect(screen.queryByRole("group", { name: "Gợi ý ghi chú" })).not.toBeInTheDocument();
+  });
+
+  it("lưu với note từ chip → updateExpense nhận note đúng text chip", async () => {
+    // Arrange
+    updateExpenseMock.mockResolvedValue(EXPENSE_CAR);
+    renderEdit();
+    await screen.findByText("50.000");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Gợi ý ghi chú Đặt xe" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
+
+    // Assert
+    expect(updateExpenseMock).toHaveBeenCalledWith(
+      "e1",
+      "f1",
+      { amount: 50_000, categoryId: "c2", date: "2026-09-20", note: "Đặt xe" },
+      "2026-09-20",
+    );
+    expect(await screen.findByText("HISTORY MARKER")).toBeInTheDocument();
+  });
+});

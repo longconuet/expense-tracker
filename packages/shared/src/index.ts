@@ -68,6 +68,12 @@ export interface Category {
   /** Chỉ ghi nhận nguồn gốc (danh mục khởi tạo khi lập family) — không có hành vi riêng. */
   isPreset: boolean;
   order: number;
+  /**
+   * Gợi ý ghi chú nhanh (≤8 mục, mỗi mục 1–30 ký tự) — null = không có.
+   * Optional vì payload nested `Expense.category` (toExpenseDto) không có field
+   * này; `fetchCategories` luôn normalize về `string[] | null` cho consumer.
+   */
+  noteSuggestions?: string[] | null;
 }
 
 export interface Expense {

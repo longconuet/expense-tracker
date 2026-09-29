@@ -226,3 +226,101 @@ describe("Màn thêm khoản chi (keypad)", () => {
     expect(screen.queryByText("HOME MARKER")).not.toBeInTheDocument();
   });
 });
+
+describe("Gợi ý ghi chú nhanh theo danh mục", () => {
+  const CATS_NOTES = [
+    { id: "c1", name: "Ăn uống", icon: "🍜", isPreset: true, order: 0 },
+    {
+      id: "c2",
+      name: "Đi lại",
+      icon: "🚗",
+      isPreset: true,
+      order: 1,
+      noteSuggestions: ["Đổ xăng", "Đặt xe"],
+    },
+    { id: "c3", name: "Sức khỏe", icon: "💊", isPreset: true, order: 2, noteSuggestions: ["Thuốc cảm"] },
+  ];
+
+  beforeEach(() => {
+    useAuthStore.setState({ activeFamilyId: "f1" });
+    fetchCategoriesMock.mockReset();
+    createExpenseMock.mockReset();
+    fetchCategoriesMock.mockResolvedValue(CATS_NOTES);
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("chưa chọn danh mục → không hiện chip; chọn danh mục có gợi ý → hiện đúng list", async () => {
+    // Arrange + Act
+    renderAdd();
+    await screen.findByRole("button", { name: "Đi lại" });
+
+    // Assert — ban đầu (chưa chọn danh mục)
+    expect(screen.queryByRole("group", { name: "Gợi ý ghi chú" })).not.toBeInTheDocument();
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Đi lại" }));
+
+    // Assert — 2 chips đúng list của "Đi lại"
+    expect(screen.getByRole("button", { name: "Gợi ý ghi chú Đổ xăng" })).toHaveTextContent("Đổ xăng");
+    expect(screen.getByRole("button", { name: "Gợi ý ghi chú Đặt xe" })).toHaveTextContent("Đặt xe");
+  });
+
+  it("chạm chip → điền vào ô Ghi chú; ghi chú đã gõ trước đó → bị thay thế", async () => {
+    // Arrange
+    renderAdd();
+    await screen.findByRole("button", { name: "Đi lại" });
+    fireEvent.click(screen.getByRole("button", { name: "Đi lại" }));
+    const note = screen.getByLabelText("Ghi chú (không bắt buộc)");
+    fireEvent.change(note, { target: { value: "cơm trưa" } });
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Gợi ý ghi chú Đổ xăng" }));
+
+    // Assert — thay thế, không đính thêm ("cơm trưaĐổ xăng" là sai)
+    expect(note).toHaveValue("Đổ xăng");
+  });
+
+  it("đổi danh mục → chips đổi theo; danh mục không gợi ý → ẩn", async () => {
+    // Arrange
+    renderAdd();
+    await screen.findByRole("button", { name: "Đi lại" });
+
+    // Act + Assert — Đi lại (2 gợi ý)
+    fireEvent.click(screen.getByRole("button", { name: "Đi lại" }));
+    expect(screen.getByRole("button", { name: "Gợi ý ghi chú Đổ xăng" })).toBeInTheDocument();
+
+    // Act + Assert — Ăn uống (không gợi ý) → ẩn
+    fireEvent.click(screen.getByRole("button", { name: "Ăn uống" }));
+    expect(screen.queryByRole("group", { name: "Gợi ý ghi chú" })).not.toBeInTheDocument();
+
+    // Act + Assert — Sức khỏe (1 gợi ý khác)
+    fireEvent.click(screen.getByRole("button", { name: "Sức khỏe" }));
+    expect(screen.getByRole("button", { name: "Gợi ý ghi chú Thuốc cảm" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Gợi ý ghi chú Đổ xăng" })).not.toBeInTheDocument();
+  });
+
+  it("submit với note từ chip → createExpense nhận note đúng text chip", async () => {
+    // Arrange
+    createExpenseMock.mockResolvedValue({ expense: { id: "e1" }, savedOffline: false } as never);
+    renderAdd();
+    await typeAmount("30000");
+    fireEvent.click(screen.getByRole("button", { name: "Đi lại" }));
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Gợi ý ghi chú Đặt xe" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lưu khoản chi" }));
+
+    // Assert
+    expect(createExpenseMock).toHaveBeenCalledWith({
+      familyId: "f1",
+      category: expect.objectContaining({ id: "c2" }),
+      amount: 30000,
+      date: expect.any(String),
+      note: "Đặt xe",
+    });
+    expect(await screen.findByText("HOME MARKER")).toBeInTheDocument();
+  });
+});

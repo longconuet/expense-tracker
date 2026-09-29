@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { AppError, sendOk } from "../lib/apiError.js";
 import { MONTH_RE, currentMonth, nextMonthStart, prevMonthStart } from "../lib/dates.js";
+import { parseNoteSuggestions } from "../lib/noteSuggestions.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { requireFamilyMember } from "../middlewares/requireFamily.js";
 import { prisma } from "../prisma.js";
@@ -50,8 +51,11 @@ statsRouter.get("/", requireAuth, requireFamilyMember(), async (req, res) => {
   const byCategory = byCategoryGroups
     .map((row) => {
       const rowTotal = row._sum.amount ?? 0;
+      const categoryRow = categoryMap.get(row.categoryId);
       return {
-        category: categoryMap.get(row.categoryId),
+        category: categoryRow
+          ? { ...categoryRow, noteSuggestions: parseNoteSuggestions(categoryRow.noteSuggestions) }
+          : undefined,
         total: rowTotal,
         percent: total > 0 ? Math.round((rowTotal / total) * 1000) / 10 : 0,
       };

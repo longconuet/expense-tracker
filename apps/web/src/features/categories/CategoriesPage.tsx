@@ -19,6 +19,7 @@ import {
   PencilIcon,
   PlusIcon,
   TrashIcon,
+  XIcon,
 } from "../../shared/ui/icons";
 import { CategoriesSkeleton } from "./CategoriesSkeleton";
 
@@ -27,6 +28,8 @@ import { CategoriesSkeleton } from "./CategoriesSkeleton";
  * Mọi member đều được quyền (API enforce). Mọi danh mục bình đẳng
  * (preset khởi tạo khi tạo family cũng sửa/xoá được như danh mục thường).
  * Mutation offline → hiện lỗi, không có hàng đợi (nhất quán với sửa khoản offline).
+ * Mỗi danh mục có thể set "gợi ý ghi chú nhanh" (≤8, 1–30 ký tự) — dùng để
+ * điền nhanh ô Ghi chú khi tạo/sửa khoản chi.
  */
 
 /** Emoji gợi ý — 24 ô, bao gồm icon của 7 preset để dễ chọn lại. */
@@ -40,6 +43,10 @@ const EMOJI_SUGGESTIONS = [
 
 type FormState = { mode: "create" } | { mode: "edit"; category: Category };
 
+/** Giới hạn gợi ý ghi chú nhanh (khớp validate API). */
+const MAX_NOTE_SUGGESTIONS = 8;
+const NOTE_SUGGESTION_MAX_LEN = 30;
+
 export default function CategoriesPage() {
   const activeFamilyId = useAuthStore((s) => s.activeFamilyId);
 
@@ -51,6 +58,8 @@ export default function CategoriesPage() {
   const [form, setForm] = useState<FormState | null>(null);
   const [formName, setFormName] = useState("");
   const [formIcon, setFormIcon] = useState("");
+  const [formNotes, setFormNotes] = useState<string[]>([]);
+  const [noteInput, setNoteInput] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -101,6 +110,8 @@ export default function CategoriesPage() {
     setForm({ mode: "create" });
     setFormName("");
     setFormIcon("");
+    setFormNotes([]);
+    setNoteInput("");
     setNameError(null);
     setFormError(null);
   }
@@ -109,6 +120,8 @@ export default function CategoriesPage() {
     setForm({ mode: "edit", category });
     setFormName(category.name);
     setFormIcon(category.icon);
+    setFormNotes(category.noteSuggestions ?? []);
+    setNoteInput("");
     setNameError(null);
     setFormError(null);
   }
@@ -122,6 +135,23 @@ export default function CategoriesPage() {
   const customEmojiValue = EMOJI_SUGGESTIONS.includes(formIcon as (typeof EMOJI_SUGGESTIONS)[number])
     ? ""
     : formIcon;
+
+  /**
+   * Thêm 1 gợi ý ghi chú: trim; bỏ qua khi rỗng, đã trùng (case-insensitive)
+   * hoặc đã đủ 8. Không hiện lỗi — nhập trùng là việc bình thường khi gõ tay.
+   */
+  function addNoteSuggestion() {
+    const text = noteInput.trim();
+    if (!text) return;
+    if (formNotes.length >= MAX_NOTE_SUGGESTIONS) return;
+    if (formNotes.some((n) => n.toLowerCase() === text.toLowerCase())) return;
+    setFormNotes((prev) => [...prev, text]);
+    setNoteInput("");
+  }
+
+  function removeNoteSuggestion(text: string) {
+    setFormNotes((prev) => prev.filter((n) => n !== text));
+  }
 
   async function handleSave() {
     if (!activeFamilyId || !form) return;
@@ -139,15 +169,18 @@ export default function CategoriesPage() {
     setSaving(true);
     setNameError(null);
     setFormError(null);
+    // List rỗng → null (xoá/không có gợi ý) — API bình thường hoá về 1 đầu
+    const noteSuggestions = formNotes.length > 0 ? formNotes : null;
     try {
       if (form.mode === "edit") {
         const updated = await updateCategory(activeFamilyId, form.category.id, {
           name,
           icon,
+          noteSuggestions,
         });
         setCategories((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
       } else {
-        const created = await createCategory(activeFamilyId, { name, icon });
+        const created = await createCategory(activeFamilyId, { name, icon, noteSuggestions });
         setCategories((prev) => [...prev, created]);
       }
       setForm(null);
@@ -359,6 +392,68 @@ export default function CategoriesPage() {
                 placeholder="VD: 🧊"
                 maxLength={8}
               />
+            </div>
+          </div>
+
+          {/* Gợi ý ghi chú nhanh — chips + input thêm; dùng ở màn Tạo/Sửa khoản chi */}
+          <div>
+            <span id="category-notes-label" className="mb-1.5 block text-sm font-medium text-ink">
+              Gợi ý ghi chú nhanh
+              <span className="ml-1 font-normal text-ink-muted">(không bắt buộc)</span>
+            </span>
+            <p className="mb-2 text-xs text-ink-muted">
+              Tối đa {MAX_NOTE_SUGGESTIONS} gợi ý, mỗi gợi ý tối đa {NOTE_SUGGESTION_MAX_LEN} ký tự —
+              chạm gợi ý khi nhập khoản chi để điền nhanh.
+            </p>
+            {formNotes.length > 0 ? (
+              <div role="group" aria-label="Gợi ý ghi chú hiện có" className="flex flex-wrap gap-1.5">
+                {formNotes.map((text, index) => (
+                  <span
+                    key={`${index}-${text}`}
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-surface py-1 pl-2.5 pr-1 text-sm text-ink"
+                  >
+                    {text}
+                    <button
+                      type="button"
+                      onClick={() => removeNoteSuggestion(text)}
+                      disabled={busy}
+                      aria-label={`Xoá gợi ý "${text}"`}
+                      className="rounded-full p-0.5 text-ink-muted transition hover:bg-ink/10 hover:text-danger disabled:opacity-30"
+                    >
+                      <XIcon className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <div className="mt-2 flex gap-2">
+              <div className="flex-1">
+                <Input
+                  aria-labelledby="category-notes-label"
+                  value={noteInput}
+                  onChange={(e) => setNoteInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addNoteSuggestion();
+                    }
+                  }}
+                  placeholder="VD: Đổ xăng"
+                  maxLength={NOTE_SUGGESTION_MAX_LEN}
+                  disabled={busy}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="shrink-0"
+                onClick={addNoteSuggestion}
+                disabled={busy || !noteInput.trim() || formNotes.length >= MAX_NOTE_SUGGESTIONS}
+                aria-label="Thêm gợi ý ghi chú"
+              >
+                <PlusIcon className="h-4 w-4" />
+                Thêm
+              </Button>
             </div>
           </div>
 
