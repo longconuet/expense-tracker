@@ -8,6 +8,8 @@ import {
   UserIcon,
 } from "../shared/ui/icons";
 import { useAuthStore } from "./authStore";
+import { useCacheStatus } from "./cacheStatus";
+import { formatTimeShort } from "./dates";
 import { useOnline } from "./useOnline";
 import { useSyncStore } from "./syncQueue";
 
@@ -30,8 +32,9 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 /**
- * Shell cho các màn chính: bottom nav + banner trạng thái (offline / khoản
- * chờ đồng bộ). Tên family và tên tài khoản KHÔNG còn ở header — hiển thị
+ * Shell cho các màn chính: bottom nav + banner trạng thái (offline /
+ * máy chủ không phản hồi + dữ liệu lưu lúc HH:mm / khoản chờ đồng bộ).
+ * Tên family và tên tài khoản KHÔNG còn ở header — hiển thị
  * và đổi family tại card trên tab "Tôi". Header chỉ render khi có banner.
  *
  * PWA iOS (standalone, viewport-fit=cover): iOS phủ lớp frosted-glass lên
@@ -46,6 +49,7 @@ export function AppShell() {
   const families = useAuthStore((s) => s.families);
   const activeFamilyId = useAuthStore((s) => s.activeFamilyId);
   const pendingCount = useSyncStore((s) => s.pendingCount);
+  const servedFromCacheAt = useCacheStatus((s) => s.servedFromCacheAt);
   const online = useOnline();
 
   const activeFamily = families.find((f) => f.id === activeFamilyId) ?? families[0] ?? null;
@@ -56,11 +60,20 @@ export function AppShell() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col bg-surface pt-[env(safe-area-inset-top)]">
-      {(!online || pendingCount > 0) && (
+      {(!online || servedFromCacheAt !== null || pendingCount > 0) && (
         <header className="sticky top-[env(safe-area-inset-top)] z-10 border-b border-border bg-surface/95 backdrop-blur">
           {!online && (
             <p className="border-t border-border bg-danger/10 px-4 py-1.5 text-center text-xs font-medium text-danger">
-              Không có mạng — đang xem dữ liệu lưu trước
+              {`Không có mạng — đang xem dữ liệu lưu trước${
+                servedFromCacheAt !== null ? ` lúc ${formatTimeShort(servedFromCacheAt)}` : ""
+              }`}
+            </p>
+          )}
+          {online && servedFromCacheAt !== null && (
+            <p className="border-t border-border bg-danger/10 px-4 py-1.5 text-center text-xs font-medium text-danger">
+              {`Máy chủ không phản hồi — đang xem dữ liệu lưu lúc ${formatTimeShort(
+                servedFromCacheAt,
+              )}`}
             </p>
           )}
           {pendingCount > 0 && (
