@@ -115,6 +115,164 @@ describe("PUT /api/families/:id/categories/:categoryId", () => {
   });
 });
 
+describe("noteSuggestions — gợi ý ghi chú nhanh theo category", () => {
+  let category: { id: string; noteSuggestions: string[] | null };
+
+  beforeAll(async () => {
+    const res = await request(app)
+      .post(`/api/families/${family.id}/categories`)
+      .set(auth(ownerToken))
+      .send({ name: "Gợi ý nhanh", icon: "📝", noteSuggestions: ["Đổ xăng", "Đặt xe"] });
+    expect(res.status).toBe(201);
+    category = res.body.data.category;
+  });
+
+  afterAll(async () => {
+    await request(app)
+      .delete(`/api/families/${family.id}/categories/${category.id}`)
+      .set(auth(ownerToken));
+    // dọn luôn category test 2 (POST không gửi noteSuggestions)
+    const list = await request(app).get(`/api/families/${family.id}/categories`).set(auth(ownerToken));
+    const leftover = list.body.data.categories.find((c: { name: string }) => c.name === "Không gợi ý");
+    if (leftover) {
+      await request(app).delete(`/api/families/${family.id}/categories/${leftover.id}`).set(auth(ownerToken));
+    }
+  });
+
+  it("POST với noteSuggestions → 201, trả đúng list", async () => {
+    expect(category.noteSuggestions).toEqual(["Đổ xăng", "Đặt xe"]);
+  });
+
+  it("POST không gửi noteSuggestions → lưu null", async () => {
+    const res = await request(app)
+      .post(`/api/families/${family.id}/categories`)
+      .set(auth(ownerToken))
+      .send({ name: "Không gợi ý", icon: "📦" });
+    expect(res.status).toBe(201);
+    expect(res.body.data.category.noteSuggestions).toBeNull();
+  });
+
+  it("GET /categories trả noteSuggestions đúng — category khác = null", async () => {
+    const list = await request(app).get(`/api/families/${family.id}/categories`).set(auth(ownerToken));
+    const mine = list.body.data.categories.find((c: { name: string }) => c.name === "Gợi ý nhanh");
+    // "Khác" — preset cuối, không bị test trước đổi tên/đổi order
+    const other = list.body.data.categories.find((c: { name: string }) => c.name === "Khác");
+    expect(mine.noteSuggestions).toEqual(["Đổ xăng", "Đặt xe"]);
+    expect(other.noteSuggestions).toBeNull();
+  });
+
+  it("PUT thay thế list — name/icon giữ nguyên", async () => {
+    const res = await request(app)
+      .put(`/api/families/${family.id}/categories/${category.id}`)
+      .set(auth(ownerToken))
+      .send({ noteSuggestions: ["Tiền gửi xe"] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.category.noteSuggestions).toEqual(["Tiền gửi xe"]);
+    expect(res.body.data.category.name).toBe("Gợi ý nhanh");
+    expect(res.body.data.category.icon).toBe("📝");
+  });
+
+  it("PUT {noteSuggestions: null} → xoá hết", async () => {
+    const res = await request(app)
+      .put(`/api/families/${family.id}/categories/${category.id}`)
+      .set(auth(ownerToken))
+      .send({ noteSuggestions: null });
+    expect(res.status).toBe(200);
+    expect(res.body.data.category.noteSuggestions).toBeNull();
+  });
+
+  it("PUT không có key noteSuggestions → giữ nguyên giá trị cũ", async () => {
+    await request(app)
+      .put(`/api/families/${family.id}/categories/${category.id}`)
+      .set(auth(ownerToken))
+      .send({ noteSuggestions: ["A", "B"] });
+
+    const res = await request(app)
+      .put(`/api/families/${family.id}/categories/${category.id}`)
+      .set(auth(ownerToken))
+      .send({ name: "Gợi ý nhanh 2" });
+    expect(res.status).toBe(200);
+    expect(res.body.data.category.noteSuggestions).toEqual(["A", "B"]);
+  });
+
+  it("PUT {noteSuggestions: []} → bình thường hoá về null", async () => {
+    const res = await request(app)
+      .put(`/api/families/${family.id}/categories/${category.id}`)
+      .set(auth(ownerToken))
+      .send({ noteSuggestions: [] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.category.noteSuggestions).toBeNull();
+  });
+
+  it("item được trim khoảng trắng đầu/cuối", async () => {
+    const res = await request(app)
+      .put(`/api/families/${family.id}/categories/${category.id}`)
+      .set(auth(ownerToken))
+      .send({ noteSuggestions: ["  X  "] });
+    expect(res.status).toBe(200);
+    expect(res.body.data.category.noteSuggestions).toEqual(["X"]);
+  });
+
+  it("vượt 8 mục → 400 (POST + PUT)", async () => {
+    const nine = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+    const put = await request(app)
+      .put(`/api/families/${family.id}/categories/${category.id}`)
+      .set(auth(ownerToken))
+      .send({ noteSuggestions: nine });
+    expect(put.status).toBe(400);
+    expect(put.body.error.code).toBe("VALIDATION_ERROR");
+
+    const post = await request(app)
+      .post(`/api/families/${family.id}/categories`)
+      .set(auth(ownerToken))
+      .send({ name: "Vượt trần", icon: "❌", noteSuggestions: nine });
+    expect(post.status).toBe(400);
+    expect(post.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("mục rỗng / chỉ khoảng trắng → 400", async () => {
+    for (const bad of [[""], ["   "], ["OK", "  "]]) {
+      const res = await request(app)
+        .put(`/api/families/${family.id}/categories/${category.id}`)
+        .set(auth(ownerToken))
+        .send({ noteSuggestions: bad });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    }
+  });
+
+  it("mục > 30 ký tự → 400 (POST + PUT)", async () => {
+    const put = await request(app)
+      .put(`/api/families/${family.id}/categories/${category.id}`)
+      .set(auth(ownerToken))
+      .send({ noteSuggestions: ["a".repeat(31)] });
+    expect(put.status).toBe(400);
+    expect(put.body.error.code).toBe("VALIDATION_ERROR");
+
+    const post = await request(app)
+      .post(`/api/families/${family.id}/categories`)
+      .set(auth(ownerToken))
+      .send({ name: "Dài quá", icon: "❌", noteSuggestions: ["a".repeat(31)] });
+    expect(post.status).toBe(400);
+    expect(post.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("không phải array string → 400 (POST + PUT)", async () => {
+    const put = await request(app)
+      .put(`/api/families/${family.id}/categories/${category.id}`)
+      .set(auth(ownerToken))
+      .send({ noteSuggestions: "Đổ xăng" });
+    expect(put.status).toBe(400);
+
+    const post = await request(app)
+      .post(`/api/families/${family.id}/categories`)
+      .set(auth(ownerToken))
+      .send({ name: "Sai kiểu", icon: "❌", noteSuggestions: 123 });
+    expect(post.status).toBe(400);
+    expect(post.body.error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
 describe("DELETE /api/families/:id/categories/:categoryId", () => {
   it("preset xoá được khi không có khoản chi", async () => {
     const list = await request(app).get(`/api/families/${family.id}/categories`).set(auth(ownerToken));

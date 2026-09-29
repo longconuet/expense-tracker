@@ -31,7 +31,12 @@ export async function fetchCategories(familyId: string): Promise<Category[]> {
   const data = await withReadCache<CategoriesData>(`GET ${path}`, () =>
     apiFetch<CategoriesData>(path),
   );
-  return data.categories;
+  // Normalize 1 chỗ: payload read cache cũ (ghi trước khi có field) không có
+  // noteSuggestions → null. Consumer tin type, không check rải rác.
+  return data.categories.map((c) => ({
+    ...c,
+    noteSuggestions: Array.isArray(c.noteSuggestions) ? c.noteSuggestions : null,
+  }));
 }
 
 /**
@@ -42,12 +47,16 @@ export async function fetchCategories(familyId: string): Promise<Category[]> {
 export interface CreateCategoryInput {
   name: string;
   icon: string;
+  /** Gợi ý ghi chú nhanh — null = không có. */
+  noteSuggestions?: string[] | null;
 }
 
 export interface UpdateCategoryInput {
   name?: string;
   icon?: string;
   order?: number;
+  /** null = xoá hết gợi ý; undefined = không động. */
+  noteSuggestions?: string[] | null;
 }
 
 /** Thêm danh mục tự tạo — order = max + 1 (hiện cuối list). 409 khi trùng tên. */

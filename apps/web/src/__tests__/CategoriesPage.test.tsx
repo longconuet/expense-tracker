@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { Category } from "@expense-tracker/shared";
 import { ApiError } from "../core/api";
 import {
   createCategory,
@@ -124,7 +125,11 @@ describe("Quản lý danh mục chi tiêu", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Thêm danh mục" }));
 
     // Assert
-    expect(createCategoryMock).toHaveBeenCalledWith("f1", { name: "Tiền nước", icon: "💧" });
+    expect(createCategoryMock).toHaveBeenCalledWith("f1", {
+      name: "Tiền nước",
+      icon: "💧",
+      noteSuggestions: null,
+    });
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
     // Refetch ngầm sau save OK (đồng bộ read cache)
     expect(fetchCategoriesMock).toHaveBeenCalledTimes(2);
@@ -217,6 +222,7 @@ describe("Quản lý danh mục chi tiêu", () => {
     expect(updateCategoryMock).toHaveBeenCalledWith("f1", "c2", {
       name: "Điện nước",
       icon: "💧",
+      noteSuggestions: null,
     });
     expect(await screen.findByText("Điện nước")).toBeInTheDocument();
     expect(screen.queryByText("Tiền điện")).not.toBeInTheDocument();
@@ -321,5 +327,172 @@ describe("Quản lý danh mục chi tiêu", () => {
     const rows = screen.getAllByRole("listitem");
     expect(rows[1]).toHaveTextContent("Tiền điện");
     expect(rows[2]).toHaveTextContent("Khác");
+  });
+});
+
+describe("Gợi ý ghi chú nhanh trong modal thêm/sửa danh mục", () => {
+  const CAT_CAR: Category = {
+    id: "c4",
+    name: "Đi lại",
+    icon: "🚗",
+    isPreset: true,
+    order: 3,
+    noteSuggestions: ["Đổ xăng", "Đặt xe"],
+  };
+
+  function noteInput() {
+    return screen.getByPlaceholderText("VD: Đổ xăng");
+  }
+
+  function chipGroup() {
+    return screen.getByRole("group", { name: "Gợi ý ghi chú hiện có" });
+  }
+
+  function addSuggestion(text: string, via: "enter" | "button" = "enter") {
+    const input = noteInput();
+    fireEvent.change(input, { target: { value: text } });
+    if (via === "enter") {
+      fireEvent.keyDown(input, { key: "Enter" });
+    } else {
+      fireEvent.click(screen.getByRole("button", { name: "Thêm gợi ý ghi chú" }));
+    }
+  }
+
+  async function openCreateDialog() {
+    fetchCategoriesMock.mockResolvedValue(LIST);
+    render(<CategoriesPage />);
+    await screen.findByText("Ăn uống");
+    fireEvent.click(screen.getByRole("button", { name: "Thêm danh mục" }));
+    return screen.findByRole("dialog");
+  }
+
+  beforeEach(() => {
+    useAuthStore.setState({ user: USER, families: [FAMILY], activeFamilyId: FAMILY.id });
+    fetchCategoriesMock.mockReset();
+    createCategoryMock.mockReset();
+    updateCategoryMock.mockReset();
+    deleteCategoryMock.mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("tạo: gõ gợi ý + Enter → chip hiện ngay, input trả về trống", async () => {
+    // Arrange
+    await openCreateDialog();
+
+    // Act
+    fireEvent.change(noteInput(), { target: { value: "Đổ xăng" } });
+    fireEvent.keyDown(noteInput(), { key: "Enter" });
+
+    // Assert
+    expect(within(chipGroup()).getByText("Đổ xăng")).toBeInTheDocument();
+    expect(noteInput()).toHaveValue("");
+  });
+
+  it("tạo: gợi ý trùng case-insensitive → không thêm chip thứ 2", async () => {
+    // Arrange
+    await openCreateDialog();
+    addSuggestion("Đổ xăng");
+
+    // Act — thêm "đổ xăng" (chữ thường) bằng nút
+    addSuggestion("đổ xăng", "button");
+
+    // Assert — vẫn chỉ 1 chip "Đổ xăng", không có chip "đổ xăng"
+    expect(screen.getAllByText("Đổ xăng")).toHaveLength(1);
+    expect(screen.queryByText("đổ xăng")).toBeNull();
+  });
+
+  it("tạo: đủ 8 gợi ý thì chặn mục 9 (nút Thêm disabled)", async () => {
+    // Arrange
+    await openCreateDialog();
+    for (let i = 1; i <= 8; i++) addSuggestion(`Gợi ý ${i}`);
+    expect(within(chipGroup()).getAllByRole("button")).toHaveLength(8);
+
+    // Act
+    addSuggestion("Gợi ý 9");
+
+    // Assert — vẫn 8 chip, không thêm mục 9
+    expect(within(chipGroup()).getAllByRole("button")).toHaveLength(8);
+    expect(screen.queryByRole("button", { name: "Gợi ý 9" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Thêm gợi ý ghi chú" })).toBeDisabled();
+  });
+
+  it("tạo: xoá chip bằng nút × → chip biến mất", async () => {
+    // Arrange
+    await openCreateDialog();
+    addSuggestion("Đổ xăng");
+    addSuggestion("Đặt xe");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: 'Xoá gợi ý "Đổ xăng"' }));
+
+    // Assert
+    expect(screen.queryByText("Đổ xăng")).toBeNull();
+    expect(within(chipGroup()).getByText("Đặt xe")).toBeInTheDocument();
+  });
+
+  it("lưu với 2 gợi ý (có khoảng trắng thừa) → payload array đã trim", async () => {
+    // Arrange
+    const created = { id: "c9", name: "Đi lại", icon: "🚗", isPreset: false, order: 3, noteSuggestions: ["Đổ xăng", "Đặt xe"] };
+    fetchCategoriesMock.mockResolvedValue(LIST);
+    createCategoryMock.mockResolvedValue(created);
+    render(<CategoriesPage />);
+    await screen.findByText("Ăn uống");
+    fireEvent.click(screen.getByRole("button", { name: "Thêm danh mục" }));
+    const dialog = await screen.findByRole("dialog");
+
+    // Act
+    fireEvent.change(nameInput(), { target: { value: "Đi lại" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Chọn biểu tượng 🚗" }));
+    addSuggestion("  Đổ xăng  ");
+    addSuggestion("Đặt xe");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Thêm danh mục" }));
+
+    // Assert
+    expect(createCategoryMock).toHaveBeenCalledWith("f1", {
+      name: "Đi lại",
+      icon: "🚗",
+      noteSuggestions: ["Đổ xăng", "Đặt xe"],
+    });
+  });
+
+  it("sửa: mở modal category có gợi ý → pre-fill đúng chips", async () => {
+    // Arrange
+    fetchCategoriesMock.mockResolvedValue([CAT_FOOD, CAT_CAR]);
+    render(<CategoriesPage />);
+    await screen.findByText("Đi lại");
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Sửa danh mục Đi lại" }));
+    await screen.findByRole("dialog");
+
+    // Assert
+    expect(within(chipGroup()).getByText("Đổ xăng")).toBeInTheDocument();
+    expect(within(chipGroup()).getByText("Đặt xe")).toBeInTheDocument();
+    expect(nameInput()).toHaveValue("Đi lại");
+  });
+
+  it("sửa: xoá hết chips rồi lưu → payload noteSuggestions = null", async () => {
+    // Arrange
+    fetchCategoriesMock.mockResolvedValue([CAT_FOOD, CAT_CAR]);
+    updateCategoryMock.mockResolvedValue(CAT_CAR);
+    render(<CategoriesPage />);
+    await screen.findByText("Đi lại");
+    fireEvent.click(screen.getByRole("button", { name: "Sửa danh mục Đi lại" }));
+    const dialog = await screen.findByRole("dialog");
+
+    // Act — xoá cả 2 gợi ý rồi lưu (giữ nguyên tên/icon)
+    fireEvent.click(screen.getByRole("button", { name: 'Xoá gợi ý "Đổ xăng"' }));
+    fireEvent.click(screen.getByRole("button", { name: 'Xoá gợi ý "Đặt xe"' }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Lưu thay đổi" }));
+
+    // Assert
+    expect(updateCategoryMock).toHaveBeenCalledWith("f1", "c4", {
+      name: "Đi lại",
+      icon: "🚗",
+      noteSuggestions: null,
+    });
   });
 });

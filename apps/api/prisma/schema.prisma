@@ -58,6 +58,8 @@ model Category {
   icon     String
   isPreset Boolean @default(false)
   order    Int     @default(0)
+  // Gợi ý ghi chú nhanh: JSON array string (≤8 mục, mỗi mục 1–30 ký tự) — null = không có.
+  noteSuggestions String?
 
   family   Family    @relation(fields: [familyId], references: [id], onDelete: Cascade)
   expenses Expense[]

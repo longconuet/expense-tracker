@@ -9,6 +9,7 @@ import { Card } from "../../shared/ui/Card";
 import { Input } from "../../shared/ui/Input";
 import { Spinner } from "../../shared/ui/Spinner";
 import { haptic } from "./haptic";
+import { NoteSuggestions } from "./NoteSuggestions";
 import { suggestAmounts } from "./amountSuggestions";
 import { Keypad, type KeypadKey } from "./Keypad";
 
@@ -72,6 +73,7 @@ export default function EditPage() {
   const parsedAmount = parseInt(amount || "0", 10);
   const ready = parsedAmount > 0 && categoryId !== null;
   const suggestions = suggestAmounts(amount);
+  const selectedCategory = categories?.find((c) => c.id === categoryId) ?? null;
 
   function pressKey(key: KeypadKey) {
     if (submitting) return;
@@ -104,7 +106,6 @@ export default function EditPage() {
     if (submitting || !ready || !activeFamilyId || !expense) return;
     setFormError(null);
 
-    const selectedCategory = categories?.find((c) => c.id === categoryId);
     if (!selectedCategory) {
       setFormError("Chọn một danh mục.");
       return;
@@ -264,6 +265,12 @@ export default function EditPage() {
             onChange={(e) => setNote(e.target.value)}
             placeholder="VD: cơm trưa cả nhà"
             maxLength={200}
+          />
+          {/* Gợi ý ghi chú nhanh của danh mục đang chọn — chạm chip thay nội dung Ghi chú */}
+          <NoteSuggestions
+            suggestions={selectedCategory?.noteSuggestions ?? []}
+            onSelect={setNote}
+            disabled={submitting}
           />
         </div>
       </Card>

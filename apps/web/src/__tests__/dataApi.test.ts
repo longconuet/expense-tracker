@@ -281,16 +281,28 @@ describe("core/dataApi", () => {
     expect(expense).toEqual(updated);
   });
 
-  it("fetchCategories trả list categories của family", async () => {
+  it("fetchCategories trả list categories của family (noteSuggestions giữ nguyên)", async () => {
     // Arrange
-    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ categories: [CAT] })));
+    const catWithNotes = { ...CAT, noteSuggestions: ["Cơm trưa", "Cơm tối"] };
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ categories: [catWithNotes] })));
 
     // Act
     const categories = await fetchCategories("f1");
 
     // Assert
     expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/categories");
-    expect(categories).toEqual([CAT]);
+    expect(categories).toEqual([catWithNotes]);
+  });
+
+  it("fetchCategories: payload cache cũ (thiếu noteSuggestions) → normalize về null", async () => {
+    // Arrange — payload ghi trước khi API có field: không có key noteSuggestions
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ categories: [CAT] })));
+
+    // Act
+    const categories = await fetchCategories("f1");
+
+    // Assert — consumer luôn nhận `string[] | null`, không `undefined`
+    expect(categories).toEqual([{ ...CAT, noteSuggestions: null }]);
   });
 
   // ---------------------------------------------------------------------
@@ -353,6 +365,39 @@ describe("core/dataApi", () => {
       order: 2,
     });
     expect(category).toEqual(updated);
+  });
+
+  it("createCategory: có noteSuggestions → payload gồm cả list gợi ý", async () => {
+    // Arrange
+    const created = { id: "c9", name: "Đi lại", icon: "🚗", isPreset: false, order: 7, noteSuggestions: ["Đổ xăng", "Đặt xe"] };
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ category: created }), 201));
+
+    // Act
+    await createCategory("f1", {
+      name: "Đi lại",
+      icon: "🚗",
+      noteSuggestions: ["Đổ xăng", "Đặt xe"],
+    });
+
+    // Assert
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      name: "Đi lại",
+      icon: "🚗",
+      noteSuggestions: ["Đổ xăng", "Đặt xe"],
+    });
+  });
+
+  it("updateCategory: noteSuggestions = null → payload có key null (xoá gợi ý)", async () => {
+    // Arrange
+    const updated = { id: "c9", name: "Đi lại", icon: "🚗", isPreset: false, order: 7, noteSuggestions: null };
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ category: updated })));
+
+    // Act
+    await updateCategory("f1", "c9", { noteSuggestions: null });
+
+    // Assert
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body).toEqual({ noteSuggestions: null });
   });
 
   it("deleteCategory gọi DELETE đúng path", async () => {
@@ -470,8 +515,9 @@ describe("core/dataApi", () => {
 
   it("fetchCategories: server 500 sau lần gọi OK → trả bản lưu trước", async () => {
     // Arrange
+    const catWithNotes = { ...CAT, noteSuggestions: ["Đổ xăng"] };
     fetchMock
-      .mockResolvedValueOnce(fakeResponse(envelope({ categories: [CAT] })))
+      .mockResolvedValueOnce(fakeResponse(envelope({ categories: [catWithNotes] })))
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -485,8 +531,8 @@ describe("core/dataApi", () => {
     const second = await fetchCategories("f1"); // server down
 
     // Assert
-    expect(first).toEqual([CAT]);
-    expect(second).toEqual([CAT]);
+    expect(first).toEqual([catWithNotes]);
+    expect(second).toEqual([catWithNotes]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

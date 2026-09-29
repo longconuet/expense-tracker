@@ -121,6 +121,52 @@ test.describe("Luồng khoản chi: keypad → trang chủ → lịch sử → s
   });
 });
 
+test.describe("Gợi ý ghi chú nhanh theo danh mục (E2E)", () => {
+  test("set gợi ý cho 'Đi lại' → /add chạm chip → lưu → note hiện ở lịch sử; gợi ý giữ khi mở lại", async ({
+    page,
+  }) => {
+    // Arrange
+    await registerAndCreateFamily(page, newAccount());
+
+    // Act — vào /categories, mở modal sửa "Đi lại", thêm 2 gợi ý
+    await page.goto("/categories");
+    await page.getByRole("button", { name: "Sửa danh mục Đi lại" }).click();
+    const noteInput = page.getByPlaceholder("VD: Đổ xăng");
+    await noteInput.fill("Đổ xăng");
+    await noteInput.press("Enter");
+    await noteInput.fill("Đặt xe");
+    await noteInput.press("Enter");
+    await page.getByRole("button", { name: "Lưu thay đổi" }).click();
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+
+    // Assert — mở lại modal → 2 chips vẫn còn (đã lưu)
+    await page.getByRole("button", { name: "Sửa danh mục Đi lại" }).click();
+    await expect(page.getByRole("group", { name: "Gợi ý ghi chú hiện có" })).toContainText("Đổ xăng");
+    await expect(page.getByRole("group", { name: "Gợi ý ghi chú hiện có" })).toContainText("Đặt xe");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog")).not.toBeVisible();
+
+    // Act — /add: chọn "Đi lại" → chip gợi ý hiện → chạm chip "Đổ xăng"
+    await page.goto("/add");
+    await pickCategory(page, "Đi lại");
+    const chip = page.getByRole("button", { name: "Gợi ý ghi chú Đổ xăng" });
+    await expect(chip).toBeVisible();
+    await chip.click();
+    const note = page.getByLabel("Ghi chú (không bắt buộc)");
+    await expect(note).toHaveValue("Đổ xăng");
+
+    // Act — nhập số tiền + lưu
+    await typeKeypad(page, "15000");
+    await page.getByRole("button", { name: "Lưu khoản chi" }).click();
+
+    // Assert — lịch sử hiện note "Đổ xăng" trong nhóm "Hôm nay"
+    await page.goto("/history");
+    const today = page.locator('section[aria-label="Hôm nay"]');
+    await expect(today).toContainText("15.000 ₫");
+    await expect(today).toContainText("Đổ xăng");
+  });
+});
+
 test.describe("Lịch sử: lọc theo thành viên (E2E)", () => {
   test("family 2 thành viên → chip lọc; chọn member → chỉ hiện khoản của người đó", async ({
     browser,
