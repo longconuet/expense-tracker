@@ -19,6 +19,13 @@ export function createApp(): express.Express {
   app.use(express.json());
   app.use(cookieParser());
 
+  // Mọi response API gắn session (cookie/token) — cấm cache từ browser/proxy/CDN
+  // (dữ liệu mỗi family khác nhau; cache nhầm = lộ chi tiêu sang user khác).
+  app.use("/api", (_req, res, next) => {
+    res.set("Cache-Control", "no-store");
+    next();
+  });
+
   app.get("/api/health", (_req, res) => {
     sendOk(res, { status: "ok" });
   });
