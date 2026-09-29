@@ -125,7 +125,7 @@ describe("Quản lý danh mục chi tiêu", () => {
 
     // Assert
     expect(createCategoryMock).toHaveBeenCalledWith("f1", { name: "Tiền nước", icon: "💧" });
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
     // Refetch ngầm sau save OK (đồng bộ read cache)
     expect(fetchCategoriesMock).toHaveBeenCalledTimes(2);
     const rows = await screen.findAllByRole("listitem");
@@ -239,11 +239,12 @@ describe("Quản lý danh mục chi tiêu", () => {
 
     // Assert
     expect(deleteCategoryMock).toHaveBeenCalledWith("f1", "c2");
-    await waitFor(() => expect(screen.queryByText("Tiền điện")).not.toBeInTheDocument());
+    // Dialog vẫn mounted trong pha exit (message chứa "Tiền điện") → chờ đóng hẳn
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
+    expect(screen.queryByText("Tiền điện")).not.toBeInTheDocument();
     // Refetch ngầm sau xoá OK (đồng bộ read cache)
     expect(fetchCategoriesMock).toHaveBeenCalledTimes(2);
     expect(screen.getByText("Ăn uống")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("huy xoá trong dialog → không gọi API", async () => {
@@ -260,7 +261,7 @@ describe("Quản lý danh mục chi tiêu", () => {
     // Assert
     expect(deleteCategoryMock).not.toHaveBeenCalled();
     expect(screen.getByText("Tiền điện")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
   });
 
   it("xoá 409 đang có khoản → dialog đóng + banner lỗi, hàng vẫn còn", async () => {
@@ -279,7 +280,7 @@ describe("Quản lý danh mục chi tiêu", () => {
 
     // Assert
     expect(await screen.findByRole("alert")).toHaveTextContent("Danh mục đang có khoản chi");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
     expect(screen.getByText("Tiền điện")).toBeInTheDocument();
   });
 

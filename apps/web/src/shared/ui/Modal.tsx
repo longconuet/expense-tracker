@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 import { XIcon } from "./icons";
+import { MODAL_EXIT_MS, useDismissTransition } from "./useDismissTransition";
 
 interface ModalProps {
   open: boolean;
@@ -19,10 +20,16 @@ interface ModalProps {
  * `modal-backdrop` định nghĩa tập trung ở index.css, đúng cả light/dark),
  * card dùng token theme (bg-card, rounded-2xl) nên tự đúng light/dark.
  *
+ * Hiệu ứng: mở = fade + scale (`animate-fade-in`/`animate-modal-in`),
+ * đóng = fade + scale ngược — parent chỉ cần đưa `open` về false, Modal
+ * tự giữ mounted trong thời lượng hiệu ứng rồi mới unmount
+ * (`useDismissTransition`).
+ *
  * A11y: role="dialog" + aria-modal, đóng bằng Escape / bấm ra ngoài
  * (trừ khi `disableDismiss`), focus vào dialog khi mở (trả về phần tử
- * trigger khi đóng), focus trap (Tab không thoát), khoá scroll body
- * trong lúc mở.
+ * trigger khi đóng xong hiệu ứng), focus trap (Tab không thoát), khoá
+ * scroll body tới khi đóng xong hiệu ứng. Trong pha đóng, Escape và
+ * click overlay bị bỏ qua (parent đã nhận onClose rồi).
  *
  * PWA iOS: overlay có padding-top safe-area (max(env, 16px) — giữ 16px cũ
  * trên desktop) để mép trên card không chạm dải frosted-glass status bar;
@@ -39,10 +46,20 @@ export function Modal({
 }: ModalProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
+  // `mounted` còn true trong cả pha hiệu ứng đóng → khoá scroll/trả focus
+  // chỉ chạy khi đóng XONG (không giật scroll giữa lúc fade-out).
+  const { mounted, closing } = useDismissTransition(open, MODAL_EXIT_MS);
 
-  // Focus + khoá scroll + khôi phục khi đóng
+  // "Đóng băng" title trong pha hiệu ứng đóng: parent hay đổi title cùng
+  // render với `open` → false (VD form → null → "Sửa…" lật "Thêm…"), không
+  // để title nhảy giữa lúc fade-out.
+  const lastOpenTitleRef = useRef(title);
+  if (open) lastOpenTitleRef.current = title;
+  const displayTitle = open ? title : lastOpenTitleRef.current;
+
+  // Focus + khoá scroll + khôi phục khi unmount (sau khi đóng xong)
   useEffect(() => {
-    if (!open) return;
+    if (!mounted) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
     dialogRef.current?.focus();
     const originalOverflow = document.body.style.overflow;
@@ -51,9 +68,9 @@ export function Modal({
       document.body.style.overflow = originalOverflow;
       previouslyFocused?.focus?.();
     };
-  }, [open]);
+  }, [mounted]);
 
-  // Escape + focus trap
+  // Escape + focus trap — chỉ khi `open` (pha đóng thì bỏ qua input)
   useEffect(() => {
     if (!open) return;
     function handleKeyDown(e: KeyboardEvent) {
@@ -95,24 +112,31 @@ export function Modal({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose, disableDismiss]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return (
     <div
-      className="animate-fade-in fixed inset-0 z-50 flex items-center justify-center modal-backdrop px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center modal-backdrop px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-4 ${
+        closing ? "animate-fade-out" : "animate-fade-in"
+      }`}
       onClick={(e) => {
-        if (!disableDismiss && e.target === e.currentTarget) onClose();
+        // `open` guard: pha đóng parent đã nhận onClose rồi → không gọi lại
+        if (open && !disableDismiss && e.target === e.currentTarget) onClose();
       }}
     >
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
+        aria-labelledby={displayTitle ? titleId : undefined}
         tabIndex={-1}
-        className="animate-modal-in relative max-h-full w-full max-w-sm overflow-y-auto overscroll-contain rounded-2xl bg-card p-5 shadow-lg outline-none"
+        className={`relative max-h-full w-full max-w-sm overflow-y-auto overscroll-contain rounded-2xl bg-card p-5 shadow-lg outline-none ${
+          closing ? "animate-modal-out" : "animate-modal-in"
+        }`}
       >
-        {showClose && (
+        {/* Nút X biến mất trong pha đóng — tránh tái hiện giữa fade-out
+            (VD export modal `showClose={!exporting}`) và chặn onClose lặp. */}
+        {showClose && !closing && (
           <button
             type="button"
             onClick={onClose}
@@ -122,9 +146,9 @@ export function Modal({
             <XIcon className="h-5 w-5" />
           </button>
         )}
-        {title && (
+        {displayTitle && (
           <h2 id={titleId} className="text-base font-semibold text-ink">
-            {title}
+            {displayTitle}
           </h2>
         )}
         {children}

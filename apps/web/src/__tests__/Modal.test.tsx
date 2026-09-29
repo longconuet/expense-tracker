@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Modal } from "../shared/ui/Modal";
 
@@ -79,7 +79,7 @@ describe("Modal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("khoá scroll body khi mở, trả lại khi đóng", () => {
+  it("khoá scroll body khi mở, trả lại khi đóng xong hiệu ứng exit", async () => {
     // Arrange + Act
     const { rerender } = render(
       <Modal open onClose={() => {}} title="Tiêu đề">
@@ -95,8 +95,9 @@ describe("Modal", () => {
       </Modal>,
     );
 
-    // Assert
-    expect(document.body.style.overflow).toBe("");
+    // Assert — trong lúc fade-out vẫn khoá scroll, trả lại sau khi unmount
+    expect(document.body.style.overflow).toBe("hidden");
+    await waitFor(() => expect(document.body.style.overflow).toBe(""), { timeout: 2000 });
   });
 
   it("focus trap: Tab/Shift+Tab wrap trong dialog, kể cả khi focus đang ở container", () => {
@@ -129,7 +130,7 @@ describe("Modal", () => {
     expect(document.activeElement).toBe(b);
   });
 
-  it("trả focus về phần tử trigger khi đóng", () => {
+  it("trả focus về phần tử trigger khi đóng xong hiệu ứng exit", async () => {
     // Arrange — trigger bên ngoài modal
     const { rerender } = render(
       <>
@@ -169,8 +170,55 @@ describe("Modal", () => {
       </>,
     );
 
+    // Assert — focus trả về trigger sau khi đóng xong hiệu ứng
+    await waitFor(() => expect(document.activeElement).toBe(trigger), { timeout: 2000 });
+  });
+
+  it("đóng → áp class exit, giữ mounted trong thời lượng animation rồi unmount", async () => {
+    // Arrange + Act
+    const { rerender } = render(
+      <Modal open onClose={() => {}} title="T">
+        x
+      </Modal>,
+    );
+    expect(screen.getByRole("dialog")).toHaveClass("animate-modal-in");
+
+    // Act
+    rerender(
+      <Modal open={false} onClose={() => {}} title="T">
+        x
+      </Modal>,
+    );
+
+    // Assert — trong pha exit: dialog vẫn mounted + class animate-*-out
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveClass("animate-modal-out");
+    expect(dialog.parentElement).toHaveClass("animate-fade-out");
+
+    // Assert — sau thời lượng animation → unmount hẳn
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
+  });
+
+  it("trong pha đóng → Escape và click overlay không gọi onClose lại", () => {
+    // Arrange — open → false nhưng component vẫn mounted (pha exit)
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <Modal open onClose={onClose} title="T">
+        x
+      </Modal>,
+    );
+    rerender(
+      <Modal open={false} onClose={onClose} title="T">
+        x
+      </Modal>,
+    );
+
+    // Act
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.click(screen.getByRole("dialog").parentElement!);
+
     // Assert
-    expect(document.activeElement).toBe(trigger);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("disableDismiss → Escape + click overlay không gọi onClose", () => {
