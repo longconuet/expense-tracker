@@ -401,7 +401,9 @@ export default function HistoryPage() {
                   <h2 className="text-xs font-semibold tracking-wide text-ink-muted uppercase">
                     {group.label}
                   </h2>
-                  <span className="text-xs font-semibold text-ink-muted">
+                  {/* Tổng ngày màu accent (token primary-text, AA contrast)
+                      — phân biệt với số tiền dòng (text-ink) */}
+                  <span className="text-xs font-semibold text-primary-text">
                     {formatVnd(group.total)}
                   </span>
                 </div>

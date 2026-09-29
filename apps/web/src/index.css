@@ -11,6 +11,10 @@
 @theme {
   --color-primary: #0d9488;
   --color-primary-soft: #ccfbf1;
+  /* Accent text cho chữ nhỏ (text-xs): bản `primary` #0d9488 chỉ đạt 3.7:1
+     trên nền trắng — dưới chuẩn WCAG AA (4.5:1) cho chữ nhỏ. teal-700
+     #0f766e đạt ~5.4:1 trên card/surface trắng, vẫn giữ sắc accent. */
+  --color-primary-text: #0f766e;
   --color-on-primary: #0f172a;
   --color-surface: #f8fafa;
   --color-card: #ffffff;
@@ -103,6 +107,8 @@
 .dark {
   --color-primary: #2dd4bf;
   --color-primary-soft: #134e4a;
+  /* Dark: primary #2dd4bf đã đạt ~7.9:1 trên card #1e293b — dùng chung. */
+  --color-primary-text: #2dd4bf;
   --color-on-primary: #0f172a;
   --color-surface: #0f172a;
   --color-card: #1e293b;
