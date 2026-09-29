@@ -297,6 +297,18 @@ export default function CategoriesPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-ink">{category.name}</p>
+                      {category.noteSuggestions && category.noteSuggestions.length > 0 ? (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {category.noteSuggestions.map((text, index) => (
+                            <span
+                              key={`${index}-${text}`}
+                              className="max-w-full break-words rounded-full border border-border bg-surface px-2 py-0.5 text-xs text-ink-muted"
+                            >
+                              {text}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
                       <button

@@ -246,10 +246,16 @@ export default function AddPage() {
       </div>
 
       <Card className="mt-4">
-        <Input label="Ngày" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        <Input
+          aria-label="Ngày"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          required
+        />
         <div className="mt-4">
           <Input
-            label="Ghi chú (không bắt buộc)"
+            aria-label="Ghi chú (không bắt buộc)"
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value)}

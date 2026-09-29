@@ -80,6 +80,29 @@ describe("Quản lý danh mục chi tiêu", () => {
     expect(within(rows[2]).getByRole("button", { name: "Đưa Khác xuống dưới" })).toBeDisabled();
   });
 
+  it("row danh mục có gợi ý ghi chú → hiện chips; không có gợi ý (null/undefined) → không hiện", async () => {
+    // Arrange — 1 category có gợi ý, 1 null (trạng thái thực tế sau normalize), 1 undefined (payload cũ)
+    const CAT_NOTES = {
+      id: "c9",
+      name: "Đi lại",
+      icon: "🚗",
+      isPreset: false,
+      order: 3,
+      noteSuggestions: ["Đổ xăng", "Đặt xe"],
+    };
+    const CAT_NULL = { ...CAT_ELEC, noteSuggestions: null };
+    fetchCategoriesMock.mockResolvedValue([CAT_NOTES, CAT_FOOD, CAT_NULL]);
+    render(<CategoriesPage />);
+
+    // Assert
+    const rows = await screen.findAllByRole("listitem");
+    expect(within(rows[0]).getByText("Đổ xăng")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("Đặt xe")).toBeInTheDocument();
+    // "Ăn uống" (undefined) + "Tiền điện" (null) — không có chip
+    expect(within(rows[1]).queryByText("Đổ xăng")).not.toBeInTheDocument();
+    expect(within(rows[2]).queryByText("Đổ xăng")).not.toBeInTheDocument();
+  });
+
   it("lần tải đầu hiện skeleton", () => {
     // Arrange + Act
     fetchCategoriesMock.mockReturnValue(new Promise(() => {}));
