@@ -146,6 +146,11 @@ test.describe("Gợi ý ghi chú nhanh theo danh mục (E2E)", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).not.toBeVisible();
 
+    // Assert — gợi ý hiện ngay trên row list (không cần mở modal)
+    const carRow = page.getByRole("listitem").filter({ hasText: "Đi lại" });
+    await expect(carRow.getByText("Đổ xăng")).toBeVisible();
+    await expect(carRow.getByText("Đặt xe")).toBeVisible();
+
     // Act — /add: chọn "Đi lại" → chip gợi ý hiện → chạm chip "Đổ xăng"
     await page.goto("/add");
     await pickCategory(page, "Đi lại");

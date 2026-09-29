@@ -85,6 +85,9 @@ describe("Màn sửa khoản chi", () => {
     );
     expect(screen.getByLabelText("Ngày")).toHaveValue("2026-09-20");
     expect(screen.getByLabelText("Ghi chú (không bắt buộc)")).toHaveValue("xăng");
+    // Text label "Ngày"/"Ghi chú" đã bỏ (tiết kiệm diện tích) — input vẫn tên qua aria-label
+    expect(screen.queryByText("Ngày")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ghi chú (không bắt buộc)")).not.toBeInTheDocument();
   });
 
   it("đổi số tiền qua keypad + danh mục + ngày → updateExpense payload đúng, về lịch sử", async () => {

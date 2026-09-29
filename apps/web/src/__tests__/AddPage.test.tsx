@@ -74,6 +74,19 @@ describe("Màn thêm khoản chi (keypad)", () => {
     expect(await screen.findByText("HOME MARKER")).toBeInTheDocument();
   });
 
+  it("ô Ngày/Ghi chú không còn text label (tiết kiệm diện tích) — vẫn truy cập qua aria-label", async () => {
+    // Arrange
+    renderAdd();
+    await screen.findByRole("button", { name: "Ăn uống" });
+
+    // Assert — aria-label vẫn là tên của input (screen reader + test locator)
+    expect(screen.getByLabelText("Ngày")).toBeInTheDocument();
+    expect(screen.getByLabelText("Ghi chú (không bắt buộc)")).toBeInTheDocument();
+    // Text label đã bỏ khỏi màn hình
+    expect(screen.queryByText("Ngày")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ghi chú (không bắt buộc)")).not.toBeInTheDocument();
+  });
+
   it("nút Lưu disable khi thiếu, sáng lên khi đủ số + danh mục", async () => {
     // Arrange + Act
     renderAdd();

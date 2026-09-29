@@ -214,3 +214,33 @@ interface NoteSuggestionsProps {
   vào Supabase — đúng bẫy incident cột `username` (25/09). Production an toàn (option B:
   release qua PR `develop → main`, Actions migrate trước deploy). Sau khi push develop,
   user tự chạy migrate (lẽ trình bày lúc đó, không tự đụng production).
+
+## 8. Bổ sung 29/09/2026 (lần 2 — sau push `0ad6083`, user yêu cầu thêm)
+
+### 8.1 Hiển thị gợi ý ghi chú trong danh sách danh mục (`/categories`)
+
+- Mỗi row danh mục có `noteSuggestions` không rỗng → hiện hàng chip nhỏ (wrap) dưới tên
+  danh mục, trong `Card` row. Category không có gợi ý → không hiện gì (không chiếm chỗ).
+- Chip chỉ-đọc (không có nút × — xoá làm trong modal sửa), visual thu nhỏ hơn chip modal:
+  `text-xs`, `rounded-full border border-border bg-surface px-2 py-0.5`, `text-ink-muted`,
+  `max-w-full break-words` (gợi ý tối đa 30 ký tự vẫn không tràn Card trên màn 320px — MEDIUM review).
+- Dữ liệu: đọc thẳng từ list `fetchCategories` đã có (không fetch thêm, không đổi API).
+
+### 8.2 Bỏ text label "Ngày" + "Ghi chú (không bắt buộc)" ở màn Tạo/Sửa khoản chi
+
+- Mục đích: tiết kiệm diện tích (mobile — màn /add vốn dày: amount + danh mục + ngày + note + chips + keypad).
+- `Input` bỏ prop `label`, thay bằng **`aria-label` cùng text** ("Ngày", "Ghi chú (không bắt buộc)")
+  — giữ tên cho screen reader; test/E2E dùng `getByLabelText`/`getByLabel` nên tiếp tục khớp.
+- Placeholder giữ nguyên ("VD: cơm trưa cả nhà"); ô date tự hiển thị giá trị → đủ affordance.
+- Không làm với field khác (Tên danh mục, Biểu tượng... vẫn có label).
+
+### 8.3 Test case bổ sung
+
+| # | Case | Kỳ vọng |
+|---|------|---------|
+| 35 | /categories: list có category với `noteSuggestions` | row hiện chip đúng list; category không gợi ý → không có chip |
+| 36 | /add + /edit: ô Ngày + Ghi chú | không có text label "Ngày"/"Ghi chú (không bắt buộc)"; input vẫn lấy đúng bằng `aria-label` |
+
+## 9. Rủi ro / lưu ý deploy (bổ sung lần 2)
+
+- Không đổi schema/API — không migration, không bẫy deploy; push `develop` an toàn.
