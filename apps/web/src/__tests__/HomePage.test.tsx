@@ -137,6 +137,9 @@ describe("Trang chủ", () => {
     // Tiểu kết: hôm nay 30k + 50k = 80.000 ₫; hôm qua 20k + 40k = 60.000 ₫
     expect(screen.getByText("80.000 ₫")).toBeInTheDocument();
     expect(screen.getByText("60.000 ₫")).toBeInTheDocument();
+    // Tiểu kết ngày màu accent primary-text — phân biệt với số tiền dòng (text-ink)
+    expect(screen.getByText("80.000 ₫")).toHaveClass("text-primary-text");
+    expect(screen.getByText("30.000 ₫")).toHaveClass("text-ink");
     // Ngày mới nằm trước
     expect(
       todayHeader.compareDocumentPosition(screen.getByRole("heading", { name: "Hôm qua" })) &

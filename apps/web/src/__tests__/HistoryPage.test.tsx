@@ -141,7 +141,12 @@ describe("Lịch sử chi tiêu", () => {
     // Nhóm theo ngày: "50.000 ₫" hiện 2 lần (dòng khoản + tiểu kết ngày)
     expect(screen.getByRole("heading", { name: "Hôm nay" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Hôm qua" })).toBeInTheDocument();
-    expect(screen.getAllByText("50.000 ₫")).toHaveLength(2);
+    const amounts50k = screen.getAllByText("50.000 ₫");
+    expect(amounts50k).toHaveLength(2);
+    // Tiểu kết ngày (DOM trước) màu accent primary-text — phân biệt với số
+    // tiền dòng (text-ink)
+    expect(amounts50k[0]).toHaveClass("text-primary-text");
+    expect(amounts50k[1]).toHaveClass("text-ink");
     const loadMore = screen.getByRole("button", { name: /Tải thêm \(2\/5\)/ });
     fireEvent.click(loadMore);
 
