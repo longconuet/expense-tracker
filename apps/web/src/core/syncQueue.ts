@@ -109,7 +109,7 @@ async function doFlush(): Promise<{ synced: number }> {
   if (synced > 0) {
     window.dispatchEvent(new Event(SYNCED_EVENT));
     for (const [familyId, t] of touched) {
-      invalidateExpenseCache(familyId, [...t.months], [...t.dates]);
+      await invalidateExpenseCache(familyId, [...t.months], [...t.dates]);
     }
   }
   void useSyncStore.getState().bump();

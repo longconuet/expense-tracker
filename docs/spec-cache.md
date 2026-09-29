@@ -86,7 +86,9 @@ key lạ → không parse được → không bị invalidation chạm (chỉ ch
 - Predicate khớp: key cùng family + resource ∈ {expenses, stats} + (`month` khớp nếu có)
   + (`date` khớp nếu có). List không lọc tháng/ngày (không có `month`/`date` trong key)
   bị xoá bởi mọi mutation khoản của family — đúng vì list đó chắc chắn chứa khoản mới.
-- Fire-and-forget (`void ...`); IDB lỗi → im lặng (consistent với cacheSet).
+- **Await trong mutation** (không fire-and-forget) — đảm bảo cache sạch TRƯỚC KHI
+  mutation trả về, tránh race: fetch fallback (server vừa sập) chạy xen vào
+  giữa lúc đang xoá → trả dữ liệu cũ. Chi phí ~vài ms (store nhỏ).
 
 ### Trạng thái "đang xem dữ liệu lưu"
 

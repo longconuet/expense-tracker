@@ -59,7 +59,7 @@ export async function createCategory(
     method: "POST",
     body: input,
   });
-  invalidateFamilyCache(familyId);
+  await invalidateFamilyCache(familyId);
   return data.category;
 }
 
@@ -73,14 +73,14 @@ export async function updateCategory(
     `/api/families/${familyId}/categories/${categoryId}`,
     { method: "PUT", body: input },
   );
-  invalidateFamilyCache(familyId);
+  await invalidateFamilyCache(familyId);
   return data.category;
 }
 
 /** Xoá danh mục — 409 khi đang có khoản chi (CATEGORY_IN_USE); mọi danh mục (kể cả preset) đều xoá được. */
 export async function deleteCategory(familyId: string, categoryId: string): Promise<void> {
   await apiFetch(`/api/families/${familyId}/categories/${categoryId}`, { method: "DELETE" });
-  invalidateFamilyCache(familyId);
+  await invalidateFamilyCache(familyId);
 }
 
 // ---------------------------------------------------------------------------
@@ -215,7 +215,7 @@ export async function createExpense(input: CreateExpenseInput): Promise<CreateEx
     });
     const expense = data.expense;
     // Server đã nhận khoản — xoá cache list/stats của tháng + ngày đó
-    invalidateExpenseCache(input.familyId, [monthOf(expense.date)], [expense.date]);
+    await invalidateExpenseCache(input.familyId, [monthOf(expense.date)], [expense.date]);
     return { expense, savedOffline: false };
   } catch (err) {
     if (isServerUnavailable(err)) {
@@ -239,7 +239,7 @@ export async function deleteExpense(
   date: string,
 ): Promise<void> {
   await apiFetch(`/api/expenses/${expenseId}`, { method: "DELETE" });
-  invalidateExpenseCache(familyId, [monthOf(date)], [date]);
+  await invalidateExpenseCache(familyId, [monthOf(date)], [date]);
 }
 
 export async function fetchExpense(expenseId: string): Promise<Expense> {
@@ -271,7 +271,7 @@ export async function updateExpense(
     body: input,
   });
   const expense = data.expense;
-  invalidateExpenseCache(
+  await invalidateExpenseCache(
     familyId,
     [monthOf(previousDate), monthOf(expense.date)],
     [previousDate, expense.date],

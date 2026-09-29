@@ -29,11 +29,17 @@ export function parseCacheKey(key: string): ParsedCacheKey | null {
  * - Key KHÔNG có filter month/date (list không lọc) luôn bị xoá — list đó chắc
  *   chắn chứa khoản vừa thay đổi.
  * - `categories` không bị ảnh hưởng bởi mutation khoản chi.
+ * Awaiting phía caller → đảm bảo cache sạch TRƯỚC KHI mutation trả về
+ * (tránh race: fetch fallback chạy xen vào giữa lúc đang xoá).
  */
-export function invalidateExpenseCache(familyId: string, months: string[], dates: string[]): void {
+export async function invalidateExpenseCache(
+  familyId: string,
+  months: string[],
+  dates: string[],
+): Promise<void> {
   const monthSet = new Set(months);
   const dateSet = new Set(dates);
-  void invalidateCache((key) => {
+  await invalidateCache((key) => {
     const parsed = parseCacheKey(key);
     if (!parsed || parsed.familyId !== familyId) return false;
     if (parsed.resource === "categories") return false;
@@ -49,8 +55,8 @@ export function invalidateExpenseCache(familyId: string, months: string[], dates
  * Xoá TOÀN BỘ cache của family (3 resource) — dùng cho CRUD danh mục:
  * tên/icon danh mục được nhúng trong payload list expense + stats.
  */
-export function invalidateFamilyCache(familyId: string): void {
-  void invalidateCache((key) => {
+export async function invalidateFamilyCache(familyId: string): Promise<void> {
+  await invalidateCache((key) => {
     const parsed = parseCacheKey(key);
     return parsed !== null && parsed.familyId === familyId;
   });
