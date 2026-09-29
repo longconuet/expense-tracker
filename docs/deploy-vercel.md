@@ -229,7 +229,15 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 PR (develop → main, hoặc nội bộ develop)
   ├─ CI: lint + unit/integration test (Postgres service trong Actions) + build
   └─ Vercel (qua GitHub integration): tạo PREVIEW deployment cho PR
-       (preview dùng env scope Preview — trỏ cùng Supabase cũng được)
+       (preview dùng env scope Preview — trỏ cùng Supabase cũng được;
+        preview PR KHÔNG tự migrate — migration chưa review không chạm
+        DB production, cần migrate thì chạy tay)
+
+Push vào develop
+  └─ ci.yml: test → prisma migrate deploy (Supabase) — preview Vercel
+     không còn 500 chờ migrate tay (idempotent, no-op nếu không migration mới)
+     ⚠ DB preview = DB production (chung 1 Supabase) → migration develop
+     phải backward-compatible (additive); migration phá huỷ staging qua PR main
 
 Push vào main (sau khi merge PR — theo git flow của repo)
   └─ deploy.yml: test → prisma migrate deploy (Supabase) → vercel deploy --prod
@@ -237,7 +245,7 @@ Push vào main (sau khi merge PR — theo git flow của repo)
 
 - Mỗi job `needs` job trước — **migrations luôn xong trước khi code mới serve traffic**.
 - `concurrency: deploy-production` + `cancel-in-progress: false` — 2 deploy không chạy song song.
-- CI chạy trên `pull_request` + push `develop`/`main`; CD chỉ chạy trên `main`.
+- CI chạy trên `pull_request` + push `develop`/`main`; job migrate (ci.yml) chỉ chạy khi push `develop` (idempotent); CD chỉ chạy trên `main`.
 
 ### 4.3. Bật preview qua Vercel GitHub integration (tuỳ chọn nhưng nên bật)
 
