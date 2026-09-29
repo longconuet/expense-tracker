@@ -2,12 +2,12 @@ import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { ApiError } from "../../core/api";
 import { useAuthStore } from "../../core/authStore";
+import { validateFamilyName, validateInviteCode } from "../../core/familyForm";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
 import { Input } from "../../shared/ui/Input";
 import { AuthLayout } from "./AuthLayout";
 
-const INVITE_CODE_PATTERN = /^[A-HJ-MN-Z2-9]{6}$/;
 const FALLBACK_ERROR = "Có lỗi xảy ra, vui lòng thử lại.";
 
 function errorMessage(err: unknown): string {
@@ -38,8 +38,9 @@ export default function OnboardingPage() {
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
     setNameError(null);
-    if (familyName.trim().length < 2) {
-      setNameError("Tên gia đình phải có ít nhất 2 ký tự.");
+    const nameErr = validateFamilyName(familyName);
+    if (nameErr) {
+      setNameError(nameErr);
       return;
     }
     setSubmitting("create");
@@ -56,8 +57,9 @@ export default function OnboardingPage() {
   async function handleJoin(event: FormEvent) {
     event.preventDefault();
     setCodeError(null);
-    if (!INVITE_CODE_PATTERN.test(code)) {
-      setCodeError("Mã mời phải gồm 6 ký tự chữ/số (không có số 0, 1 và chữ I, O).");
+    const codeErr = validateInviteCode(code);
+    if (codeErr) {
+      setCodeError(codeErr);
       return;
     }
     setSubmitting("join");

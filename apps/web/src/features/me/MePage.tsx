@@ -35,6 +35,8 @@ export default function MePage() {
   const families = useAuthStore((s) => s.families);
   const activeFamilyId = useAuthStore((s) => s.activeFamilyId);
   const setActiveFamily = useAuthStore((s) => s.setActiveFamily);
+  const createFamily = useAuthStore((s) => s.createFamily);
+  const joinFamily = useAuthStore((s) => s.joinFamily);
   const logout = useAuthStore((s) => s.logout);
 
   const theme = useThemeStore((s) => s.theme);
@@ -53,6 +55,21 @@ export default function MePage() {
   function handleSelectFamily(id: string) {
     setActiveFamily(id);
     setSwitcherOpen(false);
+  }
+
+  // Tạo/join family thêm: store tự append + set activeFamilyId về family mới.
+  // Thành công → đóng dialog + về trang chủ (khớp hành vi onboarding).
+  // Lỗi throw lên FamilySwitcher hiển thị trong form.
+  async function handleCreateFamily(name: string) {
+    await createFamily(name);
+    setSwitcherOpen(false);
+    navigate("/", { replace: true });
+  }
+
+  async function handleJoinFamily(code: string) {
+    await joinFamily(code);
+    setSwitcherOpen(false);
+    navigate("/", { replace: true });
   }
 
   async function handleCopyCode() {
@@ -184,6 +201,8 @@ export default function MePage() {
           activeFamilyId={activeFamily.id}
           onSelect={handleSelectFamily}
           onClose={() => setSwitcherOpen(false)}
+          onCreateFamily={handleCreateFamily}
+          onJoinFamily={handleJoinFamily}
         />
       )}
 

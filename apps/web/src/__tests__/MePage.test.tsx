@@ -9,6 +9,7 @@ vi.mock("../core/swUpdate", () => ({
 }));
 
 import { applySwUpdate, hasPendingUpdate } from "../core/swUpdate";
+import { ApiError } from "../core/api";
 import { useAuthStore } from "../core/authStore";
 import { useThemeStore } from "../core/themeStore";
 import MePage from "../features/me/MePage";
@@ -25,12 +26,21 @@ const FAMILY = {
   memberCount: 2,
   myRole: "OWNER",
 } as const;
+const FAMILY_NEW = {
+  id: "f2",
+  name: "Nhà Mới",
+  inviteCode: "NEW123",
+  ownerName: "An",
+  memberCount: 1,
+  myRole: "OWNER",
+} as const;
 
 function renderMe() {
   return render(
     <MemoryRouter initialEntries={["/me"]}>
       <Routes>
         <Route path="/me" element={<MePage />} />
+        <Route path="/" element={<div>HOME MARKER</div>} />
         <Route path="/login" element={<div>LOGIN MARKER</div>} />
         <Route path="/categories" element={<div>CATEGORIES MARKER</div>} />
       </Routes>
@@ -240,5 +250,77 @@ describe("Màn Tôi", () => {
 
     // Assert
     expect(await screen.findByText("CATEGORIES MARKER")).toBeInTheDocument();
+  });
+
+  describe("tạo/join family thêm từ dialog", () => {
+    it("mở switcher → hiện cả 2 nút action", () => {
+      // Arrange + Act
+      renderMe();
+      fireEvent.click(screen.getByRole("button", { name: /Đổi gia đình/ }));
+
+      // Assert
+      expect(screen.getByRole("button", { name: /Tạo gia đình mới/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Join bằng mã mời/ })).toBeInTheDocument();
+    });
+
+    it("luồng create full: nhập tên → submit → createFamily được gọi, dialog đóng, về /", async () => {
+      // Arrange
+      const createFamilyMock = vi.fn(async () => FAMILY_NEW);
+      useAuthStore.setState({ createFamily: createFamilyMock });
+      renderMe();
+      fireEvent.click(screen.getByRole("button", { name: /Đổi gia đình/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Tạo gia đình mới/ }));
+      fireEvent.change(screen.getByLabelText("Tên gia đình"), { target: { value: "  Nhà Mới  " } });
+
+      // Act
+      fireEvent.click(screen.getByRole("button", { name: "Tạo gia đình" }));
+
+      // Assert
+      expect(await screen.findByText("HOME MARKER")).toBeInTheDocument();
+      expect(createFamilyMock).toHaveBeenCalledTimes(1);
+      expect(createFamilyMock).toHaveBeenCalledWith("Nhà Mới");
+      expect(screen.queryByRole("dialog", { name: "Đổi gia đình" })).not.toBeInTheDocument();
+    });
+
+    it("luồng join full: nhập mã → submit → joinFamily được gọi, dialog đóng, về /", async () => {
+      // Arrange
+      const joinFamilyMock = vi.fn(async () => FAMILY_NEW);
+      useAuthStore.setState({ joinFamily: joinFamilyMock });
+      renderMe();
+      fireEvent.click(screen.getByRole("button", { name: /Đổi gia đình/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Join bằng mã mời/ }));
+      fireEvent.change(screen.getByLabelText("Mã mời"), { target: { value: "abc234" } });
+
+      // Act
+      fireEvent.click(screen.getByRole("button", { name: "Tham gia" }));
+
+      // Assert
+      expect(await screen.findByText("HOME MARKER")).toBeInTheDocument();
+      expect(joinFamilyMock).toHaveBeenCalledTimes(1);
+      expect(joinFamilyMock).toHaveBeenCalledWith("ABC234");
+      expect(screen.queryByRole("dialog", { name: "Đổi gia đình" })).not.toBeInTheDocument();
+    });
+
+    it("store action reject → dialog vẫn mở + hiện lỗi trong form", async () => {
+      // Arrange
+      const joinFamilyMock = vi.fn(async () => {
+        throw new ApiError("ALREADY_MEMBER", "Bạn đã là thành viên gia đình này.", 409);
+      });
+      useAuthStore.setState({ joinFamily: joinFamilyMock });
+      renderMe();
+      fireEvent.click(screen.getByRole("button", { name: /Đổi gia đình/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Join bằng mã mời/ }));
+      fireEvent.change(screen.getByLabelText("Mã mời"), { target: { value: "ABC234" } });
+
+      // Act
+      fireEvent.click(screen.getByRole("button", { name: "Tham gia" }));
+
+      // Assert — dialog vẫn mở (aria-label theo view khi ở form join), lỗi hiển thị, không navigate
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Bạn đã là thành viên gia đình này.",
+      );
+      expect(screen.getByRole("dialog", { name: "Join bằng mã mời" })).toBeInTheDocument();
+      expect(screen.queryByText("HOME MARKER")).not.toBeInTheDocument();
+    });
   });
 });
