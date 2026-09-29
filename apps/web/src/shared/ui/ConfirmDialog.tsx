@@ -1,5 +1,17 @@
+import { useRef } from "react";
 import { Button } from "./Button";
 import { Modal } from "./Modal";
+
+/**
+ * Parent hay xoá nội dung (VD `deleteTarget` → null) CÙNG render với
+ * `open` → false; nếu để vậy thì message trống trắng ngay giữa hiệu ứng
+ * đóng. Giữ giá trị non-empty cuối để exit animation mượt.
+ */
+function useLastNonEmpty(value: string): string {
+  const lastRef = useRef(value);
+  if (value.trim() !== "") lastRef.current = value;
+  return lastRef.current;
+}
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -30,9 +42,12 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const displayTitle = useLastNonEmpty(title);
+  const displayMessage = useLastNonEmpty(message);
+
   return (
-    <Modal open={open} onClose={onCancel} title={title} disableDismiss={loading}>
-      <p className="mt-1 text-sm text-ink-muted">{message}</p>
+    <Modal open={open} onClose={onCancel} title={displayTitle} disableDismiss={loading}>
+      <p className="mt-1 text-sm text-ink-muted">{displayMessage}</p>
       <div className="mt-4 flex gap-2">
         <Button variant="secondary" className="flex-1" onClick={onCancel} disabled={loading}>
           {cancelLabel}

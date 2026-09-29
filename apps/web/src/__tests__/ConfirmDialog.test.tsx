@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialog } from "../shared/ui/ConfirmDialog";
 
@@ -79,5 +79,22 @@ describe("ConfirmDialog", () => {
     // Assert
     expect(screen.getByRole("button", { name: "Xoá" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Huỷ" })).toBeDisabled();
+  });
+
+  it("đóng + parent xoá message cùng lúc → giữ message cũ trong lúc exit (không blink trắng)", async () => {
+    // Arrange + Act
+    const { rerender } = render(
+      <ConfirmDialog open title="Xoá khoản chi" message='Xoá khoản "cơm trưa"?' confirmLabel="Xoá" onConfirm={() => {}} onCancel={() => {}} />,
+    );
+    expect(screen.getByText('Xoá khoản "cơm trưa"?')).toBeInTheDocument();
+
+    // Act — đóng + message rỗng (mô phỏng deleteTarget → null cùng render)
+    rerender(
+      <ConfirmDialog open={false} title="Xoá khoản chi" message="" confirmLabel="Xoá" onConfirm={() => {}} onCancel={() => {}} />,
+    );
+
+    // Assert — message cũ vẫn hiển thị trong pha exit, dialog unmount sau đó
+    expect(screen.getByText('Xoá khoản "cơm trưa"?')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
   });
 });

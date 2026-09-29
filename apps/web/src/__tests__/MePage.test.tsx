@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -96,7 +96,7 @@ describe("Màn Tôi", () => {
     expect(screen.getByText("Chủ gia đình")).toBeInTheDocument();
   });
 
-  it("bấm card family → mở dialog đổi gia đình; chọn family khác → setActiveFamily + đóng dialog", () => {
+  it("bấm card family → mở dialog đổi gia đình; chọn family khác → setActiveFamily + đóng dialog", async () => {
     // Arrange — user thuộc 2 family (đổi family giờ chỉ ở tab Tôi, không còn ở header)
     const FAMILY_2 = {
       id: "f2",
@@ -114,9 +114,12 @@ describe("Màn Tôi", () => {
     expect(screen.getByRole("dialog", { name: "Đổi gia đình" })).toBeInTheDocument();
     fireEvent.click(screen.getByText("Công ty X").closest("button")!);
 
-    // Assert — active family đổi, dialog đóng, card trỏ về family mới
+    // Assert — active family đổi, dialog đóng xong hiệu ứng, card trỏ về family mới
     expect(useAuthStore.getState().activeFamilyId).toBe(FAMILY_2.id);
-    expect(screen.queryByRole("dialog", { name: "Đổi gia đình" })).not.toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.queryByRole("dialog", { name: "Đổi gia đình" })).not.toBeInTheDocument(),
+      { timeout: 2000 },
+    );
     expect(
       screen.getByRole("button", { name: /Đổi gia đình \(đang ở Công ty X/ }),
     ).toBeInTheDocument();
@@ -240,7 +243,7 @@ describe("Màn Tôi", () => {
     // Assert
     expect(logoutMock).not.toHaveBeenCalled();
     expect(screen.queryByText("LOGIN MARKER")).not.toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
   });
 
   it("hàng 'Danh mục chi tiêu' → điều hướng /categories", async () => {

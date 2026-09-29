@@ -29,6 +29,7 @@ describe("shared/ui/FamilySwitcher", () => {
     // Arrange + Act
     render(
       <FamilySwitcher
+        open
         families={[FAMILY_A, FAMILY_B]}
         activeFamilyId={FAMILY_A.id}
         onSelect={vi.fn()}
@@ -50,6 +51,7 @@ describe("shared/ui/FamilySwitcher", () => {
     const onSelect = vi.fn();
     render(
       <FamilySwitcher
+        open
         families={[FAMILY_A, FAMILY_B]}
         activeFamilyId={FAMILY_A.id}
         onSelect={onSelect}
@@ -70,6 +72,7 @@ describe("shared/ui/FamilySwitcher", () => {
     const onClose = vi.fn();
     render(
       <FamilySwitcher
+        open
         families={[FAMILY_A, FAMILY_B]}
         activeFamilyId={FAMILY_A.id}
         onSelect={vi.fn()}
@@ -89,6 +92,7 @@ describe("shared/ui/FamilySwitcher", () => {
     const onClose = vi.fn();
     render(
       <FamilySwitcher
+        open
         families={[FAMILY_A, FAMILY_B]}
         activeFamilyId={FAMILY_A.id}
         onSelect={vi.fn()}
@@ -110,11 +114,134 @@ describe("shared/ui/FamilySwitcher", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("open=false → không render gì", () => {
+    // Arrange + Act
+    render(
+      <FamilySwitcher
+        open={false}
+        families={[FAMILY_A]}
+        activeFamilyId={FAMILY_A.id}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Assert
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("đóng (open → false) → sheet trượt xuống rồi unmount sau hiệu ứng", async () => {
+    // Arrange + Act
+    const { rerender } = render(
+      <FamilySwitcher
+        open
+        families={[FAMILY_A]}
+        activeFamilyId={FAMILY_A.id}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("dialog", { name: "Đổi gia đình" })).toHaveClass("animate-sheet-in");
+
+    // Act
+    rerender(
+      <FamilySwitcher
+        open={false}
+        families={[FAMILY_A]}
+        activeFamilyId={FAMILY_A.id}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    // Assert — trong pha exit: sheet class animate-sheet-out, vẫn mounted
+    expect(screen.getByRole("dialog", { name: "Đổi gia đình" })).toHaveClass("animate-sheet-out");
+
+    // Assert — sau thời lượng animation → unmount hẳn
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
+  });
+
+  it("trong pha đóng → click backdrop + nút X không gọi onClose lại", () => {
+    // Arrange
+    const onClose = vi.fn();
+    const { rerender } = render(
+      <FamilySwitcher
+        open
+        families={[FAMILY_A]}
+        activeFamilyId={FAMILY_A.id}
+        onSelect={vi.fn()}
+        onClose={onClose}
+      />,
+    );
+    rerender(
+      <FamilySwitcher
+        open={false}
+        families={[FAMILY_A]}
+        activeFamilyId={FAMILY_A.id}
+        onSelect={vi.fn()}
+        onClose={onClose}
+      />,
+    );
+
+    // Act
+    fireEvent.click(screen.getByRole("dialog", { name: "Đổi gia đình" }).parentElement!);
+    fireEvent.click(screen.getByLabelText("Đóng"));
+
+    // Assert
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("mở lại sau khi đóng → reset về view list, không sót form cũ", async () => {
+    // Arrange — mở, vào view create, điền tên
+    const { rerender } = render(
+      <FamilySwitcher
+        open
+        families={[FAMILY_A]}
+        activeFamilyId={FAMILY_A.id}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        onCreateFamily={vi.fn(async () => undefined)}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Tạo gia đình mới/ }));
+    fireEvent.change(screen.getByLabelText("Tên gia đình"), { target: { value: "Nhà Cũ" } });
+    expect(screen.getByLabelText("Tên gia đình")).toHaveValue("Nhà Cũ");
+
+    // Act — đóng (chờ exit xong), rồi mở lại
+    rerender(
+      <FamilySwitcher
+        open={false}
+        families={[FAMILY_A]}
+        activeFamilyId={FAMILY_A.id}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        onCreateFamily={vi.fn(async () => undefined)}
+      />,
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
+    rerender(
+      <FamilySwitcher
+        open
+        families={[FAMILY_A]}
+        activeFamilyId={FAMILY_A.id}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+        onCreateFamily={vi.fn(async () => undefined)}
+      />,
+    );
+
+    // Assert — về view list, form cũ không còn (kể cả input đã điền)
+    expect(screen.getByRole("dialog", { name: "Đổi gia đình" })).toBeInTheDocument();
+    expect(screen.getByText("Nhà An")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Tên gia đình")).not.toBeInTheDocument();
+  });
+
   describe("tạo/join family thêm (callback optional)", () => {
     it("không truyền callback → không hiện 2 nút action", () => {
       // Arrange + Act
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}
@@ -131,6 +258,7 @@ describe("shared/ui/FamilySwitcher", () => {
       // Arrange + Act
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}
@@ -150,6 +278,7 @@ describe("shared/ui/FamilySwitcher", () => {
       const onCreateFamily = vi.fn(async () => undefined);
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}
@@ -189,6 +318,7 @@ describe("shared/ui/FamilySwitcher", () => {
       );
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}
@@ -221,6 +351,7 @@ describe("shared/ui/FamilySwitcher", () => {
       });
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}
@@ -247,6 +378,7 @@ describe("shared/ui/FamilySwitcher", () => {
       });
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}
@@ -271,6 +403,7 @@ describe("shared/ui/FamilySwitcher", () => {
       const onJoinFamily = vi.fn(async () => undefined);
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}
@@ -296,6 +429,7 @@ describe("shared/ui/FamilySwitcher", () => {
       const onJoinFamily = vi.fn(async () => undefined);
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}
@@ -321,6 +455,7 @@ describe("shared/ui/FamilySwitcher", () => {
       const onJoinFamily = vi.fn(async () => undefined);
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}
@@ -346,6 +481,7 @@ describe("shared/ui/FamilySwitcher", () => {
       });
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}
@@ -369,6 +505,7 @@ describe("shared/ui/FamilySwitcher", () => {
       // Arrange
       render(
         <FamilySwitcher
+          open
           families={[FAMILY_A, FAMILY_B]}
           activeFamilyId={FAMILY_A.id}
           onSelect={vi.fn()}

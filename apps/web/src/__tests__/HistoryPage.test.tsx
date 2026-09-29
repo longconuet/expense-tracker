@@ -436,11 +436,12 @@ describe("Lịch sử chi tiêu", () => {
     expect(screen.getByText(/Xoá khoản "cơm trưa" \(50.000 ₫\)/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Xoá" }));
 
-    // Assert
+    // Assert — "cơm trưa" cũng nằm trong message dialog (vẫn mounted trong
+    // pha exit) → chờ dialog đóng hẳn rồi mới khẳng định list đã sạch
     expect(deleteExpenseMock).toHaveBeenCalledWith("e1", FAMILY.id, today());
     expect(await screen.findByText("xăng")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
     expect(screen.queryByText("cơm trưa")).not.toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("huy xác nhận xoá trong dialog → không gọi API", async () => {
@@ -460,7 +461,7 @@ describe("Lịch sử chi tiêu", () => {
     // Assert
     expect(deleteExpenseMock).not.toHaveBeenCalled();
     expect(screen.getByText("cơm trưa")).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
   });
 
   it("xoá khoản API fail → dialog đóng + hiện lỗi trên màn, khoản vẫn còn", async () => {
@@ -480,7 +481,7 @@ describe("Lịch sử chi tiêu", () => {
 
     // Assert
     expect(await screen.findByRole("alert")).toHaveTextContent("Xoá không thành công.");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
     expect(screen.getByText("cơm trưa")).toBeInTheDocument();
   });
 
@@ -500,7 +501,7 @@ describe("Lịch sử chi tiêu", () => {
 
     // Assert
     expect(deleteExpenseMock).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
   });
 
   it("chạm khoản (owner) → điều hướng sang màn sửa /expenses/:id/edit", async () => {
@@ -640,7 +641,7 @@ describe("Lịch sử chi tiêu", () => {
       );
     });
     expect(vi.mocked(URL.createObjectURL)).toHaveBeenCalledWith(exportBlob);
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
   });
 
   it("export thất bại → hiện lỗi trong modal, modal không đóng", async () => {

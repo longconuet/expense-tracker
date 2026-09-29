@@ -220,8 +220,8 @@ describe("Thống kê", () => {
     // Act — đóng popup
     fireEvent.click(screen.getByRole("button", { name: "Đóng" }));
 
-    // Assert
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Assert — chờ đóng xong hiệu ứng exit
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
   });
 
   it("đổi tháng khi đang mở popup → đóng popup (ngày cũ không thuộc view)", async () => {
@@ -236,8 +236,8 @@ describe("Thống kê", () => {
     // Act
     fireEvent.click(screen.getByRole("button", { name: "Tháng trước" }));
 
-    // Assert
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    // Assert — chờ đóng xong hiệu ứng exit
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument(), { timeout: 2000 });
   });
 
   it("tải lần đầu → skeleton (không spinner), selector tháng vẫn hoạt động", async () => {

@@ -21,6 +21,14 @@
 
   --animate-fade-in: fade-in 0.15s ease-out;
   --animate-modal-in: modal-in 0.15s ease-out;
+  /* Hiệu ứng đóng (exit) — `forwards` giữ trạng thái cuối (opacity 0) tới
+     khi component unmount xong (thời điểm do JS điều khiển, khớp thời lượng
+     MODAL_EXIT_MS / SHEET_EXIT_MS trong useDismissTransition.ts). */
+  --animate-fade-out: fade-out 0.15s ease-in forwards;
+  --animate-modal-out: modal-out 0.15s ease-in forwards;
+  /* Bottom sheet trượt lên từ đáy / trượt xuống khi đóng. */
+  --animate-sheet-in: sheet-in 0.2s cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-sheet-out: sheet-out 0.18s ease-in forwards;
 
   @keyframes fade-in {
     from {
@@ -39,6 +47,56 @@
       opacity: 1;
       transform: none;
     }
+  }
+  @keyframes fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+  @keyframes modal-out {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.96) translateY(8px);
+    }
+  }
+  @keyframes sheet-in {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: none;
+    }
+  }
+  @keyframes sheet-out {
+    from {
+      transform: none;
+    }
+    to {
+      transform: translateY(100%);
+    }
+  }
+}
+
+/*
+ * Tôn trọng prefers-reduced-motion: bỏ toàn bộ animation mở/đóng dialog.
+ * Timer unmount phía JS vẫn chờ đủ thời lượng — element chỉ hiện tĩnh thêm
+ * ~150–180ms trước khi biến mất (không có chuyển động).
+ */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-fade-out,
+  .animate-modal-in,
+  .animate-modal-out,
+  .animate-sheet-in,
+  .animate-sheet-out {
+    animation: none;
   }
 }
 

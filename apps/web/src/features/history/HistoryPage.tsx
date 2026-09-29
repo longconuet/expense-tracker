@@ -458,18 +458,25 @@ export default function HistoryPage() {
         </>
       )}
 
-      {deleteTarget && (
-        <ConfirmDialog
-          open
-          title="Xoá khoản chi"
-          message={`Xoá khoản "${deleteTarget.note || deleteTarget.category.name}" (${formatVnd(deleteTarget.amount)})?`}
-          confirmLabel="Xoá"
-          danger
-          loading={deletingId === deleteTarget.id}
-          onConfirm={() => handleDelete(deleteTarget)}
-          onCancel={() => setDeleteTarget(null)}
-        />
-      )}
+      {/* Always-mounted + `open`: ConfirmDialog chạy được hiệu ứng đóng;
+          message "" khi deleteTarget=null bị ConfirmDialog "đóng băng"
+          ở giá trị cuối trong lúc exit. */}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Xoá khoản chi"
+        message={
+          deleteTarget
+            ? `Xoá khoản "${deleteTarget.note || deleteTarget.category.name}" (${formatVnd(deleteTarget.amount)})?`
+            : ""
+        }
+        confirmLabel="Xoá"
+        danger
+        loading={deleteTarget !== null && deletingId === deleteTarget.id}
+        onConfirm={() => {
+          if (deleteTarget) handleDelete(deleteTarget);
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
 
       <Modal
         open={exportOpen}

@@ -195,8 +195,9 @@ export default function MePage() {
         </Card>
       )}
 
-      {activeFamily && switcherOpen && (
+      {activeFamily && (
         <FamilySwitcher
+          open={switcherOpen}
           families={families}
           activeFamilyId={activeFamily.id}
           onSelect={handleSelectFamily}

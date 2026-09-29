@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import type { Family } from "@expense-tracker/shared";
 import { ApiError } from "../../core/api";
 import { validateFamilyName, validateInviteCode } from "../../core/familyForm";
@@ -6,6 +6,7 @@ import { Button } from "./Button";
 import { Input } from "./Input";
 import { RoleBadge } from "./RoleBadge";
 import { ChevronLeftIcon, PlusIcon, UsersIcon, XIcon } from "./icons";
+import { SHEET_EXIT_MS, useDismissTransition } from "./useDismissTransition";
 
 type SwitcherView = "list" | "create" | "join";
 
@@ -24,9 +25,15 @@ function errorMessage(err: unknown): string {
  * - `join`: nhập mã mời → `onJoinFamily(code)`
  * Thành công/lỗi do parent xử lý (callback resolve → parent đóng dialog;
  * reject → component hiện message trong form).
+ *
+ * Hiệu ứng: slide-up khi mở (`animate-sheet-in`), slide-down khi đóng
+ * (`animate-sheet-out`). Parent giữ render liên tục + truyền `open`;
+ * component tự unmount sau khi đóng xong (`useDismissTransition`).
+ *
  * UI primitive thuần — không inject service, không gọi HTTP.
  */
 export function FamilySwitcher({
+  open,
   families,
   activeFamilyId,
   onSelect,
@@ -34,6 +41,8 @@ export function FamilySwitcher({
   onCreateFamily,
   onJoinFamily,
 }: {
+  /** Mount/đóng do parent điều khiển (true = đang mở). */
+  open: boolean;
   families: Family[];
   activeFamilyId: string;
   onSelect: (id: string) => void;
@@ -44,11 +53,36 @@ export function FamilySwitcher({
   onJoinFamily?: (code: string) => Promise<void>;
 }) {
   const [view, setView] = useState<SwitcherView>("list");
+  const { mounted, closing } = useDismissTransition(open, SHEET_EXIT_MS);
+
   const [familyName, setFamilyName] = useState("");
   const [code, setCode] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Component luôn mounted (để chạy hiệu ứng đóng) → state form/view có thể
+  // sót qua chu kỳ đóng→mở (trước đây parent unmount nên mở lại luôn "mới").
+  // Reset NGAY trong render (pattern derive-state) thay vì useEffect — để
+  // không flash 1 frame form cũ khi sheet vừa trượt lên.
+  const prevOpenRef = useRef(open);
+  if (prevOpenRef.current !== open) {
+    const wasOpen = prevOpenRef.current;
+    prevOpenRef.current = open;
+    if (open && !wasOpen) {
+      setView("list");
+      setFamilyName("");
+      setCode("");
+      setNameError(null);
+      setCodeError(null);
+      setSubmitting(false);
+    }
+  }
+
+  // Pha đóng: parent đã nhận onClose rồi → bỏ qua mọi thao tác đóng lặp lại
+  function handleClose() {
+    if (open) onClose();
+  }
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -97,15 +131,21 @@ export function FamilySwitcher({
   const dialogLabel =
     view === "create" ? "Tạo gia đình mới" : view === "join" ? "Join bằng mã mời" : "Đổi gia đình";
 
+  if (!mounted) return null;
+
   return (
     <div
-      className="fixed inset-0 z-20 flex items-end justify-center modal-backdrop"
-      onClick={onClose}
+      className={`fixed inset-0 z-20 flex items-end justify-center modal-backdrop ${
+        closing ? "animate-fade-out" : "animate-fade-in"
+      }`}
+      onClick={handleClose}
     >
       <div
         role="dialog"
         aria-label={dialogLabel}
-        className="w-full max-w-md rounded-t-2xl bg-card p-5"
+        className={`w-full max-w-md rounded-t-2xl bg-card p-5 ${
+          closing ? "animate-sheet-out" : "animate-sheet-in"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         {view === "list" && (
@@ -113,7 +153,7 @@ export function FamilySwitcher({
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-ink">Đổi gia đình</h2>
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 aria-label="Đóng"
                 className="rounded-lg p-1.5 text-ink-muted transition hover:bg-ink/5"
               >
@@ -174,7 +214,7 @@ export function FamilySwitcher({
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-ink">Tạo gia đình mới</h2>
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 aria-label="Đóng"
                 className="rounded-lg p-1.5 text-ink-muted transition hover:bg-ink/5"
               >
@@ -221,7 +261,7 @@ export function FamilySwitcher({
             <div className="flex items-center justify-between">
               <h2 className="font-semibold text-ink">Join bằng mã mời</h2>
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 aria-label="Đóng"
                 className="rounded-lg p-1.5 text-ink-muted transition hover:bg-ink/5"
               >
