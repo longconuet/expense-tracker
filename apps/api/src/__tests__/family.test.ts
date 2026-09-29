@@ -112,6 +112,54 @@ describe("POST /api/families/join — vào bằng mã mời", () => {
   });
 });
 
+describe("Multi-family — user thuộc nhiều family", () => {
+  it("user đã có 1 family tạo được family thứ 2 (/me trả 2 family)", async () => {
+    const actor = await registerActor("Chủ K", "fam_k_owner");
+    const first = await createFamily(actor, "Gia Đình K");
+
+    const res = await request(app)
+      .post("/api/families")
+      .set("Authorization", `Bearer ${actor.token}`)
+      .send({ name: "Gia Đình K2" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.family.id).not.toBe(first.id);
+    expect(res.body.data.family.myRole).toBe("OWNER");
+
+    const me = await request(app)
+      .get("/api/me")
+      .set("Authorization", `Bearer ${actor.token}`);
+    expect(me.body.data.families).toHaveLength(2);
+  });
+
+  it("user join được family thứ 2 bằng mã khác (/me trả 2 family)", async () => {
+    const ownerA = await registerActor("Chủ L1", "fam_l1_owner");
+    const ownerB = await registerActor("Chủ L2", "fam_l2_owner");
+    const familyA = await createFamily(ownerA, "Gia Đình L1");
+    const familyB = await createFamily(ownerB, "Gia Đình L2");
+
+    const member = await registerActor("Thành Viên L", "fam_l_member");
+    await request(app)
+      .post("/api/families/join")
+      .set("Authorization", `Bearer ${member.token}`)
+      .send({ code: familyA.inviteCode });
+
+    const res = await request(app)
+      .post("/api/families/join")
+      .set("Authorization", `Bearer ${member.token}`)
+      .send({ code: familyB.inviteCode });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.family.id).toBe(familyB.id);
+    expect(res.body.data.family.myRole).toBe("MEMBER");
+
+    const me = await request(app)
+      .get("/api/me")
+      .set("Authorization", `Bearer ${member.token}`);
+    expect(me.body.data.families).toHaveLength(2);
+  });
+});
+
 describe("GET /api/families/:id — chi tiết family", () => {
   it("thành viên xem được family + danh sách thành viên", async () => {
     const owner = await registerActor("Chủ D", "fam_d_owner");

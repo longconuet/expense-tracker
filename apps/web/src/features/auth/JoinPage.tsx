@@ -2,12 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError } from "../../core/api";
 import { useAuthStore } from "../../core/authStore";
+import { validateInviteCode } from "../../core/familyForm";
 import { Button } from "../../shared/ui/Button";
 import { Input } from "../../shared/ui/Input";
 import { AuthLayout, FormError } from "./AuthLayout";
-
-// Alphabet mã mời: ABCDEFGHJKLMNPQRSTUVWXYZ23456789 (không có 0, 1, I, O)
-const INVITE_CODE_PATTERN = /^[A-HJ-MN-Z2-9]{6}$/;
 
 export default function JoinPage() {
   const [code, setCode] = useState("");
@@ -27,8 +25,9 @@ export default function JoinPage() {
     event.preventDefault();
     setError(null);
 
-    if (!INVITE_CODE_PATTERN.test(code)) {
-      setError("Mã mời phải gồm 6 ký tự chữ/số (không có số 0, 1 và chữ I, O).");
+    const codeErr = validateInviteCode(code);
+    if (codeErr) {
+      setError(codeErr);
       return;
     }
 

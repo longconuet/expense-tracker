@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../core/api";
 import { FamilySwitcher } from "../shared/ui/FamilySwitcher";
 
 const FAMILY_A = {
@@ -107,5 +108,293 @@ describe("shared/ui/FamilySwitcher", () => {
 
     // Assert
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  describe("tạo/join family thêm (callback optional)", () => {
+    it("không truyền callback → không hiện 2 nút action", () => {
+      // Arrange + Act
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+        />,
+      );
+
+      // Assert
+      expect(screen.queryByRole("button", { name: /Tạo gia đình mới/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Join bằng mã mời/ })).not.toBeInTheDocument();
+    });
+
+    it("truyền cả 2 callback → hiện 2 nút action ở đáy sheet", () => {
+      // Arrange + Act
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onCreateFamily={vi.fn(async () => undefined)}
+          onJoinFamily={vi.fn(async () => undefined)}
+        />,
+      );
+
+      // Assert
+      expect(screen.getByRole("button", { name: /Tạo gia đình mới/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Join bằng mã mời/ })).toBeInTheDocument();
+    });
+
+    it("create: tên rỗng / chỉ dấu cách → hiện lỗi, không gọi callback", async () => {
+      // Arrange
+      const onCreateFamily = vi.fn(async () => undefined);
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onCreateFamily={onCreateFamily}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Tạo gia đình mới/ }));
+
+      // Act — submit khi input rỗng
+      fireEvent.click(screen.getByRole("button", { name: "Tạo gia đình" }));
+
+      // Assert
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Tên gia đình phải có ít nhất 2 ký tự.",
+      );
+      expect(onCreateFamily).not.toHaveBeenCalled();
+
+      // Act — chỉ dấu cách cũng sai
+      // (regex vì lỗi validate nằm trong <label> → accessible name của input có tiền tố tên label)
+      fireEvent.change(screen.getByLabelText(/^Tên gia đình/), { target: { value: "   " } });
+      fireEvent.click(screen.getByRole("button", { name: "Tạo gia đình" }));
+
+      // Assert
+      expect(screen.getByRole("alert")).toHaveTextContent("ít nhất 2 ký tự");
+      expect(onCreateFamily).not.toHaveBeenCalled();
+    });
+
+    it("create: tên hợp lệ → gọi onCreateFamily (đã trim) + button loading trong khi chờ", async () => {
+      // Arrange — giữ promise chưa resolve để kiểm tra trạng thái loading
+      let resolveCreate: () => void = () => undefined;
+      const onCreateFamily = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveCreate = resolve;
+          }),
+      );
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onCreateFamily={onCreateFamily}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Tạo gia đình mới/ }));
+      fireEvent.change(screen.getByLabelText("Tên gia đình"), { target: { value: "  Nhà Mới  " } });
+
+      // Act
+      fireEvent.click(screen.getByRole("button", { name: "Tạo gia đình" }));
+
+      // Assert — gọi với tên đã trim + button disable (loading)
+      expect(onCreateFamily).toHaveBeenCalledTimes(1);
+      expect(onCreateFamily).toHaveBeenCalledWith("Nhà Mới");
+      expect(screen.getByRole("button", { name: /Tạo gia đình/ })).toBeDisabled();
+
+      // Act — resolve → hết loading
+      resolveCreate();
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: /Tạo gia đình/ })).not.toBeDisabled(),
+      );
+    });
+
+    it("create: callback reject ApiError → hiện message server trong form", async () => {
+      // Arrange
+      const onCreateFamily = vi.fn(async () => {
+        throw new ApiError("INTERNAL", "Không thể tạo gia đình, thử lại sau.", 500);
+      });
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onCreateFamily={onCreateFamily}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Tạo gia đình mới/ }));
+      fireEvent.change(screen.getByLabelText("Tên gia đình"), { target: { value: "Nhà Mới" } });
+
+      // Act
+      fireEvent.click(screen.getByRole("button", { name: "Tạo gia đình" }));
+
+      // Assert
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Không thể tạo gia đình, thử lại sau.",
+      );
+    });
+
+    it("create: callback reject (không phải ApiError) → hiện fallback", async () => {
+      // Arrange
+      const onCreateFamily = vi.fn(async () => {
+        throw new Error("boom");
+      });
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onCreateFamily={onCreateFamily}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Tạo gia đình mới/ }));
+      fireEvent.change(screen.getByLabelText("Tên gia đình"), { target: { value: "Nhà Mới" } });
+
+      // Act
+      fireEvent.click(screen.getByRole("button", { name: "Tạo gia đình" }));
+
+      // Assert
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Có lỗi xảy ra, vui lòng thử lại.",
+      );
+    });
+
+    it("join: mã sai độ dài → lỗi validate, không gọi callback", async () => {
+      // Arrange
+      const onJoinFamily = vi.fn(async () => undefined);
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onJoinFamily={onJoinFamily}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Join bằng mã mời/ }));
+
+      // Act — input chỉ nhận A-Z0-9, maxLength 6 → "abc" → "ABC" (3 ký tự, sai)
+      fireEvent.change(screen.getByLabelText("Mã mời"), { target: { value: "abc" } });
+      fireEvent.click(screen.getByRole("button", { name: "Tham gia" }));
+
+      // Assert
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Mã mời phải gồm 6 ký tự chữ/số",
+      );
+      expect(onJoinFamily).not.toHaveBeenCalled();
+    });
+
+    it("join: mã đủ 6 ký tự nhưng chứa ký tự cấm (0, 1, I, O) → lỗi validate, không gọi callback", async () => {
+      // Arrange
+      const onJoinFamily = vi.fn(async () => undefined);
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onJoinFamily={onJoinFamily}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Join bằng mã mời/ }));
+
+      // Act — "AB01CD" đủ 6 ký tự nhưng 0 và 1 không thuộc alphabet mã mời
+      fireEvent.change(screen.getByLabelText("Mã mời"), { target: { value: "AB01CD" } });
+      fireEvent.click(screen.getByRole("button", { name: "Tham gia" }));
+
+      // Assert
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Mã mời phải gồm 6 ký tự chữ/số",
+      );
+      expect(onJoinFamily).not.toHaveBeenCalled();
+    });
+
+    it("join: mã 6 ký tự gõ thường → gọi onJoinFamily với mã uppercase", async () => {
+      // Arrange
+      const onJoinFamily = vi.fn(async () => undefined);
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onJoinFamily={onJoinFamily}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Join bằng mã mời/ }));
+
+      // Act — "abc234" không dính ký tự cấm (0, 1, I, O) của alphabet mã mời
+      fireEvent.change(screen.getByLabelText("Mã mời"), { target: { value: "abc234" } });
+      fireEvent.click(screen.getByRole("button", { name: "Tham gia" }));
+
+      // Assert
+      await waitFor(() => expect(onJoinFamily).toHaveBeenCalledTimes(1));
+      expect(onJoinFamily).toHaveBeenCalledWith("ABC234");
+    });
+
+    it("join: callback reject ApiError → hiện message trong form", async () => {
+      // Arrange
+      const onJoinFamily = vi.fn(async () => {
+        throw new ApiError("ALREADY_MEMBER", "Bạn đã là thành viên gia đình này.", 409);
+      });
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onJoinFamily={onJoinFamily}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: /Join bằng mã mời/ }));
+      fireEvent.change(screen.getByLabelText("Mã mời"), { target: { value: "ABC234" } });
+
+      // Act
+      fireEvent.click(screen.getByRole("button", { name: "Tham gia" }));
+
+      // Assert
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Bạn đã là thành viên gia đình này.",
+      );
+    });
+
+    it("nút 'Quay lại' trong view create/join → về lại list", async () => {
+      // Arrange
+      render(
+        <FamilySwitcher
+          families={[FAMILY_A, FAMILY_B]}
+          activeFamilyId={FAMILY_A.id}
+          onSelect={vi.fn()}
+          onClose={vi.fn()}
+          onCreateFamily={vi.fn(async () => undefined)}
+          onJoinFamily={vi.fn(async () => undefined)}
+        />,
+      );
+
+      // Act — vào view create rồi quay lại
+      fireEvent.click(screen.getByRole("button", { name: /Tạo gia đình mới/ }));
+      expect(screen.getByRole("button", { name: /Quay lại/ })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /Quay lại/ }));
+
+      // Assert — về list (thấy family + nút action), form biến mất
+      expect(screen.getByText("Công ty X")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Tạo gia đình mới/ })).toBeInTheDocument();
+      expect(screen.queryByLabelText("Tên gia đình")).not.toBeInTheDocument();
+
+      // Act — vào view join rồi quay lại
+      fireEvent.click(screen.getByRole("button", { name: /Join bằng mã mời/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Quay lại/ }));
+
+      // Assert
+      expect(screen.queryByLabelText("Mã mời")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Join bằng mã mời/ })).toBeInTheDocument();
+    });
   });
 });
