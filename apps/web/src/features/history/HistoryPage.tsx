@@ -280,10 +280,11 @@ export default function HistoryPage() {
   }
 
   async function handleDelete(expense: Expense) {
+    if (!activeFamilyId) return;
     setDeletingId(expense.id);
     setError(null);
     try {
-      await deleteExpense(expense.id);
+      await deleteExpense(expense.id, activeFamilyId, expense.date);
       setExpenses((prev) => prev.filter((e) => e.id !== expense.id));
       setMeta((m) => (m ? { ...m, total: Math.max(0, m.total - 1) } : m));
     } catch (err) {

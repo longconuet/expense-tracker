@@ -101,7 +101,7 @@ export default function EditPage() {
   }, []);
 
   async function handleSubmit() {
-    if (submitting || !ready) return;
+    if (submitting || !ready || !activeFamilyId || !expense) return;
     setFormError(null);
 
     const selectedCategory = categories?.find((c) => c.id === categoryId);
@@ -117,12 +117,17 @@ export default function EditPage() {
     haptic(15);
     setSubmitting(true);
     try {
-      await updateExpense(id, {
-        amount: parsedAmount,
-        categoryId: selectedCategory.id,
-        date,
-        note: note.trim() || null,
-      });
+      await updateExpense(
+        id,
+        activeFamilyId,
+        {
+          amount: parsedAmount,
+          categoryId: selectedCategory.id,
+          date,
+          note: note.trim() || null,
+        },
+        expense.date,
+      );
       navigate("/history");
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Có lỗi xảy ra, vui lòng thử lại.");

@@ -19,6 +19,12 @@ vi.mock("../core/db", () => ({
   }),
 }));
 
+const invalidateExpenseCacheMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../core/cacheInvalidate", () => ({
+  invalidateExpenseCache: invalidateExpenseCacheMock,
+}));
+
 vi.mock("../core/api", () => {
   class ApiError extends Error {
     code: string;
@@ -72,6 +78,7 @@ describe("core/syncQueue", () => {
     getTokenMock.mockReset().mockReturnValue("token-1");
     useSyncStore.setState({ pendingCount: 0 });
     syncedSpy.mockClear();
+    invalidateExpenseCacheMock.mockClear();
     window.addEventListener(SYNCED_EVENT, syncedSpy);
   });
 
@@ -204,6 +211,37 @@ describe("core/syncQueue", () => {
     expect(r1).toEqual(r2);
     expect(r1.synced).toBe(2);
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("flush ≥1 khoản thành công → invalidate cache theo tháng/ngày của các khoản đã sync", async () => {
+    // Arrange — 2 khoản cùng family, 2 tháng khác nhau
+    await enqueueExpense(makeEntry({ date: "2026-08-15" }));
+    await enqueueExpense(makeEntry({ date: "2026-09-01" }));
+    apiFetchMock.mockResolvedValue({ expense: {} });
+
+    // Act
+    const result = await flushQueue();
+
+    // Assert
+    expect(result.synced).toBe(2);
+    expect(invalidateExpenseCacheMock).toHaveBeenCalledTimes(1);
+    expect(invalidateExpenseCacheMock).toHaveBeenCalledWith(
+      "f1",
+      ["2026-08", "2026-09"],
+      ["2026-08-15", "2026-09-01"],
+    );
+  });
+
+  it("flush không sync được khoản nào → KHÔNG invalidate cache", async () => {
+    // Arrange
+    await enqueueExpense(makeEntry());
+    apiFetchMock.mockRejectedValue(new ApiError("INTERNAL_ERROR", "lỗi server", 500));
+
+    // Act
+    await flushQueue();
+
+    // Assert
+    expect(invalidateExpenseCacheMock).not.toHaveBeenCalled();
   });
 
   it("isServerUnavailable: 0 và 5xx là true, 4xx và lỗi thường là false", () => {

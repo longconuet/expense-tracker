@@ -1,6 +1,8 @@
 import type { Category } from "@expense-tracker/shared";
 import { create } from "zustand";
 import { apiFetch, getAccessToken, isServerUnavailable } from "./api";
+import { invalidateExpenseCache } from "./cacheInvalidate";
+import { monthOf } from "./dates";
 import { idbDelete, idbGetAll, idbPut } from "./db";
 
 /**
@@ -76,6 +78,8 @@ async function doFlush(): Promise<{ synced: number }> {
     return { synced: 0 }; // IndexedDB không khả dụng — không có gì để sync
   }
   let synced = 0;
+  // Tháng/ngày có khoản vừa sync (theo family) — để xoá cache liên quan
+  const touched = new Map<string, { months: Set<string>; dates: Set<string> }>();
 
   for (const entry of pending) {
     try {
@@ -91,6 +95,11 @@ async function doFlush(): Promise<{ synced: number }> {
       });
       await idbDelete("expenses", entry.id);
       synced += 1;
+      const fam =
+        touched.get(entry.familyId) ?? { months: new Set<string>(), dates: new Set<string>() };
+      fam.months.add(monthOf(entry.date));
+      fam.dates.add(entry.date);
+      touched.set(entry.familyId, fam);
     } catch (err) {
       if (isServerUnavailable(err)) break; // mạng chưa về — dừng vòng flush
       // 4xx: giữ khoản trong hàng đợi, thử khoản tiếp theo
@@ -99,6 +108,9 @@ async function doFlush(): Promise<{ synced: number }> {
 
   if (synced > 0) {
     window.dispatchEvent(new Event(SYNCED_EVENT));
+    for (const [familyId, t] of touched) {
+      invalidateExpenseCache(familyId, [...t.months], [...t.dates]);
+    }
   }
   void useSyncStore.getState().bump();
   return { synced };
