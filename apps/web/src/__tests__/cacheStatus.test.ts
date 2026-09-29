@@ -6,7 +6,7 @@ const isoAgo = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 describe("core/cacheStatus", () => {
   beforeEach(() => {
-    useCacheStatus.setState({ servedFromCacheAt: null });
+    useCacheStatus.setState({ servedFromCacheAt: null, markedAt: null });
   });
 
   afterEach(() => {
@@ -67,6 +67,40 @@ describe("core/cacheStatus", () => {
 
     // Assert
     expect(useCacheStatus.getState().servedFromCacheAt).toBe(new Date(base).toISOString());
+  });
+
+  it("savedAt cũ (1h) nhưng mark mới (< 2s) → clear() vẫn giữ mark (guard theo markedAt, không theo savedAt)", () => {
+    vi.useFakeTimers();
+    const base = Date.UTC(2030, 0, 1);
+    vi.setSystemTime(base);
+
+    // Arrange — entry cache đã ghi từ 1h trước (production: fallback luôn là entry cũ)
+    useCacheStatus.getState().markServed(new Date(base - 3600_000).toISOString());
+    vi.setSystemTime(base + 500);
+
+    // Act
+    useCacheStatus.getState().clear();
+
+    // Assert
+    expect(useCacheStatus.getState().servedFromCacheAt).toBe(
+      new Date(base - 3600_000).toISOString(),
+    );
+  });
+
+  it("clear(true) → xoá luôn mark mới (đổi trang)", () => {
+    vi.useFakeTimers();
+    const base = Date.UTC(2030, 0, 1);
+    vi.setSystemTime(base);
+
+    // Arrange
+    useCacheStatus.getState().markServed(new Date(base).toISOString());
+
+    // Act
+    useCacheStatus.getState().clear(true);
+
+    // Assert
+    expect(useCacheStatus.getState().servedFromCacheAt).toBeNull();
+    expect(useCacheStatus.getState().markedAt).toBeNull();
   });
 
   it("clear() khi chưa có mark → giữ null", () => {

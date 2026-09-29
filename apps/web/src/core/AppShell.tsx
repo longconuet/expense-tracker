@@ -1,5 +1,6 @@
+import { useEffect, useRef } from "react";
 import type { ComponentType, SVGProps } from "react";
-import { Navigate, NavLink, Outlet } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   ChartIcon,
   HistoryIcon,
@@ -51,6 +52,21 @@ export function AppShell() {
   const pendingCount = useSyncStore((s) => s.pendingCount);
   const servedFromCacheAt = useCacheStatus((s) => s.servedFromCacheAt);
   const online = useOnline();
+  const location = useLocation();
+
+  // Đổi trang → xoá "đang xem dữ liệu lưu" (force — không qua guard 2s):
+  // banner chỉ còn ý nghĩa với trang đang hiển thị dữ liệu fallback; màn mới
+  // tự mark lại nếu fetch của nó cũng phải dùng cache. Bỏ qua lần chạy đầu
+  // (mount): lúc đó mark (nếu có) thuộc về chính trang vừa mở — production
+  // reload thì store đã null, đây chỉ để không xoá nhầm mark đặt trước render.
+  const isFirstLocation = useRef(true);
+  useEffect(() => {
+    if (isFirstLocation.current) {
+      isFirstLocation.current = false;
+      return;
+    }
+    useCacheStatus.getState().clear(true);
+  }, [location.pathname]);
 
   const activeFamily = families.find((f) => f.id === activeFamilyId) ?? families[0] ?? null;
 

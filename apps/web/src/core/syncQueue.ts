@@ -107,10 +107,13 @@ async function doFlush(): Promise<{ synced: number }> {
   }
 
   if (synced > 0) {
-    window.dispatchEvent(new Event(SYNCED_EVENT));
+    // Xoá cache TRƯỚC KHI fire event — màn refetch theo SYNCED_EVENT gọi
+    // withReadCache; nếu event bay trước vòng xoá, GET 5xx có thể đọc cache
+    // cũ (thiếu khoản vừa sync) trong 1 chu kỳ.
     for (const [familyId, t] of touched) {
       await invalidateExpenseCache(familyId, [...t.months], [...t.dates]);
     }
+    window.dispatchEvent(new Event(SYNCED_EVENT));
   }
   void useSyncStore.getState().bump();
   return { synced };

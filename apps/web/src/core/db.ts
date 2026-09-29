@@ -74,3 +74,8 @@ export function idbGetAll<T>(store: StoreName): Promise<T[]> {
 export function idbDelete(store: StoreName, key: IDBValidKey): Promise<void> {
   return withStore<void>(store, "readwrite", (os) => os.delete(key) as IDBRequest<void>);
 }
+
+/** Xoá TOÀN BỘ entry của store (VD purge cache đọc khi logout). */
+export function idbClear(store: StoreName): Promise<void> {
+  return withStore<void>(store, "readwrite", (os) => os.clear() as IDBRequest<void>);
+}

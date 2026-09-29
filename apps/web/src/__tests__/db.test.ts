@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { idbDelete, idbGet, idbGetAll, idbPut } from "../core/db";
+import { idbClear, idbDelete, idbGet, idbGetAll, idbPut } from "../core/db";
 
 // ---------------------------------------------------------------------------
 // Fake IndexedDB in-memory — đủ mặt cho core/db.ts
@@ -57,6 +57,13 @@ class FakeObjectStore {
   delete(key: string): FakeIDBRequest<void> {
     const req = new FakeIDBRequest<void>();
     if (this.mode === "readwrite") this.meta.data.delete(key);
+    req.settle(undefined);
+    return req;
+  }
+
+  clear(): FakeIDBRequest<void> {
+    const req = new FakeIDBRequest<void>();
+    if (this.mode === "readwrite") this.meta.data.clear();
     req.settle(undefined);
     return req;
   }
@@ -142,5 +149,20 @@ describe("core/db (wrapper IndexedDB)", () => {
   it("get key không tồn tại → undefined", async () => {
     // Act + Assert
     expect(await idbGet("expenses", "khong-ton-tai")).toBeUndefined();
+  });
+
+  it("idbClear xoá toàn bộ entry của store (purge cache khi logout)", async () => {
+    // Arrange
+    await idbPut("cache", { key: "k1", savedAt: "t", value: { a: 1 } });
+    await idbPut("cache", { key: "k2", savedAt: "t", value: { b: 2 } });
+
+    // Act
+    await idbClear("cache");
+
+    // Assert — store trống, store khác không bị ảnh hưởng
+    expect(await idbGetAll("cache")).toHaveLength(0);
+    await idbPut("expenses", { id: "q1", amount: 1 });
+    await idbClear("cache");
+    expect((await idbGetAll("expenses")) as unknown[]).toHaveLength(1);
   });
 });

@@ -35,20 +35,22 @@
 | File | Thay đổi |
 |---|---|
 | `src/core/api.ts` | Chuyển `isServerUnavailable` từ `syncQueue.ts` về đây (thuộc về ngữ nghĩa `ApiError`). **Refactor thuần, không đổi hành vi** — phá cycle import `readCache ↔ syncQueue` |
-| `src/core/cacheStatus.ts` **(mới)** | Store Zustand nhỏ `useCacheStatus: { servedFromCacheAt: string \| null, markServed(savedAt), clear() }`. `clear()` có guard 2s: chỉ xoá nếu mark cũ hơn 2000ms (tránh race 2 fetch song song: 1 fallback + 1 OK) |
+| `src/core/cacheStatus.ts` **(mới)** | Store Zustand nhỏ `useCacheStatus: { servedFromCacheAt, markedAt, markServed(savedAt), clear(force?) }`. `servedFromCacheAt` = savedAt entry (hiển thị giờ lưu); `markedAt` = lúc set mark — **guard 2s của `clear()` dùng `markedAt`** (entry fallback luôn già → dùng savedAt thì guard vô hiệu). `clear(true)` = force, dùng khi đổi trang |
 | `src/core/readCache.ts` | +TTL (`CACHE_TTL`, `ttlFor(key)`), +eviction (`evictCache` + `evictCacheThrottled`, hằng `CACHE_MAX_ENTRIES=300`, `CACHE_MAX_AGE_MS=14d`, target 240), +`invalidateCache(predicate)`. `cacheGet` trả `{ value, savedAt }` (bỏ entry quá TTL + xoá luôn). `withReadCache`: fallback → `markServed(savedAt)`; thành công → `clear()`; ghi cache → gọi eviction throttled |
 | `src/core/cacheInvalidate.ts` **(mới)** | `parseCacheKey` (regex key chuẩn), `invalidateExpenseCache(familyId, months, dates)`, `invalidateFamilyCache(familyId)`. Fire-and-forget |
 | `src/core/dataApi.ts` | Gắn invalidation: `createExpense` (OK) → tháng + ngày của khoản; `updateExpense` → tháng/ngày **cũ + mới**; `deleteExpense` → tháng + ngày khoản; `createCategory`/`updateCategory`/`deleteCategory` → toàn bộ cache family. Đổi signature: `updateExpense(expenseId, familyId, input, previousDate)`, `deleteExpense(expenseId, familyId, date)` — `Expense` không có field `familyId`, caller (EditPage/HistoryPage) có sẵn `activeFamilyId` |
-| `src/core/syncQueue.ts` | Sau flush ≥1 khoản thành công → `invalidateExpenseCache` theo tháng/ngày các khoản đã sync (mỗi family). Import `isServerUnavailable` từ `api.ts` |
+| `src/core/syncQueue.ts` | Sau flush ≥1 khoản thành công → `invalidateExpenseCache` theo tháng/ngày các khoản đã sync (mỗi family) — **await XONG trước khi fire `SYNCED_EVENT`** (màn refetch theo event gọi withReadCache; event bay trước vòng xoá → 1 chu kỳ đọc cache cũ). Import `isServerUnavailable` từ `api.ts` |
 | `src/core/dates.ts` | +`monthOf(date)` (YYYY-MM-DD → YYYY-MM) · +`formatTimeShort(iso)` (→ "HH:mm", vi-VN) |
-| `src/core/AppShell.tsx` | Banner: giữ dòng offline cũ + nối `servedFromCacheAt` ("…lưu trước lúc HH:mm"); thêm dòng mới khi `online && servedFromCacheAt` ("Máy chủ không phản hồi — đang xem dữ liệu lưu lúc HH:mm") |
+| `src/core/db.ts` | +`idbClear(store)` — xoá toàn bộ entry 1 store (dùng khi logout) |
+| `src/core/authStore.ts` | `clearSession` (logout/mất phiên): `idbClear("cache")` best-effort — không để lại dữ liệu chi tiêu family cũ trên browser dùng chung |
+| `src/core/AppShell.tsx` | Banner: giữ dòng offline cũ + nối `servedFromCacheAt` ("…lưu trước lúc HH:mm"); thêm dòng mới khi `online && servedFromCacheAt` ("Máy chủ không phản hồi — đang xem dữ liệu lưu lúc HH:mm"). **Đổi trang → `clear(true)`** (banner chỉ còn ý nghĩa với trang đang hiển thị dữ liệu fallback; màn mới tự mark lại nếu cũng fallback) |
 | `src/App.tsx` | Mount: `void evictCache()` (dọn entry >14 ngày + vượt cap khi mở app) |
 
 ### BE — `apps/api`
 
 | File | Thay đổi |
 |---|---|
-| `src/app.ts` | Middleware `app.use("/api", ...)`: `Cache-Control: no-store` cho mọi response API (data có session — chặn proxy/CDN cache nhầm). Đặt trước các router |
+| `src/app.ts` | Middleware `app.use("/api", ...)`: `Cache-Control: no-store` + `Pragma: no-cache` + `Expires: 0` cho mọi response API (data có session — chặn browser/proxy/CDN, kể cả proxy HTTP/1.0 cũ). Đặt trước các router |
 
 ## 4. Chính sách cache chi tiết
 
@@ -93,12 +95,14 @@ key lạ → không parse được → không bị invalidation chạm (chỉ ch
 ### Trạng thái "đang xem dữ liệu lưu"
 
 - `withReadCache` fallback thành công → `markServed(savedAt)`; fetch live OK → `clear()`.
-- `clear()` guard 2s (mark mới hơn 2s → giữ) — tránh 2 fetch song song của 1 trang
-  (1 OK + 1 fallback) làm banner nhấp nháy / tắt nhầm.
+- `clear()` guard 2s theo **`markedAt`** (lúc set mark, không theo `savedAt` của entry —
+  entry fallback luôn già hơn 2s nên guard theo savedAt sẽ vô hiệu): mark mới hơn 2s → giữ
+  (tránh 2 fetch song song của 1 trang: 1 OK + 1 fallback làm banner tắt nhầm).
+- **Đổi trang → `clear(true)`** (bỏ qua guard) — banner chỉ còn ý nghĩa với trang đang
+  hiển thị dữ liệu fallback; màn mới tự mark lại nếu fetch của nó cũng fallback.
 - Banner AppShell hiện khi `!online` **hoặc** `servedFromCacheAt !== null`:
   - `!online`: "Không có mạng — đang xem dữ liệu lưu trước" + " lúc HH:mm" nếu có mark.
   - `online && mark`: "Máy chủ không phản hồi — đang xem dữ liệu lưu lúc HH:mm".
-- Mark tự hết ý nghĩa khi fetch live tiếp theo OK (sau >2s) hoặc user đổi trang.
 
 ## 5. Test cases
 

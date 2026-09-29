@@ -21,8 +21,11 @@ export function createApp(): express.Express {
 
   // Mọi response API gắn session (cookie/token) — cấm cache từ browser/proxy/CDN
   // (dữ liệu mỗi family khác nhau; cache nhầm = lộ chi tiêu sang user khác).
+  // Pragma/Expires: chặn nốt proxy HTTP/1.0 cũ không hiểu no-store.
   app.use("/api", (_req, res, next) => {
     res.set("Cache-Control", "no-store");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
     next();
   });
 

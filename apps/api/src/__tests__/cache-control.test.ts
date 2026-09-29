@@ -3,7 +3,13 @@ import { describe, expect, it } from "vitest";
 import { createApp } from "../app.js";
 
 describe("Cache-Control: no-store cho mọi response /api", () => {
-  it("200 (health) → no-store", async () => {
+  const assertNoCacheHeaders = (res: { headers: Record<string, string> }) => {
+    expect(res.headers["cache-control"]).toBe("no-store");
+    expect(res.headers["pragma"]).toBe("no-cache");
+    expect(res.headers["expires"]).toBe("0");
+  };
+
+  it("200 (health) → no-store + pragma + expires", async () => {
     // Arrange
     const app = createApp();
 
@@ -12,10 +18,10 @@ describe("Cache-Control: no-store cho mọi response /api", () => {
 
     // Assert
     expect(res.status).toBe(200);
-    expect(res.headers["cache-control"]).toBe("no-store");
+    assertNoCacheHeaders(res);
   });
 
-  it("401 (chưa đăng nhập) → no-store", async () => {
+  it("401 (chưa đăng nhập) → no-store + pragma + expires", async () => {
     // Arrange
     const app = createApp();
 
@@ -24,10 +30,10 @@ describe("Cache-Control: no-store cho mọi response /api", () => {
 
     // Assert
     expect(res.status).toBe(401);
-    expect(res.headers["cache-control"]).toBe("no-store");
+    assertNoCacheHeaders(res);
   });
 
-  it("404 (route /api không tồn tại) → no-store", async () => {
+  it("404 (route /api không tồn tại) → no-store + pragma + expires", async () => {
     // Arrange
     const app = createApp();
 
@@ -36,6 +42,6 @@ describe("Cache-Control: no-store cho mọi response /api", () => {
 
     // Assert
     expect(res.status).toBe(404);
-    expect(res.headers["cache-control"]).toBe("no-store");
+    assertNoCacheHeaders(res);
   });
 });

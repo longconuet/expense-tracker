@@ -573,9 +573,6 @@ describe("core/dataApi", () => {
   // ---------------------------------------------------------------------
 
   describe("cache invalidation sau mutation", () => {
-    /** Invalidation là fire-and-forget — flush microtask + timer 0. */
-    const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
-
     const seed = (key: string) => {
       mem.cache.set(key, { key, savedAt: new Date().toISOString(), value: { seeded: true } });
     };
@@ -590,7 +587,6 @@ describe("core/dataApi", () => {
 
       // Act — EXPENSE.date = 2026-09-01
       await createExpense({ familyId: "f1", category: CAT, amount: 50_000, date: "2026-09-01" });
-      await flush();
 
       // Assert
       expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-09")).toBe(false);
@@ -611,7 +607,6 @@ describe("core/dataApi", () => {
 
       // Act
       await updateExpense("e1", "f1", { date: "2026-10-05" }, "2026-09-01");
-      await flush();
 
       // Assert
       expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-09")).toBe(false);
@@ -629,7 +624,6 @@ describe("core/dataApi", () => {
 
       // Act
       await deleteExpense("e1", "f1", "2026-09-05");
-      await flush();
 
       // Assert
       expect(mem.cache.has("GET /api/families/f1/expenses?month=2026-09")).toBe(false);
@@ -649,7 +643,6 @@ describe("core/dataApi", () => {
 
       // Act
       await updateCategory("f1", "c1", { name: "Điện nước" });
-      await flush();
 
       // Assert
       expect(mem.cache.has("GET /api/families/f1/categories")).toBe(false);
@@ -670,7 +663,6 @@ describe("core/dataApi", () => {
         amount: 50_000,
         date: "2026-09-01",
       });
-      await flush();
 
       // Assert
       expect(result.savedOffline).toBe(true);

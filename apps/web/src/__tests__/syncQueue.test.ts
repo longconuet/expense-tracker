@@ -232,6 +232,25 @@ describe("core/syncQueue", () => {
     );
   });
 
+  it("flush ≥1 khoản thành công → invalidate cache TRƯỚC KHI fire SYNCED_EVENT", async () => {
+    // Arrange
+    await enqueueExpense(makeEntry({ date: "2026-09-01" }));
+    apiFetchMock.mockResolvedValue({ expense: {} });
+    let invalidatedAtEventTime = false;
+    const atEvent = () => {
+      invalidatedAtEventTime = invalidateExpenseCacheMock.mock.calls.length > 0;
+    };
+    window.addEventListener(SYNCED_EVENT, atEvent);
+
+    // Act
+    await flushQueue();
+
+    // Assert — khi event bay ra (màn refetch), cache đã được xoá xong
+    window.removeEventListener(SYNCED_EVENT, atEvent);
+    expect(invalidateExpenseCacheMock).toHaveBeenCalledTimes(1);
+    expect(invalidatedAtEventTime).toBe(true);
+  });
+
   it("flush không sync được khoản nào → KHÔNG invalidate cache", async () => {
     // Arrange
     await enqueueExpense(makeEntry());

@@ -62,7 +62,7 @@ describe("core/readCache", () => {
     mem.cache.clear();
     vi.clearAllMocks();
     __resetEvictThrottle();
-    useCacheStatus.setState({ servedFromCacheAt: null });
+    useCacheStatus.setState({ servedFromCacheAt: null, markedAt: null });
   });
 
   describe("cacheSet / cacheGet", () => {
@@ -116,8 +116,12 @@ describe("core/readCache", () => {
       // Assert
       expect(result).toBe(123);
       expect(await cacheGet("k")).toEqual({ value: 123, savedAt: expect.any(String) });
-      // clear() có guard 2s — mark 1s tuổi vẫn giữ; đặt mark >2s để test đường clear thật
-      useCacheStatus.setState({ servedFromCacheAt: isoAgo(3000) });
+      // clear() có guard 2s theo markedAt — mark 1s tuổi vẫn giữ; đặt mark >2s
+      // (cả 2 field) để test đường clear thật
+      useCacheStatus.setState({
+        servedFromCacheAt: isoAgo(3000),
+        markedAt: Date.now() - 3000,
+      });
       await withReadCache("k2", async () => 456);
       expect(useCacheStatus.getState().servedFromCacheAt).toBeNull();
     });
