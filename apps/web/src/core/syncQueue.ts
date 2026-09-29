@@ -1,6 +1,6 @@
 import type { Category } from "@expense-tracker/shared";
 import { create } from "zustand";
-import { ApiError, apiFetch, getAccessToken } from "./api";
+import { apiFetch, getAccessToken, isServerUnavailable } from "./api";
 import { idbDelete, idbGetAll, idbPut } from "./db";
 
 /**
@@ -29,11 +29,6 @@ function newId(): string {
     return crypto.randomUUID();
   }
   return `q-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** Server không đạt được (lỗi mạng hoặc 5xx) — chấp nhận ghi offline. */
-export function isServerUnavailable(err: unknown): boolean {
-  return err instanceof ApiError && (err.status === 0 || err.status >= 500);
 }
 
 export async function enqueueExpense(input: NewQueuedExpense): Promise<QueuedExpense> {

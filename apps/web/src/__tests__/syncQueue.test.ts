@@ -19,8 +19,8 @@ vi.mock("../core/db", () => ({
   }),
 }));
 
-vi.mock("../core/api", () => ({
-  ApiError: class ApiError extends Error {
+vi.mock("../core/api", () => {
+  class ApiError extends Error {
     code: string;
     status: number;
     constructor(code: string, message: string, status: number) {
@@ -29,17 +29,21 @@ vi.mock("../core/api", () => ({
       this.code = code;
       this.status = status;
     }
-  },
-  apiFetch: vi.fn(),
-  getAccessToken: vi.fn(),
-}));
+  }
+  return {
+    ApiError,
+    apiFetch: vi.fn(),
+    getAccessToken: vi.fn(),
+    isServerUnavailable: (err: unknown) =>
+      err instanceof ApiError && (err.status === 0 || err.status >= 500),
+  };
+});
 
-import { ApiError, apiFetch, getAccessToken } from "../core/api";
+import { ApiError, apiFetch, getAccessToken, isServerUnavailable } from "../core/api";
 import {
   enqueueExpense,
   flushQueue,
   getPendingExpenses,
-  isServerUnavailable,
   SYNCED_EVENT,
   useSyncStore,
 } from "../core/syncQueue";

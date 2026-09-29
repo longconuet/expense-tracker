@@ -20,6 +20,11 @@ export class ApiError extends Error {
   }
 }
 
+/** Server không đạt được (lỗi mạng hoặc 5xx) — chấp nhận ghi offline / fallback cache. */
+export function isServerUnavailable(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 0 || err.status >= 500);
+}
+
 let accessToken: string | null = null;
 let refreshInFlight: Promise<string | null> | null = null;
 let sessionExpiredHandler: (() => void) | null = null;
