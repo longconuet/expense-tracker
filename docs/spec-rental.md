@@ -256,7 +256,11 @@ trị hiện có trong DB nếu chỉ gửi 1 field).
 ### `POST /api/families/:id/rental/months/:month/confirm` (OWNER)
 
 Body: **đầy đủ** 10 field `RentalMonthFields` + `date: "YYYY-MM-DD"`. Validate:
-giá trị như trên + `isValidDateInMonth(date, month)`.
+giá trị như trên + `newElec > 0` + `newWater > 0` (công tơ mới phải đã đọc —
+số **cũ** được phép 0 ở tháng đầu khi công tơ mới lắp; draft chưa đọc số thì
+số mới = 0 là bình thường nên rule này chỉ áp ở confirm) +
+`isValidDateInMonth(date, month)`. → 400 `VALIDATION_ERROR`
+"Số công tơ điện/nước mới phải lớn hơn 0".
 
 1 transaction Prisma (`$transaction`):
 
@@ -313,9 +317,9 @@ chi mới được tạo/cập nhật → Lịch sử + Home phải tươi ngay.
 
 **`RentalPage.tsx`** — route `/rental`. 2 trạng thái theo `fetchRental`:
 
-1. **Chưa có config** → form setup: 6 `Input` (type number, `inputMode="numeric"`)
-   trong Card "Thông tin mặc định" (4 khoản cố định + 2 đơn giá, hint đơn vị
-   đ / đ/kWh / đ/m³) + nút "Lưu & tạo tháng hiện tại" → `saveRentalConfig` rồi
+1. **Chưa có config** → form setup: 6 `NumberInput` trong Card "Thông tin mặc
+   định" (4 khoản cố định + 2 đơn giá, hint đơn vị đ / đ/kWh / đ/m³) + nút "Lưu
+   & tạo tháng hiện tại" → `saveRentalConfig` rồi
    `createRentalMonth(tháng hiện tại)` (bỏ qua 409 `RENTAL_MONTH_EXISTS` — tháng
    đã có thì chỉ lưu config) → chuyển sang trạng thái 2.
 2. **Có config** →
@@ -340,15 +344,19 @@ chi mới được tạo/cập nhật → Lịch sử + Home phải tươi ngay.
   hành động (label "Chỉ xem — chủ gia đình mới chỉnh sửa được").
 - **OWNER, DRAFT** — form 3 Card:
   1. "Khoản cố định": 4 input (Phòng / Mạng / Thang máy + vệ sinh / Gửi xe —
-     `type="number" min=0 inputMode="numeric"`, input thuần number, đơn giản).
+     `NumberInput`, input thuần number, đơn giản).
   2. "Công tơ & đơn giá": 4 hàng — Điện: (cũ, mới) → dòng phụ "**280 kWh**"
      (live, `formatMeter` + computeRentalTotals); Nước: (cũ, mới) → "**6 m³**";
-     2 ô đơn giá (đ/kWh, đ/m³). Input công tơ: `type="number" min=0 step=1
-     inputMode="numeric"` (int — khớp dữ liệu thật).
+     2 ô đơn giá (đ/kWh, đ/m³). Input công tơ: `NumberInput` (int — khớp dữ
+     liệu thật).
   3. "Kết quả": 2 dòng Tiền điện / Tiền nước (formatVnd, `text-ink-muted`) +
      **TỔNG** lớn (`text-3xl text-primary-text font-bold`).
   - `newElec < oldElec` hoặc `newWater < oldWater` → message lỗi đỏ trong Card
      2 + nút Chốt disable.
+  - `newElec <= 0` hoặc `newWater <= 0` (chưa đọc số công tơ mới — draft mới
+    prefill 0/0) → message lỗi đỏ "Số công tơ điện/nước mới phải lớn hơn 0" +
+    nút Chốt disable (khớp rule confirm phía API; số **cũ** được phép 0 ở
+    tháng đầu).
   - Nút "Chốt khoản chi" (lg, primary) → **Modal chốt**: tóm tắt Tổng, ô
      `input type="date"` (default `firstDayOfMonth(month)`, min/max = đầu/cuối
      tháng — khoá expense đúng trong tháng), preview note (text-xs, từ
@@ -361,6 +369,14 @@ chi mới được tạo/cập nhật → Lịch sử + Home phải tươi ngay.
   nút "Chỉnh sửa & chốt lại" (mở form edit như DRAFT, nút cuối đổi thành
   "Chốt lại") + nút "Xoá tháng" (message ConfirmDialog cảnh báo rõ:
   "Khoản chi liên kết cũng sẽ bị xoá khỏi Lịch sử").
+
+**`NumberInput.tsx`** — input số nguyên có dấu phân cách hàng nghìn kiểu vi-VN
+(3.200.000). `type="text" + inputMode="numeric"` (type="number" không render
+được dấu chấm; mobile vẫn lên bàn phím số). `onChange` chỉ nhận chữ số (lọc
+`\D`, cap 10 chữ số ≈ trần API — vượt thì API 400). State ở component cha giữ
+**chuỗi số thuần** ("3200000") — component chỉ lo hiển thị (grouping regex
+trên chuỗi, giữ số 0 dẫn đầu). Dùng ở cả form setup (`RentalPage`) + form tháng
+(`RentalMonthPage`) — 10 ô tháng + 6 ô setup.
 
 **Trang chủ — card "🏠 Tiền phòng trọ"** (`HomePage.tsx`):
 
@@ -475,6 +491,16 @@ Setup helper: register 1 OWNER + 1 MEMBER cùng family (pattern các test có s�
 - `category.test.ts` "trả 7 preset mặc định" → **8** (order: "Nhà trọ" trước "Sức khỏe").
 - `CategoriesPage.tsx` comment "7 preset" → 8.
 - E2E `auth.spec.ts` nếu có assert số danh mục → cập nhật (check lúc chạy).
+
+### 5.6 Test bổ sung — validate công tơ mới > 0 + input dấu phân cách nghìn
+
+(Thêm sau khi feature đã lên production — user yêu cầu chốt phải đọc số công tơ
+mới, và input number hiển thị dấu phân cách hàng nghìn vi-VN.)
+
+| # | Case | Kỳ vọng |
+|---|------|---------|
+| 55 | API: POST confirm tháng đầu (old/new = 0) | 400 `VALIDATION_ERROR` "Số công tơ điện mới phải lớn hơn 0"; điện đã đọc (> 0) còn nước = 0 → 400 (lỗi nước); đọc đủ cả 2 (> 0, số **cũ** = 0) → 200, total đúng |
+| 56 | FE: `RentalMonthPage` DRAFT mới (prefill 0/0) | lỗi "Số công tơ điện mới phải lớn hơn 0" + nút "Chốt khoản chi" disabled; mọi input số hiển thị dấu phân cách nghìn ("3.200.000", "17.743" — component `NumberInput`, state vẫn chuỗi số thuần) |
 
 ## 6. Vạch ngoài (không làm trong feature này)
 

@@ -172,6 +172,20 @@ function assertAmountFits(fields: RentalMonthFields): void {
   }
 }
 
+/**
+ * Số công tơ MỚI (điện, nước) phải > 0 khi CHỐT — công tơ phải đã có chỉ số
+ * đọc được. Chỉ áp ở confirm (draft chưa đọc số thì số mới = 0 là bình thường).
+ * Số CŨ được phép 0 (tháng đầu, công tơ mới lắp).
+ */
+function assertMetersRead(month: { newElec: number; newWater: number }): void {
+  if (month.newElec <= 0) {
+    throw new AppError(400, "VALIDATION_ERROR", "Số công tơ điện mới phải lớn hơn 0");
+  }
+  if (month.newWater <= 0) {
+    throw new AppError(400, "VALIDATION_ERROR", "Số công tơ nước mới phải lớn hơn 0");
+  }
+}
+
 export const rentalRouter = Router({ mergeParams: true });
 
 rentalRouter.use(requireAuth, requireFamilyMember());
@@ -342,6 +356,7 @@ rentalRouter.post(
     const { rent, internet, elevator, parking, oldElec, newElec, electricityRate, oldWater, newWater, waterRate } = fields;
 
     assertMetersConsistent({ oldElec, newElec, oldWater, newWater });
+    assertMetersRead({ newElec, newWater });
     if (!isValidDateInMonth(date, month)) {
       throw new AppError(400, "VALIDATION_ERROR", "date phải là ngày hợp lệ trong tháng này");
     }
