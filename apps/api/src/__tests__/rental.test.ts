@@ -393,6 +393,56 @@ describe("POST /api/families/:id/rental/months/:month/confirm", () => {
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
 
+  it("số công tơ mới = 0 (chưa đọc số) → 400; đọc đủ số > 0 (kể cả số cũ = 0) → chốt OK", async () => {
+    // Tháng đầu tiên của family (không có tháng trước) → prefill old/new = 0
+    const created = await postMonth(owner.token, familyId, "2026-01");
+    expect(created.status).toBe(201);
+
+    try {
+      // Cả điện + nước đều 0 → chặn ở điện (kiểm tra trước)
+      const resElec = await confirmMonth(owner.token, familyId, "2026-01", {
+        ...JULY_CONFIRM,
+        oldElec: 0,
+        newElec: 0,
+        oldWater: 0,
+        newWater: 0,
+        date: "2026-01-10",
+      });
+      expect(resElec.status).toBe(400);
+      expect(resElec.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resElec.body.error.message).toContain("điện");
+
+      // Điện đã đọc, nước còn 0 → chặn ở nước
+      const resWater = await confirmMonth(owner.token, familyId, "2026-01", {
+        ...JULY_CONFIRM,
+        oldElec: 0,
+        newElec: 5_000,
+        oldWater: 0,
+        newWater: 0,
+        date: "2026-01-10",
+      });
+      expect(resWater.status).toBe(400);
+      expect(resWater.body.error.code).toBe("VALIDATION_ERROR");
+      expect(resWater.body.error.message).toContain("nước");
+
+      // Đọc đủ cả 2 (> 0, số cũ = 0 — công tơ mới lắp) → chốt OK
+      const ok = await confirmMonth(owner.token, familyId, "2026-01", {
+        ...JULY_CONFIRM,
+        oldElec: 0,
+        newElec: 5_000,
+        oldWater: 0,
+        newWater: 3,
+        date: "2026-01-10",
+      });
+      expect(ok.status).toBe(200);
+      // 3.600.000 cố định + 5.000 kWh × 4.000 + 3 m³ × 35.000 = 23.705.000
+      expect(ok.body.data.month.total).toBe(23_705_000);
+    } finally {
+      const del = await deleteMonth(owner.token, familyId, "2026-01");
+      expect(del.status).toBe(200);
+    }
+  });
+
   it("MEMBER → 403 OWNER_ONLY", async () => {
     const res = await confirmMonth(member.token, familyId, "2026-08", {
       ...JULY_CONFIRM,

@@ -182,6 +182,10 @@ describe("RentalPage (/rental)", () => {
     fireEvent.change(screen.getByLabelText("Gửi xe (đ)"), { target: { value: "100000" } });
     fireEvent.change(screen.getByLabelText("Giá điện (đ/kWh)"), { target: { value: "4000" } });
     fireEvent.change(screen.getByLabelText("Giá nước (đ/m³)"), { target: { value: "35000" } });
+
+    // NumberInput hiển thị dấu phân cách nghìn (state phía sau vẫn là chuỗi số thuần)
+    expect(screen.getByLabelText("Tiền phòng (đ)")).toHaveValue("3.200.000");
+
     fireEvent.click(screen.getByRole("button", { name: /Lưu & tạo tháng/ }));
 
     // Assert
@@ -315,6 +319,12 @@ describe("RentalMonthPage (/rental/:month)", () => {
 
     const elec = within(screen.getByTestId("meter-elec"));
     const water = within(screen.getByTestId("meter-water"));
+
+    // Input số hiển thị dấu phân cách nghìn (vi-VN)
+    expect(screen.getByLabelText("Tiền phòng (đ)")).toHaveValue("3.200.000");
+    expect(elec.getByLabelText("Số cũ")).toHaveValue("17.743");
+    expect(elec.getByLabelText("Đơn giá (đ/kWh)")).toHaveValue("4.000");
+
     fireEvent.change(elec.getByLabelText("Số mới"), { target: { value: "18023" } });
     fireEvent.change(water.getByLabelText("Số mới"), { target: { value: "1007" } });
 
@@ -323,6 +333,17 @@ describe("RentalMonthPage (/rental/:month)", () => {
     expect(screen.getByText("1.120.000 ₫")).toBeInTheDocument();
     expect(screen.getByText("210.000 ₫")).toBeInTheDocument();
     expect(screen.getByText("4.930.000 ₫")).toBeInTheDocument();
+  });
+
+  it("DRAFT mới (chưa đọc số, công tơ = 0) → lỗi 'phải lớn hơn 0' + nút Chốt disabled", async () => {
+    fetchRentalMock.mockResolvedValue({ config: CONFIG, months: [makeFreshMonth("2026-07")] });
+    renderMonthPage("2026-07");
+    await screen.findByRole("heading", { name: monthLabel("2026-07") });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Số công tơ điện mới phải lớn hơn 0",
+    );
+    expect(screen.getByRole("button", { name: "Chốt khoản chi" })).toBeDisabled();
   });
 
   it("DRAFT: số mới < số cũ → lỗi + nút Chốt disabled", async () => {
@@ -443,7 +464,11 @@ describe("RentalMonthPage (/rental/:month)", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Xoá" }));
     await waitFor(() => expect(deleteRentalMonthMock).toHaveBeenCalledWith("f1", "2026-07"));
-    expect(screen.getByText("LIST_MARKER")).toBeInTheDocument();
+    // Navigate xảy ra SAU khi mock resolve (microtask) + re-render — phải chờ,
+    // assert đồng bộ dễ flake khi suite chạy parallel trên máy tải nặng.
+    await waitFor(() => expect(screen.getByText("LIST_MARKER")).toBeInTheDocument(), {
+      timeout: 3000,
+    });
   });
 
   it("MEMBER: xem được giá trị + kết quả, mọi input khoá, không có nút hành động", async () => {

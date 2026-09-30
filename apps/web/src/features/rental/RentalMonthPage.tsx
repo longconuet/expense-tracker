@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   buildRentalNote,
@@ -22,6 +22,7 @@ import { ConfirmDialog } from "../../shared/ui/ConfirmDialog";
 import { Input } from "../../shared/ui/Input";
 import { Modal } from "../../shared/ui/Modal";
 import { Spinner } from "../../shared/ui/Spinner";
+import { NumberInput } from "./NumberInput";
 
 /**
  * Form 1 tháng phòng trọ — route /rental/:month.
@@ -141,6 +142,10 @@ export default function RentalMonthPage() {
     const ne = parseAmount(form.newElec);
     const ow = parseAmount(form.oldWater);
     const nw = parseAmount(form.newWater);
+    // Số MỚI phải > 0 trước khi chốt — công tơ phải đã có chỉ số đọc được
+    // (số CŨ được phép 0 ở tháng đầu, khi công tơ mới lắp).
+    if (ne !== null && ne <= 0) return "Số công tơ điện mới phải lớn hơn 0";
+    if (nw !== null && nw <= 0) return "Số công tơ nước mới phải lớn hơn 0";
     if (oe !== null && ne !== null && ne < oe) return "Số công tơ điện mới phải ≥ số cũ";
     if (ow !== null && nw !== null && nw < ow) return "Số công tơ nước mới phải ≥ số cũ";
     return null;
@@ -247,8 +252,9 @@ export default function RentalMonthPage() {
 
   if (!form) return null;
 
-  const set = (key: keyof FormState) => (e: ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => (f ? { ...f, [key]: e.target.value } : f));
+  // Setter dạng string thuần — NumberInput đã lọc ký tự, trả về chuỗi số.
+  const setRaw = (key: keyof FormState) => (value: string) =>
+    setForm((f) => (f ? { ...f, [key]: value } : f));
 
   const note = totals ? buildRentalNote(month, formAsFields(form)) : null;
 
@@ -281,15 +287,15 @@ export default function RentalMonthPage() {
         <Card>
           <h2 className="font-semibold text-ink">Khoản cố định</h2>
           <div className="mt-3 space-y-3">
-            <MoneyInput label="Tiền phòng (đ)" value={form.rent} onChange={set("rent")} disabled={!editable} />
-            <MoneyInput label="Tiền mạng (đ)" value={form.internet} onChange={set("internet")} disabled={!editable} />
-            <MoneyInput
+            <NumberInput label="Tiền phòng (đ)" value={form.rent} onValueChange={setRaw("rent")} disabled={!editable} />
+            <NumberInput label="Tiền mạng (đ)" value={form.internet} onValueChange={setRaw("internet")} disabled={!editable} />
+            <NumberInput
               label="Thang máy + vệ sinh (đ)"
               value={form.elevator}
-              onChange={set("elevator")}
+              onValueChange={setRaw("elevator")}
               disabled={!editable}
             />
-            <MoneyInput label="Gửi xe (đ)" value={form.parking} onChange={set("parking")} disabled={!editable} />
+            <NumberInput label="Gửi xe (đ)" value={form.parking} onValueChange={setRaw("parking")} disabled={!editable} />
           </div>
         </Card>
 
@@ -302,10 +308,10 @@ export default function RentalMonthPage() {
               unit="kWh"
               oldMeter={form.oldElec}
               newMeter={form.newElec}
-              onOld={set("oldElec")}
-              onNew={set("newElec")}
+              onOld={setRaw("oldElec")}
+              onNew={setRaw("newElec")}
               rate={form.electricityRate}
-              onRate={set("electricityRate")}
+              onRate={setRaw("electricityRate")}
               consumption={totals?.elecConsumption}
             />
             <MeterRow
@@ -314,10 +320,10 @@ export default function RentalMonthPage() {
               unit="m³"
               oldMeter={form.oldWater}
               newMeter={form.newWater}
-              onOld={set("oldWater")}
-              onNew={set("newWater")}
+              onOld={setRaw("oldWater")}
+              onNew={setRaw("newWater")}
               rate={form.waterRate}
-              onRate={set("waterRate")}
+              onRate={setRaw("waterRate")}
               consumption={totals?.waterConsumption}
             />
           </div>
@@ -456,32 +462,6 @@ export default function RentalMonthPage() {
   );
 }
 
-/** Input số tiền (int) — type number + inputMode numeric cho keyboard mobile. */
-function MoneyInput({
-  label,
-  value,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: string;
-  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Input
-      label={label}
-      type="number"
-      min={0}
-      step={1}
-      inputMode="numeric"
-      value={value}
-      onChange={onChange}
-      disabled={disabled}
-    />
-  );
-}
-
 /** Hàng công tơ: số cũ / số mới + đơn giá + dòng tiêu thụ live. */
 function MeterRow({
   testId,
@@ -500,10 +480,10 @@ function MeterRow({
   unit: string;
   oldMeter: string;
   newMeter: string;
-  onOld: (e: ChangeEvent<HTMLInputElement>) => void;
-  onNew: (e: ChangeEvent<HTMLInputElement>) => void;
+  onOld: (value: string) => void;
+  onNew: (value: string) => void;
   rate: string;
-  onRate: (e: ChangeEvent<HTMLInputElement>) => void;
+  onRate: (value: string) => void;
   consumption: number | null | undefined;
 }) {
   return (
@@ -517,19 +497,11 @@ function MeterRow({
         )}
       </div>
       <div className="mt-2 grid grid-cols-2 gap-3">
-        <Input label="Số cũ" type="number" min={0} step={1} inputMode="numeric" value={oldMeter} onChange={onOld} />
-        <Input label="Số mới" type="number" min={0} step={1} inputMode="numeric" value={newMeter} onChange={onNew} />
+        <NumberInput label="Số cũ" value={oldMeter} onValueChange={onOld} />
+        <NumberInput label="Số mới" value={newMeter} onValueChange={onNew} />
       </div>
       <div className="mt-3">
-        <Input
-          label={`Đơn giá (đ/${unit})`}
-          type="number"
-          min={0}
-          step={1}
-          inputMode="numeric"
-          value={rate}
-          onChange={onRate}
-        />
+        <NumberInput label={`Đơn giá (đ/${unit})`} value={rate} onValueChange={onRate} />
       </div>
     </div>
   );

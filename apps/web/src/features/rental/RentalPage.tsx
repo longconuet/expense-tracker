@@ -14,6 +14,7 @@ import { Card } from "../../shared/ui/Card";
 import { Input } from "../../shared/ui/Input";
 import { Modal } from "../../shared/ui/Modal";
 import { Spinner } from "../../shared/ui/Spinner";
+import { NumberInput } from "./NumberInput";
 
 /**
  * Tiền phòng trọ — route /rental.
@@ -190,59 +191,41 @@ export default function RentalPage() {
               Nhập một lần — các tháng sau tự kế thừa, vẫn sửa được từng tháng trước khi chốt.
             </p>
             <div className="mt-4 space-y-3">
-              <Input
+              <NumberInput
                 label="Tiền phòng (đ)"
-                type="number"
-                min={0}
-                inputMode="numeric"
-                placeholder="3200000"
+                placeholder="3.200.000"
                 value={configForm.rent}
-                onChange={(e) => setConfigForm((f) => ({ ...f, rent: e.target.value }))}
+                onValueChange={(v) => setConfigForm((f) => ({ ...f, rent: v }))}
               />
-              <Input
+              <NumberInput
                 label="Tiền mạng (đ)"
-                type="number"
-                min={0}
-                inputMode="numeric"
-                placeholder="100000"
+                placeholder="100.000"
                 value={configForm.internet}
-                onChange={(e) => setConfigForm((f) => ({ ...f, internet: e.target.value }))}
+                onValueChange={(v) => setConfigForm((f) => ({ ...f, internet: v }))}
               />
-              <Input
+              <NumberInput
                 label="Thang máy + vệ sinh (đ)"
-                type="number"
-                min={0}
-                inputMode="numeric"
-                placeholder="200000"
+                placeholder="200.000"
                 value={configForm.elevator}
-                onChange={(e) => setConfigForm((f) => ({ ...f, elevator: e.target.value }))}
+                onValueChange={(v) => setConfigForm((f) => ({ ...f, elevator: v }))}
               />
-              <Input
+              <NumberInput
                 label="Gửi xe (đ)"
-                type="number"
-                min={0}
-                inputMode="numeric"
-                placeholder="100000"
+                placeholder="100.000"
                 value={configForm.parking}
-                onChange={(e) => setConfigForm((f) => ({ ...f, parking: e.target.value }))}
+                onValueChange={(v) => setConfigForm((f) => ({ ...f, parking: v }))}
               />
-              <Input
+              <NumberInput
                 label="Giá điện (đ/kWh)"
-                type="number"
-                min={0}
-                inputMode="numeric"
-                placeholder="4000"
+                placeholder="4.000"
                 value={configForm.electricityRate}
-                onChange={(e) => setConfigForm((f) => ({ ...f, electricityRate: e.target.value }))}
+                onValueChange={(v) => setConfigForm((f) => ({ ...f, electricityRate: v }))}
               />
-              <Input
+              <NumberInput
                 label="Giá nước (đ/m³)"
-                type="number"
-                min={0}
-                inputMode="numeric"
-                placeholder="35000"
+                placeholder="35.000"
                 value={configForm.waterRate}
-                onChange={(e) => setConfigForm((f) => ({ ...f, waterRate: e.target.value }))}
+                onValueChange={(v) => setConfigForm((f) => ({ ...f, waterRate: v }))}
               />
             </div>
             {configError && (
