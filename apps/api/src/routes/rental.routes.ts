@@ -91,7 +91,7 @@ const PG_INT_MAX = 2_147_483_647;
 // Helpers
 // ---------------------------------------------------------------------------
 
-type MonthRow = Prisma.RentalMonthGetPayload<{}>;
+type MonthRow = Prisma.RentalMonthGetPayload<null>;
 
 function toMonthFields(row: Pick<
   MonthRow,
@@ -134,7 +134,7 @@ function toMonthDto(row: MonthRow): RentalMonth {
   };
 }
 
-function toConfigDto(row: Prisma.RentalConfigGetPayload<{}>): RentalConfig {
+function toConfigDto(row: Prisma.RentalConfigGetPayload<null>): RentalConfig {
   return {
     rent: row.rent,
     internet: row.internet,
