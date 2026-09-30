@@ -269,9 +269,20 @@ export default function HistoryPage() {
           {expense.category.icon}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate font-medium text-ink">{expense.note || expense.category.name}</p>
-          <p className="text-xs text-ink-muted">
-            {expense.category.name} · {expense.createdByName}
+          {/* Tiêu đề = tên danh mục. Ghi chú (nếu có) nằm hàng dưới,
+              phía sau người tạo. */}
+          <p className="truncate font-medium text-ink">{expense.category.name}</p>
+          <p className="truncate text-xs text-ink-muted">
+            {expense.createdByName}
+            {expense.note ? (
+              <>
+                {" · "}
+                {/* Span trần — KHÔNG "dọn" tag này: RTL getByText(note)
+                    exact-match chỉ đọc text-node trực tiếp, có span thì
+                    ~19 locator trong test mới khớp. */}
+                <span>{expense.note}</span>
+              </>
+            ) : null}
           </p>
         </div>
         <span className="font-semibold text-ink">{formatVnd(expense.amount)}</span>
