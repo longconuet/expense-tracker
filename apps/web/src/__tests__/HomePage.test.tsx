@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -70,9 +70,14 @@ describe("Trang chủ", () => {
     expect(screen.getByText("600.000 ₫")).toBeInTheDocument();
     expect(screen.getByText("60%")).toBeInTheDocument();
     expect(screen.getByText("cơm trưa")).toBeInTheDocument();
-    // Khoản gần đây nhóm theo ngày: tiêu đề "Hôm qua" + tên người tạo
+    // Layout đồng nhất Lịch sử: tiêu đề = tên danh mục; ghi chú nằm cùng
+    // hàng người tạo (phía sau người tạo)
+    const row = screen.getByText("cơm trưa").closest("li");
+    expect(row).not.toBeNull();
+    expect(within(row!).getByText("Ăn uống")).toBeInTheDocument();
+    expect(screen.getByText("cơm trưa").parentElement).toHaveTextContent("An · cơm trưa");
+    // Khoản gần đây nhóm theo ngày
     expect(screen.getByRole("heading", { name: "Hôm qua" })).toBeInTheDocument();
-    expect(screen.getByText("An")).toBeInTheDocument();
     expect(fetchStatsMock).toHaveBeenCalledWith("f1", expect.any(String));
     expect(fetchExpensesMock).toHaveBeenCalledWith("f1", expect.objectContaining({ pageSize: 5 }));
   });

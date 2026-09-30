@@ -184,10 +184,23 @@ export default function HomePage() {
                               {expense.category.icon}
                             </span>
                             <div className="min-w-0 flex-1">
+                              {/* Tiêu đề = tên danh mục. Ghi chú (nếu có) nằm
+                                  hàng dưới, phía sau người tạo (đồng nhất
+                                  với Lịch sử). */}
                               <p className="truncate text-sm font-medium text-ink">
-                                {expense.note || expense.category.name}
+                                {expense.category.name}
                               </p>
-                              <p className="text-xs text-ink-muted">{expense.createdByName}</p>
+                              <p className="truncate text-xs text-ink-muted">
+                                {expense.createdByName}
+                                {expense.note ? (
+                                  <>
+                                    {" · "}
+                                    {/* Span trần — KHÔNG "dọn" tag: RTL getByText(note)
+                                        exact-match chỉ đọc text-node trực tiếp. */}
+                                    <span>{expense.note}</span>
+                                  </>
+                                ) : null}
+                              </p>
                             </div>
                             <span className="text-sm font-semibold text-ink">
                               {formatVnd(expense.amount)}
