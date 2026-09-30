@@ -26,6 +26,8 @@ export const CACHE_TTL_MS = {
   /** Expense list + stats: quá 24h không đáng tin — coi như không có cache. */
   expenses: 24 * 60 * 60 * 1000,
   stats: 24 * 60 * 60 * 1000,
+  /** Tiền phòng trọ: cùng nhịp với expenses (dữ liệu tháng). */
+  rental: 24 * 60 * 60 * 1000,
 } as const;
 
 const DEFAULT_TTL_MS = CACHE_TTL_MS.expenses;
@@ -34,6 +36,7 @@ function ttlFor(key: string): number {
   if (key.includes("/categories")) return CACHE_TTL_MS.categories;
   if (key.includes("/stats")) return CACHE_TTL_MS.stats;
   if (key.includes("/expenses")) return CACHE_TTL_MS.expenses;
+  if (key.includes("/rental")) return CACHE_TTL_MS.rental;
   return DEFAULT_TTL_MS;
 }
 

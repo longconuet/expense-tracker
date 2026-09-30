@@ -5,17 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../core/dataApi", () => ({
   fetchStats: vi.fn(),
   fetchExpenses: vi.fn(),
+  fetchRental: vi.fn(),
 }));
 
-import { fetchExpenses, fetchStats } from "../core/dataApi";
+import { fetchExpenses, fetchRental, fetchStats } from "../core/dataApi";
 import { useAuthStore } from "../core/authStore";
 import { ApiError } from "../core/api";
 import { SYNCED_EVENT } from "../core/syncQueue";
-import { today, yesterday } from "../core/dates";
+import { currentMonth, today, yesterday } from "../core/dates";
 import HomePage from "../features/home/HomePage";
 
 const fetchStatsMock = vi.mocked(fetchStats);
 const fetchExpensesMock = vi.mocked(fetchExpenses);
+const fetchRentalMock = vi.mocked(fetchRental);
 
 const CAT = { id: "c1", name: "Ăn uống", icon: "🍜", isPreset: true, order: 0 };
 const EXPENSE = {
@@ -41,6 +43,9 @@ describe("Trang chủ", () => {
     useAuthStore.setState({ activeFamilyId: "f1" });
     fetchStatsMock.mockReset();
     fetchExpensesMock.mockReset();
+    fetchRentalMock.mockReset();
+    // Mặc định: chưa setup phòng trọ (card chỉ hiện tiêu đề)
+    fetchRentalMock.mockResolvedValue({ config: null, months: [] });
   });
 
   afterEach(() => {
@@ -257,5 +262,81 @@ describe("Trang chủ", () => {
     // Assert
     expect(await screen.findByRole("alert")).toHaveTextContent("Mất kết nối.");
     expect(screen.getByText("cơm trưa")).toBeInTheDocument();
+  });
+
+  it("card Tiền phòng trọ: tháng hiện tại DRAFT → dòng 2 Chờ chốt + tổng, link /rental", async () => {
+    // Arrange
+    fetchStatsMock.mockResolvedValue({
+      month: currentMonth(),
+      total: 0,
+      previousMonthTotal: 0,
+      byCategory: [],
+      byDay: [],
+      byMember: [],
+    });
+    fetchExpensesMock.mockResolvedValue({ expenses: [], meta: { page: 1, pageSize: 5, total: 0 } });
+    fetchRentalMock.mockResolvedValue({
+      config: {
+        rent: 3_200_000,
+        internet: 100_000,
+        elevator: 200_000,
+        parking: 100_000,
+        electricityRate: 4_000,
+        waterRate: 35_000,
+        updatedAt: "2026-09-01T00:00:00.000Z",
+      },
+      months: [
+        {
+          id: "m1",
+          month: currentMonth(),
+          rent: 3_200_000,
+          internet: 100_000,
+          elevator: 200_000,
+          parking: 100_000,
+          oldElec: 17_743,
+          newElec: 18_023,
+          electricityRate: 4_000,
+          oldWater: 1_001,
+          newWater: 1_007,
+          waterRate: 35_000,
+          status: "DRAFT",
+          expenseId: null,
+          confirmedAt: null,
+          elecConsumption: 280,
+          waterConsumption: 6,
+          electricityCost: 1_120_000,
+          waterCost: 210_000,
+          total: 4_930_000,
+        },
+      ],
+    });
+    renderHome();
+
+    // Assert
+    const card = await screen.findByText("Tiền phòng trọ");
+    expect(card).toBeInTheDocument();
+    expect(screen.getByText("Chờ chốt · 4.930.000 ₫")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Tiền phòng trọ/ })).toHaveAttribute("href", "/rental");
+  });
+
+  it("card Tiền phòng trọ: fetchRental lỗi (offline) → không crash Home, card chỉ hiện tiêu đề", async () => {
+    // Arrange
+    fetchStatsMock.mockResolvedValue({
+      month: currentMonth(),
+      total: 1_000_000,
+      previousMonthTotal: 500_000,
+      byCategory: [],
+      byDay: [],
+      byMember: [],
+    });
+    fetchExpensesMock.mockResolvedValue({ expenses: [EXPENSE], meta: { page: 1, pageSize: 5, total: 1 } });
+    fetchRentalMock.mockRejectedValue(new ApiError("NETWORK_ERROR", "Mất kết nối.", 0));
+    renderHome();
+
+    // Assert — Home vẫn render đầy đủ, card không có dòng 2
+    expect(await screen.findByText("Tổng chi tiêu")).toBeInTheDocument();
+    expect(screen.getByText("Tiền phòng trọ")).toBeInTheDocument();
+    expect(screen.queryByText(/Chờ chốt ·/)).toBeNull();
+    expect(screen.queryByText(/Đã chốt ·/)).toBeNull();
   });
 });

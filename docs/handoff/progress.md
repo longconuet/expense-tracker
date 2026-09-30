@@ -3,6 +3,19 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
+## Cập nhật: 30/09/2026 — **Tính năng "Tiền phòng trọ" XONG 7/7 WBS** (spec `docs/spec-rental.md`, user duyệt + chốt 4 điểm: setup mặc định 1 lần + sửa theo tháng trước khi chốt · preset "Nhà trọ" 🏠 · tháng đã chốt mở lại được (OWNER) cập nhật CÙNG khoản chi · card Home làm điểm vào) — 6 commit trên `develop`, **chưa push**:
+
+- `0bc99dd` docs: spec đầy đủ (schema, 7 endpoint, wireframe FE, 54 test case, WBS 7 task)
+- `f6a85aa` feat(shared): `rental.ts` — types + `computeRentalTotals` + `formatMeter` (vi-VN int) + `isValidMonth`/`isValidDateInMonth` + `firstDay/lastDayOfMonth` + `buildRentalNote` (≤200) + `RENTAL_CATEGORY` · `PRESET_CATEGORIES` + "Nhà trọ" 🏠 (8 preset, index 3, "Khác" cuối) — **số công tơ INT** (verify 100% 30 dòng sổ thật: 18.023 − 17.743 = 280 kWh, tổng tháng 7 = 4.930.000 ₫)
+- `a85fef5` feat(api): Prisma `RentalConfig` (6 giá trị, familyId unique) + `RentalMonth` (snapshot 10 trường, `@@unique([familyId, month])`, DRAFT/CONFIRMED, `expenseId` 1-1) · migration `20260930101929_add_rental` + backfill idempotent preset "Nhà trọ" cho family cũ (id `md5('rental-'+familyId)`, đã apply dev DB, chạy 2 lần = INSERT 0 0)
+- `3abc1d5` feat(api): `rental.routes.ts` 7 endpoint `/api/families/:id/rental` · chốt = 1 transaction (self-heal category "Nhà trọ" + create/update 1 Expense + CONFIRMED + expenseId) · prefill draft: cố định + đơn giá từ config, số cũ = số mới tháng trước (carry-over) · guard `RENTAL_EXPENSE_LOCKED` 409 trên PUT/DELETE `/api/expenses/:id` · `assertAmountFits` total ≤ PG_INT_MAX (cột `Expense.amount` INTEGER)
+- `52bdd34` feat(web): `features/rental/` — `RentalPage` (setup 6 giá trị, list nhóm năm + chip Đã chốt/Chờ chốt, ghost card tạo tháng hiện tại 1 chạm, modal thêm tháng) + `RentalMonthPage` (form 10 trường tính live kWh/m³/tiền điện-nước/tổng, chặn công tơ mới < cũ, modal chốt: date mặc định 01 + min/max trong tháng + preview note; CONFIRMED: banner + "Chỉnh sửa & chốt lại" + xoá cảnh báo xoá cả khoản chi; MEMBER read-only) + `RentalCard` Home (fetch độc lập không block, lỗi/offline → card chỉ hiện tiêu đề) · dataApi 6 hàm (fetch qua read cache TTL 24h; mutation online-only; confirm/delete invalidate cả expense cache tháng+date) · token `--color-warning`/`-soft` (light #b45309 ≈4.6:1 AA / dark #fbbf24) · route `/rental` + `/rental/:month`
+- `6b3f1c3` fix + E2E: **review 2 agent** (code + security, 0 CRITICAL/HIGH) → fix: confirm khoá row `FOR UPDATE` + re-read trong transaction (chống 2 confirm song song tạo 2 expense — 1 mồ côi kép tiền) · self-heal category catch P2002 (không 500) · form setup chặn ô trống (sẽ lưu config toàn 0, không UI sửa lại) · +4 test API (3× MEMBER 403, 1× tổng > INT_MAX) · spec case 47 cập nhật (chốt xong ở lại màn tháng) · **E2E `e2e/rental.spec.ts`** case 53–54: happy path 4.930.000 ₫ → 1 khoản "Nhà trọ" Lịch sử; chốt lại giá điện 3.500 → 4.790.000 ₫ vẫn 1 khoản
+- **Baseline cuối**: shared 28/28 · api **145/145** · web **343/343** · **E2E 16/16** · tsc + lint + build sạch
+- **Ghi nhận WBS**: task 5+6 (FE form tháng) gộp 1 commit — form + modal chốt + chế độ CONFIRMED + xoá là 1 khối không tách được (1 screen = 1 commit); WBS 7 = E2E + entry này (gộp vào `6b3f1c3` vì e2e là phần verify của chính các fix)
+- **LOW review chấp nhận (đã note, không chặn)**: L3 cache expense lọc-đúng-date stale ≤24h sau xoá/chốt-đổi-ngày (đã comment code) · L4 `RentalCard` nằm `features/rental` nhưng Home import (spec gán card làm điểm vào) · L5 mock thứ tự effect trong `App.sessionRestored.test.tsx` (đã comment) · R-4 GET /rental 403 lộ family tồn tại = pattern có sẵn toàn `/api/families/:id/*`
+- **⚠ CHƯA làm**: push `develop` (6 commit) + PR `develop → main` release — chờ user; push sẽ tự apply migration `20260930101929_add_rental` vào DB production qua CI job migrate (migration additive, an toàn)
+
 ## Cập nhật: 30/09/2026 — **Đồng nhất popup chi tiết ngày (Thống kê) với ExpenseRow** — user chốt "hãy đồng nhất popup chi tiết ngày (Thống kê)". `DayDetailModal.tsx`: hàng khoản chi chuyển từ markup riêng (layout CŨ: note làm tiêu đề, dòng 2 "danh mục · người tạo", dòng 2 không truncate, amount có `shrink-0`) → `<ExpenseRow expense={expense} size="sm" />` — đồng bộ hoàn toàn 3 màn (Lịch sử md, Trang chủ sm, popup sm). Test `DayDetailModal.test.tsx`: 2 assertion cũ → layout mới (tiêu đề "Ăn uống"/"Đi lại" + dòng 2 "An · Tiệc liên hoan" qua parentElement + "Bình" exact). Tổng ngày `text-primary-text` + fetch/cap 100/loading/error KHÔNG đụng. **Giờ KHÔNG CÒN màn nào render hàng khoản bằng markup riêng** (reviewer grep toàn `apps/web/src` xác nhận — chỗ còn lại là aggregation theo danh mục/chip lọc/form, đúng bản chất). Kết quả: api 101/101 · web 319/319 · shared 12/12 · E2E 15/15 · lint + build sạch. Review 2 agent: code **DUYỆT** (reviewer measure Chromium headless: mất `shrink-0` an toàn — `div.min-w-0.flex-1` hấp thụ shrink, pixel-identical với markup cũ; 2 LOW chỉ ghi nhận: truncate không có `title` tooltip = follow-up trên ExpenseRow, coverage dot-thừa nằm ở `ExpenseRow.test.tsx`) + security **DUYỆT** 0 phát hiện.
 
 ## Cập nhật: 30/09/2026 — **Tách component dùng chung `ExpenseRow` (Lịch sử + Trang chủ)** — user chốt theo đề xuất reviewer (task "Gần đây" 30/09): 2 page copy chung 1 khối markup hàng khoản → bug lệch layout (đổi History quên Home). (1) **MỚI** `shared/ui/ExpenseRow.tsx` — presentational thuần (props `expense: Expense` + `size?: "md" | "sm"`; map `sizeClass` tĩnh, default md = Lịch sử, sm = card "Gần đây"); giữ nguyên block: icon aria-hidden + tiêu đề = `category.name` + dòng 2 `createdByName · note` (span trần có comment lý do RTL) + `formatVnd`; container (Link/Card/li + nút xoá) vẫn phía page; (2) `HistoryPage` xoá `renderRowContent` → `<ExpenseRow />`; (3) `HomePage` khối JSX → `<ExpenseRow size="sm" />`; (4) **MỚI** test `ExpenseRow.test.tsx` 4 test (tiêu đề = danh mục không phải note; note sau creator; note null → chỉ creator; classes theo size — test dùng `ExpenseRowProps["size"]` theo fix LOW review). **Yêu cầu "DOM giữ nguyên" đã verify byte-level** (reviewer so bảng class trước/sau + test cũ KHÔNG sửa 1 dòng). Kết quả: api 101/101 · web **319/319** (+4) · shared 12/12 · E2E 15/15 · lint + build sạch. Review 2 agent: code **DUYỆT** (2 LOW: fix `ExpenseRowProps["size"]` = đã áp; assert class theo size = chấp nhận, khớp style test Keypad) + security **DUYỆT** 0 phát hiện. **Lưu ý cho task sau** (reviewer): nếu user chốt đồng nhất popup DayDetailModal — hàng popup lệch ExpenseRow ở 4 điểm (note làm tiêu đề, thứ tự dòng 2 ngược, thiếu truncate, amount `shrink-0`) → sẽ cần thêm prop kiểu `titleMode`; KHÔNG thêm `shrink-0` vào ExpenseRow lúc này (sẽ đổi DOM 2 màn đang chạy)
@@ -322,30 +335,31 @@
 - **Sửa khoản offline**: `PUT /expenses/:id` khi server không đạt → hiện lỗi (chưa có queue cho edit — queue chỉ support create)
 - Khoản queue gặp 4xx vĩnh viễn (VD danh mục bị xoá) sẽ ở lại queue, retry lại mỗi 30s — MVP chấp nhận, cần UI quản lý queue thì làm sau
 
-## Trạng thái Git + Production (cập nhật 25/09/2026)
-- `develop` = `9e3b8e3` (docs sau `58eaab0` feat stats byMember) — **đã push**; `main` = `32b1719` (**PR #7 `develop → main` đã merge ~20:24 25/09** — 14 commit); develop dẫn main **2 commit** (stats byMember) → **PR #8 `develop → main` chờ tạo** để release qua Actions CD
+## Trạng thái Git + Production (cập nhật 30/09/2026)
+- `develop` = `6b3f1c3` (sau `52bdd34` feat(web) rental) — **chưa push, 6 commit** (`0bc99dd` → `f6a85aa` → `a85fef5` → `3abc1d5` → `52bdd34` → `6b3f1c3` = tính năng tiền phòng trọ trọn bộ); `main` = `32b1719`
 - **Option B VERIFIED END-TO-END**: Production Branch Vercel = `release-disabled` (user Save, frozen ở `4545b87`, không bao giờ push vào) — push `develop 9e3b8e3` chỉ tạo deployment **preview** (`READY/STAGED`, alias `expense-tracker-git-develop-long-7bf1.vercel.app`, không attach domain production) ✓; production chỉ nhận deploy qua Actions CD (test → migrate → `vercel deploy --prod`, trigger push `main`)
 - **Ghi chú transition**: production deployment của PR #7 do git-integration Vercel tạo khi push `main` (tại thời điểm merge Production Branch chưa đổi sang `release-disabled`) — code + DB khớp nên chạy ổn; từ push main kế tiếp git-integration KHÔNG còn tạo production deploy
 - **Production** (`https://expense-tracker-long-7bf1.vercel.app`) = code `32b1719` (≡ develop `4545b87`) + DB đã migrate (`20260925120000_add_username` apply tay sau incident 25/09) — probe 401 OK
 - Các commit chính sau release v1.0 (xem `git log --oneline`): `cbc9526` (perf: pin region sin1, PR #5) · `408e4b4` (keep-warm cron, PR #6) · `1603146` (xoá keep-warm.yml — thay bằng UptimeRobot) · `906d576` (skeleton + no-flicker) · `22f9471` (modal + ConfirmDialog) · `d6880dd` + `0c33ae9` (quản lý danh mục) · `1c7003d` (bình đẳng hoá preset) · `3655604` (username thay email) + `452a28e` + `4545b87` (docs) · `58eaab0` (stats byMember)
 - Git identity set **riêng cho repo** (không global): `Long NT` / `nice231096@gmail.com`
-- Working tree clean
-- Baseline test hiện tại: **web 158** · api 63 · shared 4 (tổng 225)
+- Working tree clean (sau entry này)
+- Baseline test hiện tại: **web 343** · api 145 · shared 28 (tổng 516) + E2E 16/16
 
 ## Đang làm
-- (không) — **toàn bộ 14 WBS trong plan.md §10 đã hoàn tất**; keep-warm đã chuyển xong sang UptimeRobot (monitor ping 5 phút xanh đều + cảnh báo down)
+- (không) — tính năng **Tiền phòng trọ** XONG 7/7 WBS (entry đầu file 30/09) · toàn bộ 14 WBS gốc plan.md §10 cũng đã hoàn tất
 
-## Task kế tiếp: (không có WBS nào còn lại)
-Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gốc):
-1. Upgrade PostgreSQL thật (đổi provider schema + migration PG + chạy compose với service postgres) — doc đã có hướng dẫn trong `docs/deploy.md`
-2. Chạy thử deploy Vercel + Supabase theo guide (mục B — chưa được kiểm chứng)
-3. UI quản lý queue offline (hiện khoản đang chờ sync, xoá/đẩy lại) — mục "Chênh với spec"
-4. Code-splitting thêm (VD recharts đã tách; nếu thêm thư viện nặng khác) hoặc tối ưu bundle
+## Task kế tiếp: **push `develop` + PR `develop → main` release tiền phòng trọ** (chờ user duyệt)
+- 6 commit chưa push (`0bc99dd` → `6b3f1c3`); push → CI chạy test + **tự apply migration `20260930101929_add_rental` vào DB production** (additive: 2 bảng mới + backfill idempotent — an toàn, không đổi data cũ)
+- Release production: PR `develop → main` → Actions CD (test → migrate → vercel deploy --prod) — xem quy trình mục "Chi tiết Phase 4 + 5"
+- Việc khác tuỳ user chọn (không chặn):
+  1. Fix overflow `Expense.amount` (issue deferred đầu tiên)
+  2. UI quản lý queue offline — mục "Chênh với spec"
 
 ## Quyết định đã chốt
 - Màu chính: teal — light `#0D9488` / dark `#2DD4BF`; dark mode theo class, toggle màn "Tôi", lưu localStorage (key `etracker-theme`)
 - Access token: in-memory; chỉ persist `activeFamilyId` (key `etracker-auth`)
-- Category mặc định: Ăn uống 🍜 · Đi lại 🚗 · Gia đình ⚡ · Sức khỏe 💊 · Vui chơi 🎬 · Mua sắm 🛒 · Khác 📦
+- Category mặc định (8 preset, 30/09 + "Nhà trọ"): Ăn uống 🍜 · Đi lại 🚗 · Gia đình ⚡ · **Nhà trọ 🏠 (index 3)** · Sức khỏe 💊 · Vui chơi 🎬 · Mua sắm 🛒 · Khác 📦 (luôn cuối)
+- **Tiền phòng trọ (30/09)**: số công tơ = INT (số chỉ dồn tích); chốt 1 tháng = ĐÚNG 1 expense "Nhà trọ" (tháng đã chốt chốt lại = update cùng expense, link `RentalMonth.expenseId`); đơn giá snapshot per month; số cũ tháng sau = số mới tháng trước (prefill carry-over); chỉ OWNER mutation (config + months), MEMBER xem; expense do chốt trọ khoá PUT/DELETE thường (409 `RENTAL_EXPENSE_LOCKED`); mutation rental online-only (không offline queue); FE giữ form string → parse int khi tính/lưu
 - Quyền sửa/xoá khoản chi: người tạo + owner (API enforce; FE chỉ hiện nút khi `owner || createdByName === user.name`)
 - Auth: JWT access (in-memory FE) + refresh cookie httpOnly, rotation, stateless — token theo `userId`, không phụ thuộc username/email (đổi định danh không phá phiên)
 - **Đăng nhập bằng username** (25/09): username 2-20 ký tự `a-z 0-9 . _` bắt đầu/kết thúc bằng chữ hoặc số, tự lowercase, unique — định danh login duy nhất; email nullable chỉ ghi nhận nguồn gốc (backfill từ phần trước @ của email cũ); không có tính năng đổi username sau (YAGNI)
@@ -356,6 +370,7 @@ Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gố
 - Commit: Conventional Commits, thẳng `develop`, 1 task = 1 commit; remote `origin` = https://github.com/longconuet/expense-tracker.git
 
 ## Issue deferred (không chặn — làm khi cần)
+- **`Expense.amount` overflow latent (phát hiện task rental 30/09)**: cột `amount` là Postgres INTEGER (≤ 2.147.483.647) nhưng endpoint expenses thường (POST/PUT `/api/expenses`) cho qua amount tới ~1e12 (chưa có guard kiểu `assertAmountFits` của rental) → lưu > INT_MAX → 500. FE keypad cap 9 chữ số (999.999.999) nên UI không chạm được; chỉ API gọi trực tiếp mới lộ. Fix: guard INT_MAX ở create/update expense (pattern `assertAmountFits` có sẵn trong `rental.routes.ts`)
 - **Map Prisma P2002 trong `errorHandler`** (lấp chung 2 case): (1) PUT category đổi tên trùng trong family → 500 thay vì 409 (có sẵn từ task quản lý danh mục); (2) race register: `findUnique` + `create` không nguyên tử, 2 request trùng username song song → P2002 → 500 thay vì 409 (unique index vẫn chặn vỡ dữ liệu). Fix: map `code === "P2002"` → 409 code thích hợp, hoặc pre-check như POST category
 - **Rate limit `/api/auth/*`** (brute force): chưa có; username ngắn dễ đoán hơn email — follow-up `express-rate-limit`. (Side-channel timing nhỏ khi user không tồn tại — bỏ qua)
 - **Reorder 2 PUT song song** (task quản lý danh mục): partial-failure → order trùng; cần endpoint swap hoặc `@@unique([familyId, order])` phía API
@@ -398,3 +413,13 @@ Việc phát triển tiếp theo (tuỳ user chọn, không nằm trong WBS gố
 - `POST /api/expenses` {familyId,categoryId,amount,date,note?} → 201 {expense}
 - `GET/PUT/DELETE /api/expenses/:id`
 - `GET /api/families/:id/stats?month` → MonthlyStats
+- **Tiền phòng trọ** (30/09, spec `docs/spec-rental.md`) — mount `/api/families/:id/rental`:
+  - `GET /` → `{ config: RentalConfig|null, months: RentalMonth[] }` (mọi member; months desc)
+  - `PUT /config` (owner) `{rent,internet,elevator,parking,electricityRate,waterRate}` (int ≥0, cap 1e9/1e7) → upsert
+  - `GET /months?year=YYYY` → `{ months }` (mọi member)
+  - `POST /months` (owner) `{month: "YYYY-MM"}` → 201 draft (prefill config + số công tơ tháng trước) — 409 RENTAL_CONFIG_NOT_SET / RENTAL_MONTH_EXISTS
+  - `PUT /months/:month` (owner) partial 10 field — DRAFT only, 409 RENTAL_MONTH_CONFIRMED
+  - `POST /months/:month/confirm` (owner) 10 field + `date` (trong tháng) → 1 transaction: tạo/update 1 Expense "Nhà trọ" + CONFIRMED → `{ month, expenseId }` — guard tổng ≤ INT_MAX
+  - `DELETE /months/:month` (owner) — đã chốt → xoá luôn expense liên kết
+  - `RentalMonth`: 10 giá trị + `status` + `expenseId` + `confirmedAt` + computed `{elecConsumption, waterConsumption, electricityCost, waterCost, total}`
+  - Expense do chốt trọ: PUT/DELETE `/api/expenses/:id` → 409 `RENTAL_EXPENSE_LOCKED`

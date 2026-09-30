@@ -7,11 +7,11 @@ import { invalidateCache } from "./readCache";
 
 export interface ParsedCacheKey {
   familyId: string;
-  resource: "categories" | "expenses" | "stats";
+  resource: "categories" | "expenses" | "stats" | "rental";
   params: URLSearchParams;
 }
 
-const KEY_PATTERN = /^GET \/api\/families\/([^/]+)\/(categories|expenses|stats)(?:\?(.*))?$/;
+const KEY_PATTERN = /^GET \/api\/families\/([^/]+)\/(categories|expenses|stats|rental)(?:\?(.*))?$/;
 
 /** Parse key cache; trả null cho key không khớp hình dạng chuẩn. */
 export function parseCacheKey(key: string): ParsedCacheKey | null {
@@ -59,5 +59,13 @@ export async function invalidateFamilyCache(familyId: string): Promise<void> {
   await invalidateCache((key) => {
     const parsed = parseCacheKey(key);
     return parsed !== null && parsed.familyId === familyId;
+  });
+}
+
+/** Xoá cache tiền phòng trọ của family — gọi sau mọi mutation rental. */
+export async function invalidateRentalCache(familyId: string): Promise<void> {
+  await invalidateCache((key) => {
+    const parsed = parseCacheKey(key);
+    return parsed !== null && parsed.familyId === familyId && parsed.resource === "rental";
   });
 }

@@ -6,9 +6,14 @@ import type {
   Family,
   FamilyMemberDto,
   MonthlyStats,
+  RentalConfig,
+  RentalConfigFields,
+  RentalListResponse,
+  RentalMonth,
+  RentalMonthFields,
 } from "@expense-tracker/shared";
 import { apiFetch, apiFetchBinary, apiFetchWithMeta, ApiError, isServerUnavailable } from "./api";
-import { invalidateExpenseCache, invalidateFamilyCache } from "./cacheInvalidate";
+import { invalidateExpenseCache, invalidateFamilyCache, invalidateRentalCache } from "./cacheInvalidate";
 import { monthOf } from "./dates";
 import { withReadCache } from "./readCache";
 import { enqueueExpense } from "./syncQueue";
@@ -286,6 +291,95 @@ export async function updateExpense(
     [previousDate, expense.date],
   );
   return expense;
+}
+
+// ---------------------------------------------------------------------------
+// Tiền phòng trọ (rental) — spec: docs/spec-rental.md
+//
+// Read đi qua read cache (TTL 24h); mutation online-only (không offline queue,
+// nhất quán với category) — sau khi 2xx tự invalidate cache rental của family.
+// ---------------------------------------------------------------------------
+
+export async function fetchRental(familyId: string): Promise<RentalListResponse> {
+  const path = `/api/families/${familyId}/rental`;
+  return withReadCache<RentalListResponse>(`GET ${path}`, () =>
+    apiFetch<RentalListResponse>(path),
+  );
+}
+
+/** Setup/sửa thông tin mặc định (upsert) — chỉ OWNER (API enforce). */
+export async function saveRentalConfig(
+  familyId: string,
+  fields: RentalConfigFields,
+): Promise<RentalConfig> {
+  const data = await apiFetch<{ config: RentalConfig }>(
+    `/api/families/${familyId}/rental/config`,
+    { method: "PUT", body: fields },
+  );
+  await invalidateRentalCache(familyId);
+  return data.config;
+}
+
+/** Tạo draft tháng — prefill từ config + số công tơ tháng trước (API). */
+export async function createRentalMonth(familyId: string, month: string): Promise<RentalMonth> {
+  const data = await apiFetch<{ month: RentalMonth }>(
+    `/api/families/${familyId}/rental/months`,
+    { method: "POST", body: { month } },
+  );
+  await invalidateRentalCache(familyId);
+  return data.month;
+}
+
+/** Sửa tháng DRAFT — chỉ OWNER. Tháng đã chốt → 409 (dùng confirm). */
+export async function updateRentalMonth(
+  familyId: string,
+  month: string,
+  fields: Partial<RentalMonthFields>,
+): Promise<RentalMonth> {
+  const data = await apiFetch<{ month: RentalMonth }>(
+    `/api/families/${familyId}/rental/months/${month}`,
+    { method: "PUT", body: fields },
+  );
+  await invalidateRentalCache(familyId);
+  return data.month;
+}
+
+export interface ConfirmRentalMonthInput extends RentalMonthFields {
+  /** Ngày của khoản chi — bắt buộc trong tháng `month` (API validate). */
+  date: string;
+}
+
+/**
+ * Chốt tháng: tạo (DRAFT) hoặc cập nhật lại (CONFIRMED) 1 khoản chi.
+ * Invalidate cả expense cache của tháng — khoản chi mới phải hiện ngay
+ * ở Lịch sử/Home.
+ */
+export async function confirmRentalMonth(
+  familyId: string,
+  month: string,
+  input: ConfirmRentalMonthInput,
+): Promise<{ month: RentalMonth; expenseId: string }> {
+  const data = await apiFetch<{ month: RentalMonth; expenseId: string }>(
+    `/api/families/${familyId}/rental/months/${month}/confirm`,
+    { method: "POST", body: input },
+  );
+  await Promise.all([
+    invalidateRentalCache(familyId),
+    invalidateExpenseCache(familyId, [month], [input.date]),
+  ]);
+  return data;
+}
+
+/**
+ * Xoá tháng — nếu đã chốt thì xoá luôn khoản chi liên kết.
+ * Expense cache: xoá theo tháng (list không lọc date). Edge case: bản cache
+ * lọc đúng ngày của khoản đó (popup chi tiết ngày) tươi lại sau TTL 24h.
+ */
+export async function deleteRentalMonth(familyId: string, month: string): Promise<void> {
+  await apiFetch<{ ok: true }>(`/api/families/${familyId}/rental/months/${month}`, {
+    method: "DELETE",
+  });
+  await Promise.all([invalidateRentalCache(familyId), invalidateExpenseCache(familyId, [month], [])]);
 }
 
 // ---------------------------------------------------------------------------

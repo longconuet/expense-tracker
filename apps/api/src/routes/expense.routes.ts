@@ -320,9 +320,29 @@ expenseRouter.get("/:id", async (req, res) => {
   sendOk(res, { expense: toExpenseDto(expense) });
 });
 
+/**
+ * Khoản chi do "chốt tháng phòng trọ" tạo ra (RentalMonth.expenseId) KHÔNG
+ * sửa/xoá được từ đây — con đường duy nhất là endpoint rental (giữ nhất quán
+ * snapshot tháng ↔ expense). Spec: docs/spec-rental.md §2.2.
+ */
+async function assertNotRentalExpense(expenseId: string): Promise<void> {
+  const rentalLink = await prisma.rentalMonth.findUnique({
+    where: { expenseId },
+    select: { id: true },
+  });
+  if (rentalLink) {
+    throw new AppError(
+      409,
+      "RENTAL_EXPENSE_LOCKED",
+      "Đây là khoản chi phòng trọ — hãy chỉnh sửa hoặc xoá ở màn Tiền phòng trọ",
+    );
+  }
+}
+
 expenseRouter.put("/:id", validateBody(updateExpenseSchema), async (req, res) => {
   const expenseId = String(req.params.id ?? "");
   const existing = await requireExpenseAccess(expenseId, req.auth!.userId);
+  await assertNotRentalExpense(expenseId);
   const { categoryId, amount, date, note } = req.body;
 
   const data: Prisma.ExpenseUpdateInput = {};
@@ -346,6 +366,7 @@ expenseRouter.put("/:id", validateBody(updateExpenseSchema), async (req, res) =>
 expenseRouter.delete("/:id", async (req, res) => {
   const expenseId = String(req.params.id ?? "");
   await requireExpenseAccess(expenseId, req.auth!.userId);
+  await assertNotRentalExpense(expenseId);
   await prisma.expense.delete({ where: { id: expenseId } });
   sendOk(res, { ok: true });
 });

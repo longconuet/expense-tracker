@@ -31,14 +31,15 @@ afterAll(async () => {
 });
 
 describe("GET /api/families/:id/categories", () => {
-  it("trả 7 preset mặc định xếp theo order", async () => {
+  it("trả 8 preset mặc định xếp theo order", async () => {
     const res = await request(app).get(`/api/families/${family.id}/categories`).set(auth(ownerToken));
 
     expect(res.status).toBe(200);
-    expect(res.body.data.categories).toHaveLength(7);
+    expect(res.body.data.categories).toHaveLength(8);
     const names = res.body.data.categories.map((c: { name: string }) => c.name);
     expect(names[0]).toBe("Ăn uống");
-    expect(names[6]).toBe("Khác");
+    expect(names[3]).toBe("Nhà trọ");
+    expect(names[7]).toBe("Khác");
     for (let i = 1; i < res.body.data.categories.length; i++) {
       expect(res.body.data.categories[i].order).toBeGreaterThan(res.body.data.categories[i - 1].order);
     }
@@ -54,7 +55,7 @@ describe("POST /api/families/:id/categories", () => {
       .send({ name: "Sách", icon: "📚" });
 
     expect(res.status).toBe(201);
-    expect(res.body.data.category).toMatchObject({ name: "Sách", icon: "📚", isPreset: false, order: 7 });
+    expect(res.body.data.category).toMatchObject({ name: "Sách", icon: "📚", isPreset: false, order: 8 });
   });
 
   it("từ chối trùng tên trong family với 409", async () => {

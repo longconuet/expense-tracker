@@ -40,7 +40,7 @@ afterAll(async () => {
 });
 
 describe("POST /api/families — tạo family", () => {
-  it("tạo family: user thành OWNER, có mã 6 ký tự, seed 7 preset categories", async () => {
+  it("tạo family: user thành OWNER, có mã 6 ký tự, seed 8 preset categories", async () => {
     const actor = await registerActor("Chủ Gia", "fam_owner");
 
     const family = await createFamily(actor, "Nhà Mình");
@@ -53,7 +53,12 @@ describe("POST /api/families — tạo family", () => {
     expect(family.members[0]).toMatchObject({ userId: actor.userId, name: "Chủ Gia", role: "OWNER" });
 
     const categoryCount = await prisma.category.count({ where: { familyId: family.id } });
-    expect(categoryCount).toBe(7);
+    expect(categoryCount).toBe(8);
+    const presetNames = await prisma.category.findMany({
+      where: { familyId: family.id },
+      select: { name: true },
+    });
+    expect(presetNames.map((c) => c.name)).toContain("Nhà trọ");
   });
 
   it("từ chối tên quá ngắn với 400", async () => {
