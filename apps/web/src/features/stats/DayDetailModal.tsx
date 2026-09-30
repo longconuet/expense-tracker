@@ -5,6 +5,7 @@ import { ApiError } from "../../core/api";
 import { fetchExpenses } from "../../core/dataApi";
 import { shortDate } from "../../core/dates";
 import { Button } from "../../shared/ui/Button";
+import { ExpenseRow } from "../../shared/ui/ExpenseRow";
 import { Modal } from "../../shared/ui/Modal";
 import { Spinner } from "../../shared/ui/Spinner";
 
@@ -88,18 +89,7 @@ export function DayDetailModal({ open, date, familyId, onClose }: DayDetailModal
           <ul className="mt-3 space-y-2.5">
             {expenses.map((expense) => (
               <li key={expense.id} className="flex items-center gap-3">
-                <span className="text-xl" aria-hidden>
-                  {expense.category.icon}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink">
-                    {expense.note || expense.category.name}
-                  </p>
-                  <p className="text-xs text-ink-muted">
-                    {expense.category.name} · {expense.createdByName}
-                  </p>
-                </div>
-                <span className="shrink-0 text-sm font-semibold text-ink">{formatVnd(expense.amount)}</span>
+                <ExpenseRow expense={expense} size="sm" />
               </li>
             ))}
           </ul>

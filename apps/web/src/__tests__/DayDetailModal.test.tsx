@@ -66,11 +66,14 @@ describe("DayDetailModal", () => {
     // Tổng ngày màu accent (primary-text) — phân biệt với số tiền khoản (text-ink)
     expect(screen.getByText("450.000 ₫")).toHaveClass("text-primary-text");
     expect(screen.getByText("250.000 ₫")).toHaveClass("text-ink");
-    expect(screen.getByText("Tiệc liên hoan")).toBeInTheDocument();
-    expect(screen.getByText("Ăn uống · An")).toBeInTheDocument();
+    // Layout đồng nhất Lịch sử/Trang chủ: tiêu đề = tên danh mục, ghi chú
+    // nằm cùng hàng người tạo (phía sau người tạo)
+    expect(screen.getByText("Ăn uống")).toBeInTheDocument();
+    expect(screen.getByText("Tiệc liên hoan").parentElement).toHaveTextContent("An · Tiệc liên hoan");
     expect(screen.getByText("250.000 ₫")).toBeInTheDocument();
-    // Khoản không có note → hiện tên danh mục
-    expect(screen.getByText("Đi lại · Bình")).toBeInTheDocument();
+    // Khoản không có note → tiêu đề = tên danh mục, dòng 2 chỉ người tạo
+    expect(screen.getByText("Đi lại")).toBeInTheDocument();
+    expect(screen.getByText("Bình")).toBeInTheDocument();
     expect(screen.getByText("200.000 ₫")).toBeInTheDocument();
   });
 
