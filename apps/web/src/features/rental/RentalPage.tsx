@@ -73,6 +73,12 @@ export default function RentalPage() {
 
   async function handleSubmitConfig() {
     if (!activeFamilyId) return;
+    // Ô RỖNG phải chặn — `Number("") = 0` sẽ trôi qua validate phía dưới và
+    // lưu config toàn 0 (mà sau khi config tồn tại không còn UI sửa config).
+    if (Object.values(configForm).some((v) => v.trim() === "")) {
+      setConfigError("Vui lòng nhập đầy đủ số tiền (chữ số, không âm).");
+      return;
+    }
     const fields = Object.fromEntries(
       Object.entries(configForm).map(([k, v]) => [k, Number(v)]),
     ) as unknown as RentalConfigFields;

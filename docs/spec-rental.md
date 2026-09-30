@@ -455,7 +455,7 @@ Setup helper: register 1 OWNER + 1 MEMBER cùng family (pattern các test có s�
 | 44 | `RentalPage` (MEMBER — mock role) | không có nút "Thêm tháng"/ghost card |
 | 45 | `RentalMonthPage` DRAFT: nhập 4 trường công tơ + đơn giá | dòng kWh/m³ + Tiền điện/nước + TỔNG update live đúng (data case 1) |
 | 46 | `RentalMonthPage` newElec < oldElec | hiện lỗi + nút Chốt disabled |
-| 47 | `RentalMonthPage` bấm Chốt → confirm modal | date default = ngày 01 tháng, min/max trong tháng; bấm Chốt → `confirmRentalMonth` payload đủ 11 field + navigate |
+| 47 | `RentalMonthPage` bấm Chốt → confirm modal | date default = ngày 01 tháng, min/max trong tháng; bấm Chốt → `confirmRentalMonth` payload đủ 11 field; thành công → **ở lại màn tháng**, refetch + hiện banner "Đã chốt" (không navigate — xem lại ngay kết quả) |
 | 48 | `RentalMonthPage` CONFIRMED | banner "Đã chốt" + total; không có form edit cho tới khi bấm "Chỉnh sửa & chốt lại" |
 | 49 | `RentalMonthPage` CONFIRMED sửa + Chốt lại | gọi `confirmRentalMonth` (không gọi update) với giá trị mới |
 | 50 | `RentalMonthPage` Xoá tháng CONFIRMED | ConfirmDialog có cảnh báo xoá cả khoản chi; xác nhận → `deleteRentalMonth` |

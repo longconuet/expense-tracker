@@ -363,6 +363,16 @@ rentalRouter.post(
     });
 
     const result = await prisma.$transaction(async (tx) => {
+      // Khoá row tháng cho đến hết transaction — chống TOCTOU 2 confirm song song
+      // (cả 2 đọc expenseId=null bên ngoài → tạo 2 expense, 1 khoản mồ côi kép tiền).
+      // Sau khoá phải RE-READ: confirm trước vừa commit thì mình lấy expenseId mới
+      // → đi nhánh cập nhật (re-chốt) thay vì tạo khoản mới.
+      await tx.$queryRaw`SELECT "id" FROM "RentalMonth" WHERE "id" = ${existing.id} FOR UPDATE`;
+      const current = await tx.rentalMonth.findUnique({ where: { id: existing.id } });
+      if (!current) {
+        throw new AppError(404, "MONTH_NOT_FOUND", "Không tìm thấy tháng này");
+      }
+
       // Category "Nhà trọ" — self-heal nếu user đã xoá preset.
       let category = await tx.category.findFirst({
         where: { familyId, name: RENTAL_CATEGORY.name },
@@ -370,19 +380,31 @@ rentalRouter.post(
       });
       if (!category) {
         const maxOrder = await tx.category.aggregate({ where: { familyId }, _max: { order: true } });
-        category = await tx.category.create({
-          data: {
-            familyId,
-            name: RENTAL_CATEGORY.name,
-            icon: RENTAL_CATEGORY.icon,
-            isPreset: true,
-            order: (maxOrder._max.order ?? -1) + 1,
-          },
-          select: { id: true },
-        });
+        try {
+          category = await tx.category.create({
+            data: {
+              familyId,
+              name: RENTAL_CATEGORY.name,
+              icon: RENTAL_CATEGORY.icon,
+              isPreset: true,
+              order: (maxOrder._max.order ?? -1) + 1,
+            },
+            select: { id: true },
+          });
+        } catch (err) {
+          // P2002: confirm song song (2 thiết bị) cùng tạo category — lấy lại row vừa tạo.
+          if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+            const retry = await tx.category.findFirst({
+              where: { familyId, name: RENTAL_CATEGORY.name },
+              select: { id: true },
+            });
+            if (retry) category = retry;
+          }
+          if (!category) throw err;
+        }
       }
 
-      let expenseId = existing.expenseId;
+      let expenseId = current.expenseId;
       if (expenseId) {
         // Defensive: expenseId phải trỏ về expense của family này.
         const linked = await tx.expense.findUnique({
@@ -412,7 +434,7 @@ rentalRouter.post(
       }
 
       const updatedMonth = await tx.rentalMonth.update({
-        where: { id: existing.id },
+        where: { id: current.id },
         data: {
           rent, internet, elevator, parking, oldElec, newElec, electricityRate, oldWater, newWater, waterRate,
           status: "CONFIRMED",

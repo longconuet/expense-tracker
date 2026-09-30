@@ -200,6 +200,20 @@ describe("RentalPage (/rental)", () => {
     expect(await screen.findByRole("button", { name: /Thêm tháng/ })).toBeInTheDocument();
   });
 
+  it("chưa có config (OWNER) → form setup 6 trường; ô trống → lỗi, không gọi API", async () => {
+    // Arrange
+    fetchRentalMock.mockResolvedValue({ config: null, months: [] });
+    renderRentalRoutes();
+
+    // Act — bấm Lưu khi form trống
+    await screen.findByText("Thông tin mặc định");
+    fireEvent.click(screen.getByRole("button", { name: /Lưu & tạo tháng/ }));
+
+    // Assert — lỗi hiện, không gọi API (số 0 toàn bộ sẽ kẹt config không sửa được)
+    expect(await screen.findByRole("alert")).toHaveTextContent("nhập đầy đủ số tiền");
+    expect(saveRentalConfigMock).not.toHaveBeenCalled();
+  });
+
   it("chưa có config (MEMBER) → chỉ xem, không có form setup", async () => {
     useAuthStore.setState({
       user: USER,

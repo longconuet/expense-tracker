@@ -224,6 +224,12 @@ describe("POST /api/families/:id/rental/months", () => {
     expect(m.oldWater).toBe(1_007);
     expect(m.newWater).toBe(1_007);
   });
+
+  it("MEMBER → 403 OWNER_ONLY", async () => {
+    const res = await postMonth(member.token, familyId, "2026-09");
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("OWNER_ONLY");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -386,6 +392,27 @@ describe("POST /api/families/:id/rental/months/:month/confirm", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
+
+  it("MEMBER → 403 OWNER_ONLY", async () => {
+    const res = await confirmMonth(member.token, familyId, "2026-08", {
+      ...JULY_CONFIRM,
+      date: "2026-08-01",
+    });
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("OWNER_ONLY");
+  });
+
+  it("tổng > INT_MAX (cột Expense.amount) → 400 VALIDATION_ERROR", async () => {
+    // 1.000.000 kWh × 10.000.000 đ/kWh = 1e13 > 2.147.483.647
+    const res = await confirmMonth(owner.token, familyId, "2026-08", {
+      ...JULY_CONFIRM,
+      newElec: 1_000_000,
+      electricityRate: 10_000_000,
+      date: "2026-08-01",
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -482,6 +509,14 @@ describe("Xử lý category + xoá tháng", () => {
     expect(await prisma.expense.findUnique({ where: { id: expenseId } })).toBeNull();
     const list = await getRental(owner.token, familyId);
     expect(list.body.data.months.some((m: { month: string }) => m.month === "2026-08")).toBe(false);
+  });
+
+  it("MEMBER → 403 OWNER_ONLY", async () => {
+    await postMonth(owner.token, familyId, "2026-03");
+    const res = await deleteMonth(member.token, familyId, "2026-03");
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe("OWNER_ONLY");
+    await deleteMonth(owner.token, familyId, "2026-03"); // dọn
   });
 
   it("xoá tháng không tồn tại → 404", async () => {
