@@ -26,7 +26,7 @@ const MOCK_FAMILY = {
 
 describe("App — phiên đăng nhập (còn refresh cookie)", () => {
   it("khôi phục phiên từ refresh cookie → vào thẳng trang chủ", async () => {
-    // Arrange: 1) refresh OK, 2) /me OK, 3) stats, 4) expenses (trang chủ gọi 2 API)
+    // Arrange: 1) refresh OK, 2) /me OK, 3) stats, 4) expenses, 5) rental (trang chủ gọi 3 API)
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -34,6 +34,10 @@ describe("App — phiên đăng nhập (còn refresh cookie)", () => {
       )
       .mockResolvedValueOnce(
         fakeResponse({ success: true, data: { user: MOCK_USER, families: [MOCK_FAMILY] }, error: null }),
+      )
+      // RentalCard (child effect chạy trước HomePage) fetch rental trước
+      .mockResolvedValueOnce(
+        fakeResponse({ success: true, data: { config: null, months: [] }, error: null }),
       )
       .mockResolvedValueOnce(
         fakeResponse({
@@ -63,6 +67,6 @@ describe("App — phiên đăng nhập (còn refresh cookie)", () => {
 
     // Assert — heading để phân biệt với nav link "Trang chủ"
     expect(await screen.findByRole("heading", { name: "Trang chủ" })).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 });

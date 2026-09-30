@@ -11,6 +11,7 @@ import { useRefetchOnSync } from "../../core/useRefetchOnSync";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
 import { ExpenseRow } from "../../shared/ui/ExpenseRow";
+import { RentalCard } from "../rental/RentalCard";
 import { HomeSkeleton } from "./HomeSkeleton";
 
 /**
@@ -93,6 +94,11 @@ export default function HomePage() {
           {error}
         </p>
       )}
+
+      {/* Tiền phòng trọ — fetch độc lập trong RentalCard, không block phần còn lại */}
+      <div className="mt-4">
+        <RentalCard />
+      </div>
 
       {!stats || !recent ? (
         <HomeSkeleton />

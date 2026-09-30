@@ -9,6 +9,8 @@ import HomePage from "./features/home/HomePage";
 import HistoryPage from "./features/history/HistoryPage";
 import MePage from "./features/me/MePage";
 import CategoriesPage from "./features/categories/CategoriesPage";
+import RentalPage from "./features/rental/RentalPage";
+import RentalMonthPage from "./features/rental/RentalMonthPage";
 import JoinPage from "./features/auth/JoinPage";
 import LoginPage from "./features/auth/LoginPage";
 import OnboardingPage from "./features/auth/OnboardingPage";
@@ -56,6 +58,8 @@ export const router = createBrowserRouter([
           },
           { path: "/add", element: <AddPage /> },
           { path: "/expenses/:id/edit", element: <EditPage /> },
+          { path: "/rental", element: <RentalPage /> },
+          { path: "/rental/:month", element: <RentalMonthPage /> },
           { path: "/history", element: <HistoryPage /> },
           { path: "/categories", element: <CategoriesPage /> },
           { path: "/me", element: <MePage /> },
