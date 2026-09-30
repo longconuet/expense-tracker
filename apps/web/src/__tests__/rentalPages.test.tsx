@@ -245,8 +245,11 @@ describe("RentalPage (/rental)", () => {
     });
     renderRentalRoutes();
 
-    expect(await screen.findByText(monthLabel("2026-07"))).toBeInTheDocument();
-    expect(screen.getByText(monthLabel("2025-12"))).toBeInTheDocument();
+    // Chờ data render (2025-12 unique — DRAFT không vào bảng thống kê)
+    expect(await screen.findByText(monthLabel("2025-12"))).toBeInTheDocument();
+    // "Tháng 7/2026" hiện cả ở list + bảng thống kê (tháng CONFIRMED) —
+    // match đầu theo DOM order là item list (list nằm trên section thống kê).
+    expect(screen.getAllByText(monthLabel("2026-07"))[0].closest("ul")).toBeTruthy();
     expect(screen.getByText("Đã chốt")).toBeInTheDocument();
     expect(screen.getByText("Chờ chốt")).toBeInTheDocument();
     expect(screen.getByText("4.930.000 ₫")).toBeInTheDocument();
@@ -294,6 +297,135 @@ describe("RentalPage (/rental)", () => {
     expect(await screen.findByText(monthLabel(prev2))).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Thêm tháng/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Chưa có Tháng/ })).toBeNull();
+  });
+
+  // --- Section "📊 Sử dụng điện & nước" (spec-rental-stats case 10–15) -------
+
+  const CONFIRMED: Partial<RentalMonth> = {
+    status: "CONFIRMED",
+    expenseId: "e1",
+    confirmedAt: "2026-07-31T00:00:00.000Z",
+  };
+
+  it("case 10: CONFIRMED → section thống kê: 2 panel + bảng đúng giá trị", async () => {
+    fetchRentalMock.mockResolvedValue({
+      config: CONFIG,
+      months: [
+        makeMonth(CONFIRMED), // 2026-07: 280 kWh / 1.120.000 / 6 m³ / 210.000
+        makeMonth({
+          month: "2026-06",
+          ...CONFIRMED,
+          confirmedAt: "2026-06-30T00:00:00.000Z",
+          elecConsumption: 150,
+          electricityCost: 600_000,
+          waterConsumption: 4,
+          waterCost: 140_000,
+          total: 4_340_000,
+        }),
+      ],
+    });
+    renderRentalRoutes();
+    expect(await screen.findByText("📊 Sử dụng điện & nước")).toBeInTheDocument();
+    expect(screen.getByText("Chỉ tính các tháng đã chốt.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Điện" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Nước" })).toBeInTheDocument();
+
+    // Bảng chi tiết (desc: 07/2026 trên, 06/2026 dưới)
+    const table = screen.getByRole("table");
+    expect(within(table).getByText(monthLabel("2026-07"))).toBeInTheDocument();
+    expect(within(table).getByText(monthLabel("2026-06"))).toBeInTheDocument();
+    expect(within(table).getByText("1.120.000 ₫")).toBeInTheDocument();
+    expect(within(table).getByText("210.000 ₫")).toBeInTheDocument();
+    expect(within(table).getByText("140.000 ₫")).toBeInTheDocument();
+
+    // Selector mặc định = "12 tháng gần"
+    expect(screen.getByRole("button", { name: "12 tháng gần" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("case 11: chỉ DRAFT (chưa chốt lần nào) → 'Chưa có dữ liệu', không có bảng/selector", async () => {
+    fetchRentalMock.mockResolvedValue({ config: CONFIG, months: [makeMonth()] }); // DRAFT
+    renderRentalRoutes();
+    expect(await screen.findByText("📊 Sử dụng điện & nước")).toBeInTheDocument();
+    expect(
+      screen.getByText("Chưa có dữ liệu — thống kê hiện sau khi bạn chốt tháng đầu tiên."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByRole("button", { name: "12 tháng gần" })).toBeNull();
+  });
+
+  it("case 12: click chip năm → bảng chỉ còn tháng năm đó", async () => {
+    fetchRentalMock.mockResolvedValue({
+      config: CONFIG,
+      months: [
+        makeMonth(CONFIRMED), // 2026-07
+        makeMonth({
+          month: "2025-11",
+          ...CONFIRMED,
+          confirmedAt: "2025-11-30T00:00:00.000Z",
+          elecConsumption: 100,
+          electricityCost: 400_000,
+          waterConsumption: 5,
+          waterCost: 175_000,
+        }),
+      ],
+    });
+    renderRentalRoutes();
+    await screen.findByText("📊 Sử dụng điện & nước");
+    expect(within(screen.getByRole("table")).getByText(monthLabel("2026-07"))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "2025" }));
+    expect(screen.getByRole("button", { name: "2025" })).toHaveAttribute("aria-pressed", "true");
+    const table = screen.getByRole("table");
+    expect(within(table).getByText(monthLabel("2025-11"))).toBeInTheDocument();
+    expect(within(table).queryByText(monthLabel("2026-07"))).toBeNull();
+  });
+
+  it("case 13: tháng DRAFT cùng năm KHÔNG hiện trong bảng thống kê (vẫn ở list)", async () => {
+    fetchRentalMock.mockResolvedValue({
+      config: CONFIG,
+      months: [makeMonth(CONFIRMED), makeMonth({ month: "2026-08" })], // 08 = DRAFT
+    });
+    renderRentalRoutes();
+    await screen.findByText("📊 Sử dụng điện & nước");
+    const table = screen.getByRole("table");
+    expect(within(table).getByText(monthLabel("2026-07"))).toBeInTheDocument();
+    expect(within(table).queryByText(monthLabel("2026-08"))).toBeNull();
+    // Tháng 08 vẫn hiện đúng 1 lần — ở list, không phải bảng thống kê
+    expect(screen.getByText(monthLabel("2026-08"))).toBeInTheDocument();
+  });
+
+  it("case 14: MEMBER xem được section thống kê (chỉ-đọc)", async () => {
+    useAuthStore.setState({
+      user: USER,
+      families: [{ ...FAMILY, myRole: "MEMBER" }],
+      activeFamilyId: FAMILY.id,
+    });
+    fetchRentalMock.mockResolvedValue({ config: CONFIG, months: [makeMonth(CONFIRMED)] });
+    renderRentalRoutes();
+    expect(await screen.findByText("📊 Sử dụng điện & nước")).toBeInTheDocument();
+    expect(screen.getByRole("table")).toBeInTheDocument();
+  });
+
+  it("case 15: dòng summary panel Điện — TB/cao nhất/thấp nhất đúng", async () => {
+    fetchRentalMock.mockResolvedValue({
+      config: CONFIG,
+      months: [
+        makeMonth(CONFIRMED), // 280 kWh / 1.120.000
+        makeMonth({
+          month: "2026-06",
+          ...CONFIRMED,
+          confirmedAt: "2026-06-30T00:00:00.000Z",
+          elecConsumption: 150,
+          electricityCost: 600_000,
+        }),
+      ],
+    });
+    renderRentalRoutes();
+    await screen.findByText("📊 Sử dụng điện & nước");
+    // (280+150)/2 = 215 kWh; (1.120.000+600.000)/2 = 860.000 ₫
+    const summary = screen.getByText(/TB 215 kWh/);
+    expect(summary).toHaveTextContent("860.000 ₫/tháng");
+    expect(summary).toHaveTextContent("Cao nhất 07/26 (280 kWh) · Thấp nhất 06/26");
   });
 });
 

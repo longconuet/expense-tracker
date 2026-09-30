@@ -15,6 +15,7 @@ import { Input } from "../../shared/ui/Input";
 import { Modal } from "../../shared/ui/Modal";
 import { Spinner } from "../../shared/ui/Spinner";
 import { NumberInput } from "./NumberInput";
+import { RentalStatsSection } from "./RentalStatsSection";
 
 /**
  * Tiền phòng trọ — route /rental.
@@ -305,6 +306,9 @@ export default function RentalPage() {
           </section>
         ))}
       </div>
+
+      {/* Thống kê điện/nước theo tháng — mọi member xem được (spec-rental-stats) */}
+      <RentalStatsSection months={data.months} />
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Thêm tháng" showClose>
         <div className="mt-4">
