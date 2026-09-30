@@ -63,6 +63,9 @@ describe("DayDetailModal", () => {
     expect(fetchExpensesMock).toHaveBeenCalledWith("f1", { date: "2026-09-09", page: 1, pageSize: 100 });
     expect(screen.getByRole("dialog")).toHaveTextContent(/Chi tiêu ngày 09\/09/);
     expect(await screen.findByText("450.000 ₫")).toBeInTheDocument(); // tổng 2 khoản
+    // Tổng ngày màu accent (primary-text) — phân biệt với số tiền khoản (text-ink)
+    expect(screen.getByText("450.000 ₫")).toHaveClass("text-primary-text");
+    expect(screen.getByText("250.000 ₫")).toHaveClass("text-ink");
     expect(screen.getByText("Tiệc liên hoan")).toBeInTheDocument();
     expect(screen.getByText("Ăn uống · An")).toBeInTheDocument();
     expect(screen.getByText("250.000 ₫")).toBeInTheDocument();

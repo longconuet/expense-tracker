@@ -81,7 +81,9 @@ export function DayDetailModal({ open, date, familyId, onClose }: DayDetailModal
         <>
           <div className="mt-1 flex items-center justify-between text-sm">
             <span className="text-ink-muted">Tổng</span>
-            <span className="font-semibold text-ink">{formatVnd(total)}</span>
+            {/* Tổng ngày màu accent (primary-text) — nhất quán với tiểu kết
+                ở Lịch sử/Trang chủ, phân biệt với số tiền khoản (text-ink) */}
+            <span className="font-semibold text-primary-text">{formatVnd(total)}</span>
           </div>
           <ul className="mt-3 space-y-2.5">
             {expenses.map((expense) => (
