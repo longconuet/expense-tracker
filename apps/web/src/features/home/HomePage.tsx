@@ -10,6 +10,7 @@ import { groupByDay } from "../../core/expenseGroups";
 import { useRefetchOnSync } from "../../core/useRefetchOnSync";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
+import { ExpenseRow } from "../../shared/ui/ExpenseRow";
 import { HomeSkeleton } from "./HomeSkeleton";
 
 /**
@@ -180,31 +181,7 @@ export default function HomePage() {
                       <ul className="mt-2 space-y-2.5">
                         {group.expenses.map((expense) => (
                           <li key={expense.id} className="flex items-center gap-3">
-                            <span className="text-xl" aria-hidden>
-                              {expense.category.icon}
-                            </span>
-                            <div className="min-w-0 flex-1">
-                              {/* Tiêu đề = tên danh mục. Ghi chú (nếu có) nằm
-                                  hàng dưới, phía sau người tạo (đồng nhất
-                                  với Lịch sử). */}
-                              <p className="truncate text-sm font-medium text-ink">
-                                {expense.category.name}
-                              </p>
-                              <p className="truncate text-xs text-ink-muted">
-                                {expense.createdByName}
-                                {expense.note ? (
-                                  <>
-                                    {" · "}
-                                    {/* Span trần — KHÔNG "dọn" tag: RTL getByText(note)
-                                        exact-match chỉ đọc text-node trực tiếp. */}
-                                    <span>{expense.note}</span>
-                                  </>
-                                ) : null}
-                              </p>
-                            </div>
-                            <span className="text-sm font-semibold text-ink">
-                              {formatVnd(expense.amount)}
-                            </span>
+                            <ExpenseRow expense={expense} size="sm" />
                           </li>
                         ))}
                       </ul>
