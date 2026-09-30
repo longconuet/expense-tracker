@@ -57,11 +57,11 @@ model RentalMonth {
   internet        Int
   elevator        Int
   parking         Int
-  oldElec         Float // số công tơ điện đầu kỳ (3 chữ số thập phân)
-  newElec         Float
+  oldElec         Int // số công tơ điện đầu kỳ (int kWh — số chỉ dồn tích)
+  newElec         Int
   electricityRate Int
-  oldWater        Float // số công tơ nước đầu kỳ
-  newWater        Float
+  oldWater        Int // số công tơ nước đầu kỳ (int m³)
+  newWater        Int
   waterRate       Int
   status          String   @default("DRAFT") // "DRAFT" | "CONFIRMED"
   expenseId       String?  @unique // link 1-1 với Expense khi chốt
@@ -184,14 +184,18 @@ export interface RentalTotals {
 }
 ```
 
+**Số công tơ là int** (đã verify với 100% 30 dòng sổ sách thật: 18.023 − 17.743
+= 280 kWh, 1.007 − 1.001 = 6 m³ — dấu chấm trong bảng Excel là ngăn cách hàng
+nghìn, không phải dấu thập phân). Consumption do đó luôn int, cost = int × int
+chính xác, không cần round thật (giữ `Math.round` làm phòng vệ).
+
 Hàm (pure, export — API + FE dùng chung 1 nguồn):
 
 - `computeRentalTotals(f: RentalMonthFields): RentalTotals` — consumption =
   `new - old` (raw, KHÔNG clamp — validation chặn âm ở 2 tầng API/FE); cost =
-  `Math.round(consumption * rate)` (float subtraction như `18.023 - 17.743`
-  cho 0.279999… → round về đúng). `total` luôn int.
-- `formatMeter(value: number): string` — tối đa 3 chữ số thập phân, trim `.0` thừa:
-  `280` → `"280"`, `0.333` → `"0.333"`, `6.0` → `"6"`.
+  `Math.round(consumption * rate)`; `total` luôn int.
+- `formatMeter(value: number): string` — int chia hàng nghìn kiểu vi-VN:
+  `280` → `"280"`, `1028` → `"1.028"`, `17743` → `"17.743"`.
 - `isValidMonth(month: string): boolean` — `^\d{4}-(0[1-9]|1[0-2])$`.
 - `isValidDateInMonth(date: string, month: string): boolean` — date hợp lệ thật
   (không 31/02) + cùng `YYYY-MM`.
@@ -199,8 +203,8 @@ Hàm (pure, export — API + FE dùng chung 1 nguồn):
 - `lastDayOfMonth(month: string): string` — `"2026-02" → "2026-02-28"` (năm nhuận
   đúng — viết bằng Date, không hardcode bảng).
 - `buildRentalNote(month: string, f: RentalMonthFields): string` — format mục 2.3,
-  dùng `computeRentalTotals` + `formatMeter` + `Intl.NumberFormat("vi-VN")`;
-  guarantee ≤ 200 ký tự.
+  dùng `computeRentalTotals` + `formatMeter` + chia hàng nghìn regex kiểu vi-VN
+  (cùng cách `formatVnd` — không phụ thuộc ICU); guarantee ≤ 200 ký tự.
 - `RENTAL_NOTE_MAX = 200` (export const — khớp `Expense.note` max API).
 
 ## 3. API — `rental.routes.ts` mới (mount `/api/families/:id/rental`)
@@ -302,11 +306,9 @@ giá trị như trên + `isValidDateInMonth(date, month)`.
 - `deleteRentalMonth(month): Promise<void>` — `DELETE /rental/months/:month`.
 
 Mọi mutation sau khi API trả 2xx: `invalidateRentalCache(familyId)` (mới trong
-`cacheInvalidate.ts` — xoá key rental của family; KHÔNG cần invalidate expense
-cache vì expense mới được tạo → list expense cũ vẫn đúng chiều "thiếu 1 khoản"
-đến khi user vào lại màn khác… **Sửa**: invalidate CẢ expense cache của tháng
-chốt — dùng `invalidateExpenseCache(familyId, months=[month], dates=[date])`
-sau khi confirm, để Lịch sử/Home tươi ngay).
+`cacheInvalidate.ts` — xoá key rental của family). Riêng `confirmRentalMonth`
+thêm `invalidateExpenseCache(familyId, months=[month], dates=[date])` — khoản
+chi mới được tạo/cập nhật → Lịch sử + Home phải tươi ngay.
 
 ### 4.2 `features/rental/` (feature mới — component chỉ dùng trong feature)
 
@@ -339,12 +341,11 @@ sau khi confirm, để Lịch sử/Home tươi ngay).
   hành động (label "Chỉ xem — chủ gia đình mới chỉnh sửa được").
 - **OWNER, DRAFT** — form 3 Card:
   1. "Khoản cố định": 4 input (Phòng / Mạng / Thang máy + vệ sinh / Gửi xe —
-     `inputMode="numeric"`, hiển thị hint formatVnd bên cạnh khi focus? Không —
-     giữ input thuần number, đơn giản).
+     `type="number" min=0 inputMode="numeric"`, input thuần number, đơn giản).
   2. "Công tơ & đơn giá": 4 hàng — Điện: (cũ, mới) → dòng phụ "**280 kWh**"
      (live, `formatMeter` + computeRentalTotals); Nước: (cũ, mới) → "**6 m³**";
-     2 ô đơn giá (đ/kWh, đ/m³). Input công tơ: `type="number" step="0.001"
-     inputMode="decimal"`.
+     2 ô đơn giá (đ/kWh, đ/m³). Input công tơ: `type="number" min=0 step=1
+     inputMode="numeric"` (int — khớp dữ liệu thật).
   3. "Kết quả": 2 dòng Tiền điện / Tiền nước (formatVnd, `text-ink-muted`) +
      **TỔNG** lớn (`text-3xl text-primary-text font-bold`).
   - `newElec < oldElec` hoặc `newWater < oldWater` → message lỗi đỏ trong Card
@@ -398,13 +399,12 @@ nếu cần màu vàng riêng, bổ sung token vào `index.css`).
 
 | # | Case | Kỳ vọng |
 |---|------|---------|
-| 1 | `computeRentalTotals` data thật tháng 7 (17.743→18.023 ×4000; 1.001→1.007 ×35.000; cố định 3.200.000/100.000/200.000/100.000) | consumption 280 / 6, cost 1.120.000 / 210.000, **total 4.930.000** (khớp ảnh) |
-| 2 | Float subtraction `new - old` = 0.279999… (18.023 − 17.743) × 4000 | cost = `Math.round` → **1.120.000** (không 1.119.999) |
-| 3 | Tiêu thụ không nguyên (1.001 → 1.0015, rate 35.000) | cost = 17.500… → round đúng; `formatMeter(0.0005)` hợp lý |
-| 4 | Consumption âm (new < old) | hàm trả raw âm (không clamp) — validation chặn phía API/FE |
-| 5 | `total` = tổng 4 khoản cố định + 2 cost, mọi input int → total int | int đúng |
-| 6 | `formatMeter` 280 / 280.0 / 0.333 / 17.743 / 1.007 | "280" / "280" / "0.333" / "17.743" / "1.007" |
-| 7 | `isValidMonth` "2026-07" / "2026-13" / "2026-7" / "abc" | true / false / false / false |
+| 1 | `computeRentalTotals` data thật tháng 7 (17743→18023 ×4000; 1001→1007 ×35.000; cố định 3.200.000/100.000/200.000/100.000) | consumption 280 / 6, cost 1.120.000 / 210.000, **total 4.930.000** (khớp ảnh) |
+| 2 | Dòng 2 của sổ (giá điện 3.500): 20463→20788 ×3500 | consumption 325, cost **1.137.500** (khớp ảnh) |
+| 3 | Consumption âm (new < old) | hàm trả raw âm (không clamp) — validation chặn phía API/FE |
+| 4 | `total` = tổng 4 khoản cố định + 2 cost, mọi input int → total int | int đúng |
+| 5 | `formatMeter` 280 / 1028 / 17743 / -15 | "280" / "1.028" / "17.743" / "-15" |
+| 6 | `isValidMonth` "2026-07" / "2026-13" / "2026-7" / "abc" | true / false / false / false |
 | 8 | `isValidDateInMonth("2026-02-31", "2026-02")` / `("2026-02-28","2026-02")` / `("2026-03-01","2026-02")` | false / true / false |
 | 9 | `lastDayOfMonth` 2026-02 / 2024-02 (nhuận) / 2026-12 | "2026-02-28" / "2024-02-29" / "2026-12-31" |
 | 10 | `buildRentalNote` case 1 | đúng chuỗi mẫu mục 2.3, độ dài ≤ 200 |

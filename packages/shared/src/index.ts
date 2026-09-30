@@ -2,6 +2,7 @@
 
 export { formatVnd } from "./formatVnd.js";
 export { formatVndCompact } from "./formatVndCompact.js";
+export * from "./rental.js";
 
 // ---------------------------------------------------------------------------
 // Envelope API — mọi response REST đều có cấu trúc này
@@ -96,13 +97,16 @@ export interface MonthlyStats {
 }
 
 // ---------------------------------------------------------------------------
-// Danh mục mặc định — tự động tạo khi lập gia đình (chốt 22/09/2026)
+// Danh mục mặc định — tự động tạo khi lập gia đình (chốt 22/09/2026;
+// + "Nhà trọ" 30/09/2026 — spec-rental.md; family cũ được backfill trong
+// migration add_rental)
 // ---------------------------------------------------------------------------
 
 export const PRESET_CATEGORIES = [
   { name: "Ăn uống", icon: "🍜" },
   { name: "Đi lại", icon: "🚗" },
   { name: "Gia đình", icon: "⚡" },
+  { name: "Nhà trọ", icon: "🏠" },
   { name: "Sức khỏe", icon: "💊" },
   { name: "Vui chơi", icon: "🎬" },
   { name: "Mua sắm", icon: "🛒" },

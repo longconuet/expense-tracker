@@ -32,7 +32,7 @@ import { CategoriesSkeleton } from "./CategoriesSkeleton";
  * điền nhanh ô Ghi chú khi tạo/sửa khoản chi.
  */
 
-/** Emoji gợi ý — 24 ô, bao gồm icon của 7 preset để dễ chọn lại. */
+/** Emoji gợi ý — 24 ô, bao gồm icon của 8 preset để dễ chọn lại. */
 const EMOJI_SUGGESTIONS = [
   "🍜", "🍚", "🍔", "🥤", "💧",
   "🛒", "🧺", "⛽", "🚌", "🚗",
