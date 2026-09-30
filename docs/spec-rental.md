@@ -113,10 +113,9 @@ Raw SQL **idempotent** trong cùng migration (chạy qua CI auto-migrate — kh�
 bước tay trên Supabase):
 
 ```sql
-INSERT INTO "Category" ("id", "familyId", "name", "icon", "isPreset", "order", "createdAt")
+INSERT INTO "Category" ("id", "familyId", "name", "icon", "isPreset", "order")
 SELECT md5('rental-' || f.id), f.id, 'Nhà trọ', '🏠', true,
-       (SELECT COALESCE(MAX(c2.order), 0) FROM "Category" c2 WHERE c2."familyId" = f.id) + 1,
-       now()
+       (SELECT COALESCE(MAX(c2.order), 0) FROM "Category" c2 WHERE c2."familyId" = f.id) + 1
 FROM "Family" f
 WHERE NOT EXISTS (
   SELECT 1 FROM "Category" c WHERE c."familyId" = f.id AND c.name = 'Nhà trọ'

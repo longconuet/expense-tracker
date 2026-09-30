@@ -32,9 +32,11 @@ model Family {
   inviteCode String   @unique
   createdAt  DateTime @default(now())
 
-  members    FamilyMember[]
-  categories Category[]
-  expenses   Expense[]
+  members      FamilyMember[]
+  categories   Category[]
+  expenses     Expense[]
+  rentalConfig RentalConfig?
+  rentalMonths RentalMonth[]
 }
 
 model FamilyMember {
@@ -78,10 +80,60 @@ model Expense {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  family   Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  user     User     @relation(fields: [userId], references: [id])
-  category Category @relation(fields: [categoryId], references: [id])
+  family   Family      @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user     User        @relation(fields: [userId], references: [id])
+  category Category    @relation(fields: [categoryId], references: [id])
+  // Khoản chi do "chốt tháng phòng trọ" tạo ra (RentalMonth.expenseId) —
+  // có link = KHÔNG sửa/xoá được từ endpoint expenses thường (409).
+  rentalMonth RentalMonth?
 
   @@index([familyId, date])
   @@index([familyId, categoryId, date])
+}
+
+// Tiền phòng trọ hàng tháng (spec: docs/spec-rental.md)
+//
+// RentalConfig  — thông tin mặc định 1 lần/family (4 khoản cố định + 2 đơn giá),
+//                 tháng mới tạo ra tự kế thừa (snapshot), sửa được theo tháng.
+// RentalMonth   — 1 dòng = 1 tháng, snapshot đầy đủ để lưu lịch sử; chốt (CONFIRMED)
+//                 → tạo/cập nhật 1 Expense liên kết qua expenseId (1-1).
+
+model RentalConfig {
+  id              String   @id @default(cuid())
+  familyId        String   @unique
+  rent            Int      @default(0) // Tiền phòng (đ)
+  internet        Int      @default(0) // Tiền mạng (đ)
+  elevator        Int      @default(0) // Thang máy + vệ sinh (đ)
+  parking         Int      @default(0) // Gửi xe (đ)
+  electricityRate Int      @default(0) // Giá điện (đ/kWh)
+  waterRate       Int      @default(0) // Giá nước (đ/m³)
+  updatedAt       DateTime @updatedAt
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+}
+
+model RentalMonth {
+  id              String   @id @default(cuid())
+  familyId        String
+  month           String // "YYYY-MM"
+  rent            Int
+  internet        Int
+  elevator        Int
+  parking         Int
+  oldElec         Int // số công tơ điện đầu kỳ (int kWh — số chỉ dồn tích)
+  newElec         Int
+  electricityRate Int
+  oldWater        Int // số công tơ nước đầu kỳ (int m³)
+  newWater        Int
+  waterRate       Int
+  status          String   @default("DRAFT") // "DRAFT" | "CONFIRMED"
+  expenseId       String?  @unique // Expense liên kết khi chốt
+  confirmedAt     DateTime?
+  updatedAt       DateTime @updatedAt
+
+  family  Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  expense Expense? @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+
+  @@unique([familyId, month])
+  @@index([familyId])
 }
