@@ -158,7 +158,7 @@ summary) + pure functions (đã phủ ở 4.1); không assert pixel/tooltip.)
 
 | # | Case | Kỳ vọng |
 |---|------|---------|
-| 57 | (kéo dài happy path 53: đã chốt tháng 7) quay lại `/rental` | section "Sử dụng điện & nước": bảng hàng "Tháng 7/2026 · 280 · 1.120.000 ₫ · 6 · 210.000 ₫" + chart svg panel Điện/Nước + summary "TB 280 kWh" |
+| 57 | (kéo dài 54: đã chốt **tháng hiện tại** — draft tự tạo khi lưu config) quay lại `/rental` | section "Sử dụng điện & nước": chip "12 tháng gần" pressed + ghi chú "Chỉ tính các tháng đã chốt"; 2 panel (heading Điện/Nước) + 2 chart svg; bảng 1 hàng: tháng hiện tại · 280 · **980.000 ₫** (tiền điện sau khi case 54 đổi giá 3.500) · 210.000 ₫; summary "TB 280 kWh · 980.000 ₫/tháng" (1 tháng → không có cao/thấp nhất) |
 
 ## 5. Vạch ngoài (v1)
 

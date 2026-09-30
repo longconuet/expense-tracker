@@ -8,6 +8,9 @@ import { newAccount, registerAndCreateFamily } from "./helpers";
  *   khoản "Nhà trọ" 4.930.000 ₫ trong lịch sử.
  * - Case 54 (kéo dài 53): mở tháng đã chốt → đổi giá điện 3.500 → chốt lại
  *   → 4.790.000 ₫, lịch sử vẫn 1 khoản (update, không sinh trùng).
+ * - Case 57 (kéo dài 54): section "Sử dụng điện & nước" ở /rental — spec
+ *   docs/spec-rental-stats.md §4.3: 2 panel + bảng (280 kWh · 980.000 ₫ giá
+ *   mới · 6 m³ · 210.000 ₫) + summary + selector mặc định "12 tháng gần".
  *
  * Data khớp sổ sách thật: 280 kWh × 4.000 + 6 m³ × 35.000 + 3.600.000 cố định.
  */
@@ -115,5 +118,40 @@ test.describe("Tiền phòng trọ (E2E)", () => {
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText("4.790.000 ₫");
     await expect(rows.first()).not.toContainText("4.930.000 ₫");
+
+    // --- Case 57: section "Sử dụng điện & nước" (spec-rental-stats §4.3) -------
+
+    // Act — về /rental (tháng 7 đã chốt; tiền điện = 980.000 sau khi đổi giá 3.500)
+    await page.goto("/rental");
+    await expect(page.getByRole("heading", { name: "📊 Sử dụng điện & nước" })).toBeVisible();
+    await expect(page.getByText("Chỉ tính các tháng đã chốt.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "12 tháng gần" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    // Assert — 2 panel + 2 chart svg
+    await expect(page.getByRole("heading", { name: "Điện", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Nước", exact: true })).toBeVisible();
+    await expect(page.locator(".h-48 svg")).toHaveCount(2);
+
+    // Assert — bảng chi tiết 1 hàng: 280 kWh · 980.000 ₫ (giá mới) · 6 m³ · 210.000 ₫
+    // Tháng đã chốt = tháng hiện tại lúc chạy E2E (draft tự tạo khi lưu config)
+    const now = new Date();
+    const confirmedMonthLabel = `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`;
+    const table = page.getByRole("table");
+    await expect(table.getByText(confirmedMonthLabel)).toBeVisible();
+    await expect(table.getByText("280")).toBeVisible();
+    await expect(table.getByText("980.000 ₫")).toBeVisible();
+    await expect(table.getByText("210.000 ₫")).toBeVisible();
+
+    // Assert — summary panel Điện (1 tháng → không có phần cao/thấp nhất)
+    await expect(page.getByText(/TB 280 kWh/)).toHaveText("TB 280 kWh · 980.000 ₫/tháng");
+
+    // Assert — tooltip đúng series (fix HIGH review: cost ≠ kWh): hover cột điện
+    await page.locator(".recharts-bar-rectangle").first().hover();
+    const tooltip = page.locator(".recharts-tooltip-wrapper");
+    await expect(tooltip.getByText("980.000 ₫")).toBeVisible();
+    await expect(tooltip.getByText("280 kWh")).toBeVisible();
   });
 });
