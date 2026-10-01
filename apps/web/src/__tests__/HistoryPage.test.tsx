@@ -71,6 +71,7 @@ function expense(id: string, note: string, amount: number, createdByName = "An",
     category: CAT,
     createdByName,
     createdAt: `${date}T06:00:00.000Z`,
+    recurringRuleId: null,
   };
 }
 

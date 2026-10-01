@@ -24,6 +24,7 @@ function expensesFixture() {
         category: CAT_EAT,
         createdByName: "An",
         createdAt: "2026-09-09T04:00:00.000Z",
+        recurringRuleId: null,
       },
       {
         id: "e2",
@@ -33,6 +34,7 @@ function expensesFixture() {
         category: CAT_FUEL,
         createdByName: "Bình",
         createdAt: "2026-09-09T05:00:00.000Z",
+        recurringRuleId: null,
       },
     ],
     meta: { page: 1, pageSize: 100, total: 2 },
@@ -123,6 +125,7 @@ describe("DayDetailModal", () => {
       category: CAT_EAT,
       createdByName: "An",
       createdAt: "2026-09-09T04:00:00.000Z",
+      recurringRuleId: null,
     }));
     fetchExpensesMock.mockResolvedValue({
       expenses: many,

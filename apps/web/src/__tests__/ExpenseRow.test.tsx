@@ -13,6 +13,7 @@ function expense(note: string | null) {
     category: CAT,
     createdByName: "An",
     createdAt: "2026-09-30T06:00:00.000Z",
+    recurringRuleId: null,
   };
 }
 

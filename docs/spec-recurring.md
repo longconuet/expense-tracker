@@ -91,8 +91,10 @@ model RecurringRule {
 
 ### 2.2 Chuỗi kỳ & trạng thái rule (thuật toán chuẩn — 1 nguồn cho API + FE + test)
 
-- Chuỗi kỳ: `startDate`, `advanceMonthly(startDate)`, `advanceMonthly²(…)`, …
-  (hàng tháng, clamp ngày — mục 2.3).
+- Chuỗi kỳ — nghĩa **anchor day**: kỳ của tháng M = ngày
+  **min(anchorDay, ngày cuối tháng M)**, với `anchorDay` = **NGÀY của trường
+  "Từ"** (VD "Từ 31/01" → 31/01, 28/02, **31/03**, 30/04, 31/05… — sau tháng
+  ngắn TRỞ LẠI 31, **không** sập thành 28 như cách clamp nối tiếp).
 - `nextDate` = con trỏ kỳ kế tiếp. Rule **active** ⇔ `nextDate != null`.
 - **Materialize tại ngày `today`**: với mỗi rule active mà `nextDate <= today`:
   sinh đủ các kỳ `d` với `nextDate <= d <= today` (d lần lượt là các phần tử
@@ -147,6 +149,8 @@ export interface RecurringMaterializeResult {
 
 export interface MaterializeDatesInput {
   nextDate: string;
+  /** Ngày neo chuỗi kỳ — `anchorDayOf(rule.startDate)` (mục 2.2). */
+  anchorDay: number;
   endType: RecurringEndType;
   endDate: string | null;
   occurrenceCount: number | null;
@@ -162,15 +166,25 @@ export interface MaterializeDatesResult {
 Hàm (pure, export — API + FE dùng chung 1 nguồn; ngày là string `YYYY-MM-DD`,
 tính bằng `Date.UTC` như `apps/api/src/lib/dates.ts` — không dính múi giờ):
 
-- `advanceMonthly(date: string): string` — +1 tháng, clamp ngày về cuối tháng
-  (`"2026-01-31" → "2026-02-28"`, năm nhuận `→ "2024-02-29"`).
+- `anchorDayOf(date: string): number` — ngày trong tháng của `date` (1–31).
+- `occurrenceInMonth(anchorDay: number, year: number, month: number): string`
+  — kỳ của tháng M: ngày = min(anchorDay, ngày cuối tháng), cuối tháng tính
+  bằng `Date` (năm nhuận đúng).
+- `nextOccurrence(anchorDay: number, date: string): string` — kỳ của tháng
+  kế tiếp so với `date`, neo theo `anchorDay` (`(31, "2026-02-28") →
+  "2026-03-31"`). Dùng nối chuỗi kỳ + API tính lại `nextDate` khi sửa rule
+  (mục 3.1).
+- `advanceMonthly(date: string): string` — primitive 1 bước: +1 tháng, clamp
+  ngày **của chính nó** (`"2026-01-31" → "2026-02-28"`, nhuận `→ "2024-02-29"`,
+  `"2026-12-31" → "2027-01-31"`). **KHÔNG** dùng nối chuỗi (sập ngày).
 - `firstOccurrenceFrom(startDate: string, today: string, cap = 1200): string`
-  — `startDate >= today` → trả `startDate`; khác thì trượt từng tháng đến
-  ngày khớp **đầu tiên ≥ today** (quy tắc không sinh bù — mục 1).
+  — `startDate >= today` → trả `startDate`; khác thì trượt từng tháng
+  (neo `anchorDayOf(startDate)`) đến ngày khớp **đầu tiên ≥ today** (quy tắc
+  không sinh bù — mục 1).
 - `materializeDates(input: MaterializeDatesInput, today: string, cap = 400):
   MaterializeDatesResult` — triển khai đúng mục 2.2 (FOREVER/UNTIL_DATE/COUNT,
-  cap, `nextDate > today` → `{ dates: [], nextDate: input.nextDate,
-  completed: false }`).
+  cap, nối chuỗi bằng `nextOccurrence(input.anchorDay, …)`, `nextDate > today`
+  → `{ dates: [], nextDate: input.nextDate, completed: false }`).
 - `describeRecurringEnd(endType: RecurringEndType, endDate: string | null,
   occurrenceCount: number | null): string` — `"Mãi mãi"` /
   `"Đến 31/12/2026"` / `"5 lần"` (formatter `dd/MM/yyyy` zero-pad thuần trong
@@ -280,9 +294,10 @@ Tính lại `nextDate` sau khi update (mọi trường hợp — kể cả rule 
 
 1. `lastGenerated = max(date)` của các expense `recurringRuleId = id`
    (findFirst orderBy date desc).
-2. Có `lastGenerated` → `nextDate = advanceMonthly(lastGenerated)`;
-   không có → `nextDate = firstOccurrenceFrom(startDateMới, today)`.
-   (Kết quả có thể ≤ today — tick kế tiếp sẽ catch-up đúng thiết kế.)
+2. Có `lastGenerated` → `nextDate = nextOccurrence(anchorDayOf(startDateMới),
+   lastGenerated)`; không có → `nextDate = firstOccurrenceFrom(startDateMới,
+   today)`. (Kết quả có thể ≤ today — tick kế tiếp sẽ catch-up đúng thiết kế.
+   Anchor theo "Từ" MỚI — user đổi ngày 15→20 thì kỳ kế tiếp là 20.)
 3. Nếu `endType = UNTIL_DATE` và `nextDate > endDate` → hoàn tất ngay
    (`nextDate = null`, `completedAt = now()`).
 4. Nếu `endType = COUNT` và `generatedCount >= occurrenceCount` → hoàn tất
@@ -468,17 +483,21 @@ iOS Safari render native picker).
 
 | # | Case | Kỳ vọng |
 |---|------|---------|
-| 1 | `advanceMonthly`: `"2026-01-31"` / `"2024-01-31"` (nhuận) / `"2026-01-15"` / `"2026-12-31"` | `"2026-02-28"` / `"2024-02-29"` / `"2026-02-15"` / `"2027-01-31"` |
-| 2 | `firstOccurrenceFrom("2026-11-15", "2026-10-01")` (ngày trong tương lai) | `"2026-11-15"` (không đổi) |
-| 3 | `firstOccurrenceFrom("2026-09-15", "2026-10-01")` (quá khứ) | `"2026-10-15"` |
-| 4 | `firstOccurrenceFrom("2026-01-31", "2026-10-01")` — clamp chỉ tháng 2, các tháng khác về 31 | `"2026-10-31"` |
-| 5 | `firstOccurrenceFrom("2026-01-31", "2026-02-15")` | `"2026-02-28"` |
-| 6 | `materializeDates` FOREVER: `nextDate "2026-08-01"`, today `"2026-10-01"` | dates `["2026-08-01","2026-09-01","2026-10-01"]`, nextDate `"2026-11-01"`, completed `false` |
-| 7 | `materializeDates` COUNT: `occurrenceCount 3, generatedCount 2, nextDate "2026-08-01"`, today `"2026-10-01"` | chỉ sinh **1** kỳ `["2026-08-01"]`, nextDate `null`, completed `true` |
-| 8 | `materializeDates` UNTIL_DATE: `endDate "2026-09-01", nextDate "2026-08-01"`, today `"2026-10-01"` | dates `["2026-08-01","2026-09-01"]`, nextDate `null`, completed `true` |
-| 9 | `materializeDates` `nextDate` trong tương lai (today `"2026-10-01"`, nextDate `"2026-11-01"`) | dates `[]`, nextDate giữ nguyên, completed `false` |
-| 10 | `materializeDates` cap: FOREVER, nextDate `"2025-01-01"`, today `"2026-10-01"`, `cap=3` | 3 dates đầu, nextDate `"2025-04-01"`, completed `false` (tick sau nối tiếp) |
-| 11 | `describeRecurringEnd`: FOREVER / UNTIL_DATE `"2026-12-31"` / COUNT 5 | `"Mãi mãi"` / `"Đến 31/12/2026"` / `"5 lần"` |
+| 1 | `anchorDayOf`/`occurrenceInMonth` (anchor 31): (2026,1) / (2026,2) / (2024,2) nhuận / (2026,4) / (2026,3) | `"2026-01-31"` / `"2026-02-28"` / `"2024-02-29"` / `"2026-04-30"` / `"2026-03-31"` |
+| 2 | `advanceMonthly` (primitive 1 bước): `"2026-01-31"` / `"2024-01-31"` nhuận / `"2026-01-15"` / `"2026-12-31"` | `"2026-02-28"` / `"2024-02-29"` / `"2026-02-15"` / `"2027-01-31"` |
+| 3 | `nextOccurrence` (neo anchor): (31, `"2026-02-28"`) / (30, `"2026-01-30"`) / (1, `"2026-12-01"`) | `"2026-03-31"` (TRỞ LẠI 31) / `"2026-02-28"` / `"2027-01-01"` |
+| 4 | `firstOccurrenceFrom("2026-11-15", "2026-10-01")` (ngày trong tương lai) | `"2026-11-15"` (không đổi) |
+| 5 | `firstOccurrenceFrom("2026-09-15", "2026-10-01")` (quá khứ) | `"2026-10-15"` |
+| 6 | `firstOccurrenceFrom("2026-01-31", "2026-10-01")` — anchor 31, clamp chỉ tháng 2, các tháng khác về 31 | `"2026-10-31"` |
+| 7 | `firstOccurrenceFrom("2026-01-31", "2026-02-15")` / `("2026-01-31", "2026-04-01")` | `"2026-02-28"` / `"2026-04-30"` (chặn sập ngày) |
+| 8 | `materializeDates` FOREVER: `nextDate "2026-08-01", anchorDay 1`, today `"2026-10-01"` | dates `["2026-08-01","2026-09-01","2026-10-01"]`, nextDate `"2026-11-01"`, completed `false` |
+| 9 | `materializeDates` anchor 31: `nextDate "2026-02-28", anchorDay 31`, today `"2026-03-31"` | dates `["2026-02-28","2026-03-31"]`, nextDate `"2026-04-30"`, completed `false` |
+| 10 | `materializeDates` COUNT: `occurrenceCount 3, generatedCount 2, nextDate "2026-08-01", anchorDay 1`, today `"2026-10-01"` | chỉ sinh **1** kỳ `["2026-08-01"]`, nextDate `null`, completed `true` |
+| 11 | `materializeDates` UNTIL_DATE: `endDate "2026-09-01", nextDate "2026-08-01", anchorDay 1`, today `"2026-10-01"` | dates `["2026-08-01","2026-09-01"]`, nextDate `null`, completed `true` |
+| 12 | `materializeDates` `nextDate` trong tương lai (today `"2026-10-01"`, nextDate `"2026-11-01"`) | dates `[]`, nextDate giữ nguyên, completed `false` |
+| 13 | `materializeDates` cap: FOREVER, nextDate `"2025-01-01", anchorDay 1`, today `"2026-10-01"`, `cap=3` | 3 dates đầu, nextDate `"2025-04-01"`, completed `false` (tick sau nối tiếp) |
+| 14 | `materializeDates` COUNT vừa đủ sau kỳ cuối / UNTIL_DATE đã hết hạn (endDate < nextDate) | (COUNT 2: 2 dates, nextDate null, completed) / (dates [], nextDate null, completed) |
+| 15 | `describeRecurringEnd`: FOREVER / UNTIL_DATE `"2026-12-31"` / COUNT 5 | `"Mãi mãi"` / `"Đến 31/12/2026"` / `"5 lần"` |
 
 ### 5.2 API — `apps/api/src/__tests__/recurring.test.ts` (mới, Postgres thật)
 
@@ -487,66 +506,66 @@ qua API; `today` lấy `todayStr()` khi chạy test.
 
 | # | Case | Kỳ vọng |
 |---|------|---------|
-| 12 | GET list family mới (chưa có rule) | 200, `rules: []` |
-| 13 | POST rule (OWNER): FOREVER, `startDate = today`, amount 1500000, category preset | 201; DB: `nextDate = today`, `frequency "MONTHLY"`, `generatedCount 0` |
-| 14 | POST rule (MEMBER) | 403 `OWNER_ONLY` |
-| 15 | POST/GET rule family người lạ (user không phải member) | 403 `NOT_FAMILY_MEMBER` |
-| 16 | POST rule sai validate (từng field): amount 0 / float / > 1e12 · note 201 ký tự · startDate `"2026-13-01"` · UNTIL_DATE thiếu endDate · COUNT thiếu count · FOREVER kèm endDate | 400 `VALIDATION_ERROR` (message chỉ đúng field sai) |
-| 17 | POST rule UNTIL_DATE `endDate < firstOccurrenceFrom(startDate, today)` | 400 `VALIDATION_ERROR` |
-| 18 | POST rule `categoryId` thuộc family khác | 404 `CATEGORY_NOT_FOUND` |
-| 19 | POST rule `startDate` quá khứ (hôm nay − 40 ngày, ngày khớp) | 201; `nextDate` = ngày khớp ≥ hôm nay (không phải startDate) |
-| 20 | POST materialize (MEMBER gọi) — rule `nextDate = today` | 200 `count 1`; Expense: amount/category/note = rule, `userId = rule.userId` (OWNER), `recurringRuleId` đúng; rule: `nextDate = +1 tháng`, `generatedCount 1` |
-| 21 | POST materialize lần 2 (ngay sau #20) | 200 `count 0` — không sinh trùng |
-| 22 | 2 POST materialize **song song** (`Promise.all`, rule chưa sinh kỳ hôm nay) | tổng `count` cả 2 = 1 (row lock + re-read) |
-| 23 | materialize rule `nextDate` trong tương lai | 200 `count 0`, `nextDate` không đổi |
-| 24 | Rule quá hạn 2 tháng (update `nextDate = today − 2 tháng` trực tiếp qua prisma) rồi materialize | 200 `count 3` (2 tháng trước + tháng trước + hôm nay); `nextDate` = tháng tới; 3 expense đúng ngày |
-| 25 | Rule COUNT = 1, `nextDate = today`: materialize | 200 `count 1`; rule `completedAt` có giá trị, `nextDate null`; materialize lần 2 → `count 0` |
-| 26 | Rule UNTIL_DATE `endDate = today`: materialize | 200 `count 1`, hoàn tất |
-| 27 | GET `/api/recurring/:id` (MEMBER) | 200 + category nested |
-| 28 | GET `/api/recurring/:id` (user không phải member) | 403 |
-| 29 | PUT rule đổi amount (OWNER) — rule đã có 1 khoản sinh | 200; khoản đã sinh **không đổi** amount (check DB) |
-| 30 | PUT rule (MEMBER) | 403 `FORBIDDEN` |
-| 31 | PUT rule (OWNER, không phải người tạo — family 2 OWNER? không được → tạo OWNER 2nd qua seed membership) | 200 (OWNER luôn được) |
-| 32 | PUT `startDate` vào tương lai — rule CHƯA có khoản sinh | `nextDate = startDate mới` |
-| 33 | PUT `startDate` — rule ĐÃ có khoản sinh (max date D) | `nextDate = advanceMonthly(D)` (không phụ thuộc startDate mới) |
-| 34 | PUT UNTIL_DATE `endDate` < kỳ kế tiếp | rule hoàn tất ngay: `nextDate null`, `completedAt` có giá trị |
-| 35 | PUT `categoryId` thuộc family khác | 404 `CATEGORY_NOT_FOUND` |
-| 36 | DELETE rule (OWNER) — rule đã sinh 2 khoản | 200; 2 expense **vẫn tồn tại**, `recurringRuleId = null` |
-| 37 | DELETE rule (MEMBER) | 403 `FORBIDDEN` |
-| 38 | PUT/DELETE `/api/recurring/:id` không tồn tại | 404 `RECURRING_RULE_NOT_FOUND` |
-| 39 | GET list expenses sau materialize | khoản sinh có mặt, dto có `recurringRuleId` |
-| 40 | PUT expense (khoản đã sinh) đổi date trùng ngày kỳ khác cùng rule | 409 `RECURRING_DATE_CONFLICT` |
-| 41 | PUT expense (khoản đã sinh) đổi amount/category/note | 200 (4B — cho phép) |
-| 42 | DELETE expense (khoản đã sinh, rule COUNT) → materialize | xoá OK; **không** sinh lại kỳ đó; `generatedCount` không giảm |
-| 43 | DELETE category đang có rule định kỳ | 409 `CATEGORY_IN_USE` |
+| 16 | GET list family mới (chưa có rule) | 200, `rules: []` |
+| 17 | POST rule (OWNER): FOREVER, `startDate = today`, amount 1500000, category preset | 201; DB: `nextDate = today`, `frequency "MONTHLY"`, `generatedCount 0` |
+| 18 | POST rule (MEMBER) | 403 `OWNER_ONLY` |
+| 19 | POST/GET rule family người lạ (user không phải member) | 403 `NOT_FAMILY_MEMBER` |
+| 20 | POST rule sai validate (từng field): amount 0 / float / > 1e12 · note 201 ký tự · startDate `"2026-13-01"` · UNTIL_DATE thiếu endDate · COUNT thiếu count · FOREVER kèm endDate | 400 `VALIDATION_ERROR` (message chỉ đúng field sai) |
+| 21 | POST rule UNTIL_DATE `endDate < firstOccurrenceFrom(startDate, today)` | 400 `VALIDATION_ERROR` |
+| 22 | POST rule `categoryId` thuộc family khác | 404 `CATEGORY_NOT_FOUND` |
+| 23 | POST rule `startDate` quá khứ (hôm nay − 40 ngày, ngày khớp) | 201; `nextDate` = ngày khớp ≥ hôm nay (không phải startDate) |
+| 24 | POST materialize (MEMBER gọi) — rule `nextDate = today` | 200 `count 1`; Expense: amount/category/note = rule, `userId = rule.userId` (OWNER), `recurringRuleId` đúng; rule: `nextDate = +1 tháng`, `generatedCount 1` |
+| 25 | POST materialize lần 2 (ngay sau #24) | 200 `count 0` — không sinh trùng |
+| 26 | 2 POST materialize **song song** (`Promise.all`, rule chưa sinh kỳ hôm nay) | tổng `count` cả 2 = 1 (row lock + re-read) |
+| 27 | materialize rule `nextDate` trong tương lai | 200 `count 0`, `nextDate` không đổi |
+| 28 | Rule quá hạn 2 tháng (update `nextDate = today − 2 tháng` trực tiếp qua prisma) rồi materialize | 200 `count 3` (2 tháng trước + tháng trước + hôm nay); `nextDate` = tháng tới; 3 expense đúng ngày |
+| 29 | Rule COUNT = 1, `nextDate = today`: materialize | 200 `count 1`; rule `completedAt` có giá trị, `nextDate null`; materialize lần 2 → `count 0` |
+| 30 | Rule UNTIL_DATE `endDate = today`: materialize | 200 `count 1`, hoàn tất |
+| 31 | GET `/api/recurring/:id` (MEMBER) | 200 + category nested |
+| 32 | GET `/api/recurring/:id` (user không phải member) | 403 |
+| 33 | PUT rule đổi amount (OWNER) — rule đã có 1 khoản sinh | 200; khoản đã sinh **không đổi** amount (check DB) |
+| 34 | PUT rule (MEMBER) | 403 `FORBIDDEN` |
+| 35 | PUT rule (OWNER, không phải người tạo — family 2 OWNER? không được → tạo OWNER 2nd qua seed membership) | 200 (OWNER luôn được) |
+| 36 | PUT `startDate` vào tương lai — rule CHƯA có khoản sinh | `nextDate = startDate mới` |
+| 37 | PUT `startDate` — rule ĐÃ có khoản sinh (max date D) | `nextDate = nextOccurrence(anchorDayOf(startDateMới), D)` (anchor theo "Từ" mới) |
+| 38 | PUT UNTIL_DATE `endDate` < kỳ kế tiếp | rule hoàn tất ngay: `nextDate null`, `completedAt` có giá trị |
+| 39 | PUT `categoryId` thuộc family khác | 404 `CATEGORY_NOT_FOUND` |
+| 40 | DELETE rule (OWNER) — rule đã sinh 2 khoản | 200; 2 expense **vẫn tồn tại**, `recurringRuleId = null` |
+| 41 | DELETE rule (MEMBER) | 403 `FORBIDDEN` |
+| 42 | PUT/DELETE `/api/recurring/:id` không tồn tại | 404 `RECURRING_RULE_NOT_FOUND` |
+| 43 | GET list expenses sau materialize | khoản sinh có mặt, dto có `recurringRuleId` |
+| 44 | PUT expense (khoản đã sinh) đổi date trùng ngày kỳ khác cùng rule | 409 `RECURRING_DATE_CONFLICT` |
+| 45 | PUT expense (khoản đã sinh) đổi amount/category/note | 200 (4B — cho phép) |
+| 46 | DELETE expense (khoản đã sinh, rule COUNT) → materialize | xoá OK; **không** sinh lại kỳ đó; `generatedCount` không giảm |
+| 47 | DELETE category đang có rule định kỳ | 409 `CATEGORY_IN_USE` |
 
 ### 5.3 FE — `apps/web/src/__tests__/` (pattern mock dataApi hiện có)
 
 | # | Case | Kỳ vọng |
 |---|------|---------|
-| 44 | `fetchRecurring` mock payload | map đúng shape `{ rules }`; đi qua read cache (key đúng dạng) |
-| 45 | `createRecurringRule`/`updateRecurringRule`/`deleteRecurringRule` | đúng method + path + body; gọi `invalidateRecurringCache` (spy) |
-| 46 | `materializeRecurring` `count 2` (2 tháng khác nhau) | invalidate expense cache đúng 2 months + 2 dates (spy) |
-| 47 | `fetchExpenses` payload cache **cũ** (không có `recurringRuleId`) | normalize về `null` — consumer không thấy `undefined` |
-| 48 | `RecurringPage` list: 1 active (COUNT 3, đã sinh 1) + 1 completed | 2 card đúng: "1/3 lần", "Kỳ tới: …", "Đã hoàn thành" |
-| 49 | `RecurringPage` rỗng (OWNER) / (MEMBER) | OWNER: CTA "Tạo giao dịch định kỳ"; MEMBER: không CTA, card không chạm |
-| 50 | `RecurringRulePage` (new) — chọn từng loại kết thúc | UI hiện/ẩn đúng: Mãi mãi (không dòng phụ) / Cho đến ngày (date input) / Số lần (input số) — như thiết kế |
-| 51 | `RecurringRulePage` validate: endDate < kỳ đầu tiên · số tiền 0 | message lỗi + nút Lưu disabled |
-| 52 | `RecurringRulePage` lưu mới | payload đúng (endType/endDate/occurrenceCount map đúng theo lựa chọn) + navigate `/recurring` |
-| 53 | `RecurringRulePage` (edit) prefill từ rule + đổi amount + đổi endType | gọi `updateRecurringRule` payload đủ field |
-| 54 | `RecurringRulePage` xoá rule | ConfirmDialog đúng message (khoản đã sinh giữ lại) → `deleteRecurringRule` |
-| 55 | `RecurringRulePage` (MEMBER) | màn "Chỉ chủ gia đình…" — không render form |
-| 56 | `ExpenseRow` expense có/không `recurringRuleId` | có: hiện icon định kỳ; không: không hiện (layout không đổi) |
-| 57 | `AppShell`: online + activeFamilyId | gọi `materializeRecurring(fid)` (spy); offline → không gọi |
-| 58 | `MePage` | hàng "Giao dịch định kỳ" → navigate `/recurring` |
+| 48 | `fetchRecurring` mock payload | map đúng shape `{ rules }`; đi qua read cache (key đúng dạng) |
+| 49 | `createRecurringRule`/`updateRecurringRule`/`deleteRecurringRule` | đúng method + path + body; gọi `invalidateRecurringCache` (spy) |
+| 50 | `materializeRecurring` `count 2` (2 tháng khác nhau) | invalidate expense cache đúng 2 months + 2 dates (spy) |
+| 51 | `fetchExpenses` payload cache **cũ** (không có `recurringRuleId`) | normalize về `null` — consumer không thấy `undefined` |
+| 52 | `RecurringPage` list: 1 active (COUNT 3, đã sinh 1) + 1 completed | 2 card đúng: "1/3 lần", "Kỳ tới: …", "Đã hoàn thành" |
+| 53 | `RecurringPage` rỗng (OWNER) / (MEMBER) | OWNER: CTA "Tạo giao dịch định kỳ"; MEMBER: không CTA, card không chạm |
+| 54 | `RecurringRulePage` (new) — chọn từng loại kết thúc | UI hiện/ẩn đúng: Mãi mãi (không dòng phụ) / Cho đến ngày (date input) / Số lần (input số) — như thiết kế |
+| 55 | `RecurringRulePage` validate: endDate < kỳ đầu tiên · số tiền 0 | message lỗi + nút Lưu disabled |
+| 56 | `RecurringRulePage` lưu mới | payload đúng (endType/endDate/occurrenceCount map đúng theo lựa chọn) + navigate `/recurring` |
+| 57 | `RecurringRulePage` (edit) prefill từ rule + đổi amount + đổi endType | gọi `updateRecurringRule` payload đủ field |
+| 58 | `RecurringRulePage` xoá rule | ConfirmDialog đúng message (khoản đã sinh giữ lại) → `deleteRecurringRule` |
+| 59 | `RecurringRulePage` (MEMBER) | màn "Chỉ chủ gia đình…" — không render form |
+| 60 | `ExpenseRow` expense có/không `recurringRuleId` | có: hiện icon định kỳ; không: không hiện (layout không đổi) |
+| 61 | `AppShell`: online + activeFamilyId | gọi `materializeRecurring(fid)` (spy); offline → không gọi |
+| 62 | `MePage` | hàng "Giao dịch định kỳ" → navigate `/recurring` |
 
 ### 5.4 E2E (Playwright) — spec mới `recurring.spec.ts`
 
 | # | Case | Kỳ vọng |
 |---|------|---------|
-| 59 | Đăng ký family mới → Tôi → Giao dịch định kỳ → Tạo: số tiền 1.500.000 (Keypad), chọn danh mục, ghi chú "Tiền điện", Từ = hôm nay, kết thúc "Xảy ra một số lượng lần nhất định: 3" → Lưu → list hiện rule "Đang hoạt động · Kỳ tới: hôm nay" → mở Lịch sử: khoản 1.500.000 ₫ có mặt (materialize chạy khi mở app) với icon định kỳ → rule hiển thị "1/3 lần" | happy path toàn trình (materialize do AppShell tự gọi) |
+| 63 | Đăng ký family mới → Tôi → Giao dịch định kỳ → Tạo: số tiền 1.500.000 (Keypad), chọn danh mục, ghi chú "Tiền điện", Từ = hôm nay, kết thúc "Xảy ra một số lượng lần nhất định: 3" → Lưu → list hiện rule "Đang hoạt động · Kỳ tới: hôm nay" → mở Lịch sử: khoản 1.500.000 ₫ có mặt (materialize chạy khi mở app) với icon định kỳ → rule hiển thị "1/3 lần" | happy path toàn trình (materialize do AppShell tự gọi) |
 
-(Lùi thời gian hàng tháng không thể trong E2E — được phủ bởi API test 24/25.)
+(Lùi thời gian hàng tháng không thể trong E2E — được phủ bởi API test 28/29.)
 
 ### 5.5 Test hiện có phải cập nhật
 
@@ -555,7 +574,7 @@ qua API; `today` lấy `todayStr()` khi chạy test.
   (TS bắt — fail-fast).
 - `AddPage`/`EditPage`: import `Keypad`, `CategoryChips` từ `shared/ui` —
   markup/props giữ nguyên nên test hành vi không đổi (chạy lại xác nhận).
-- `category.test.ts`: + case DELETE 409 khi category có rule (case 43).
+- `category.test.ts`: + case DELETE 409 khi category có rule (case 47).
 
 ## 6. Vạch ngoài (không làm trong feature này)
 
@@ -586,7 +605,7 @@ qua API; `today` lấy `todayStr()` khi chạy test.
   app giữa 17:00–24:00 giờ VN có thể lệch "hôm nay" so với UTC ở rìa ngày —
   chấp nhận (giống mọi tính năng khác trong app).
 - Race materialize song song: row lock `FOR UPDATE` + re-read + unique
-  constraint — 3 tầng, test 22 khoá.
+  constraint — 3 tầng, test 26 khoá.
 - Xoá rule giữa chừng transaction materialize: lock row giữ tới hết tx —
   không có expense mồ côi trỏ rule đã xoá.
 
@@ -595,9 +614,9 @@ qua API; `today` lấy `todayStr()` khi chạy test.
 | # | Commit | Nội dung |
 |---|--------|----------|
 | 1 | `docs` | Spec này |
-| 2 | `feat(shared)` | `recurring.ts` (types + `advanceMonthly`, `firstOccurrenceFrom`, `materializeDates`, `describeRecurringEnd`) + export `index.ts` + `Expense.recurringRuleId` + `recurring.test.ts` (case 1–11) + cập nhật mock `Expense` (TS bắt) |
+| 2 | `feat(shared)` | `recurring.ts` (types + `anchorDayOf`, `occurrenceInMonth`, `nextOccurrence`, `advanceMonthly`, `firstOccurrenceFrom`, `materializeDates`, `describeRecurringEnd`) + export `index.ts` + `Expense.recurringRuleId` + `recurring.test.ts` (case 1–15) + cập nhật mock `Expense` (TS bắt) |
 | 3 | `feat(api)` | Prisma schema (`RecurringRule` + `Expense.recurringRuleId` + `@@unique` + relations) + migration `add_recurring` + `prisma generate` |
-| 4 | `feat(api)` | `recurring.routes.ts` (6 endpoint + 2 router) + sửa `expense.routes.ts` (dto + 409 `RECURRING_DATE_CONFLICT`) + sửa `category.routes.ts` (409 khi có rule) + mount `app.ts` + `recurring.test.ts` (case 12–43) |
-| 5 | `feat(web)` | Nâng `Keypad` lên `shared/ui` + `CategoryChips` mới + cập nhật AddPage/EditPage + `dataApi` 5 hàm + readCache/cacheInvalidate (`recurring`) + `RecurringPage` (list + rỗng + member/owner) + router + hàng entry MePage + test (case 44–49, 57, 58) |
-| 6 | `feat(web)` | `RecurringRulePage` (form mới/sửa + khối Tùy Chỉnh + validate + xoá) + `RepeatIcon` + icon trên `ExpenseRow` + materialize trong AppShell + test (case 50–56) |
-| 7 | `test` | E2E `recurring.spec.ts` (case 59) + cập nhật `docs/handoff/progress.md` |
+| 4 | `feat(api)` | `recurring.routes.ts` (6 endpoint + 2 router) + sửa `expense.routes.ts` (dto + 409 `RECURRING_DATE_CONFLICT`) + sửa `category.routes.ts` (409 khi có rule) + mount `app.ts` + `recurring.test.ts` (case 16–47) |
+| 5 | `feat(web)` | Nâng `Keypad` lên `shared/ui` + `CategoryChips` mới + cập nhật AddPage/EditPage + `dataApi` 5 hàm + readCache/cacheInvalidate (`recurring`) + `RecurringPage` (list + rỗng + member/owner) + router + hàng entry MePage + test (case 48–53, 61, 62) |
+| 6 | `feat(web)` | `RecurringRulePage` (form mới/sửa + khối Tùy Chỉnh + validate + xoá) + `RepeatIcon` + icon trên `ExpenseRow` + materialize trong AppShell + test (case 54–60) |
+| 7 | `test` | E2E `recurring.spec.ts` (case 63) + cập nhật `docs/handoff/progress.md` |

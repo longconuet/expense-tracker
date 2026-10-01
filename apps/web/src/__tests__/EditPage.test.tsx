@@ -30,6 +30,7 @@ const EXPENSE = {
   category: { id: "c1", name: "Ăn uống", icon: "🍜", isPreset: true, order: 0 },
   createdByName: "An",
   createdAt: "2026-09-20T06:00:00.000Z",
+  recurringRuleId: null,
 };
 
 function renderEdit() {
