@@ -114,6 +114,194 @@ describe("PUT /api/families/:id/categories/:categoryId", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
+
+  it("trùng name trong family → 409 CATEGORY_EXISTS (không 500)", async () => {
+    const res = await request(app)
+      .put(`/api/families/${family.id}/categories/${customId}`)
+      .set(auth(ownerToken))
+      .send({ name: "Đổi tên preset" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("CATEGORY_EXISTS");
+  });
+});
+
+describe("POST /api/families/:id/categories/swap", () => {
+  let a: { id: string; order: number };
+  let b: { id: string; order: number };
+
+  beforeAll(async () => {
+    const ra = await request(app)
+      .post(`/api/families/${family.id}/categories`)
+      .set(auth(ownerToken))
+      .send({ name: "Swap A", icon: "🔀" });
+    const rb = await request(app)
+      .post(`/api/families/${family.id}/categories`)
+      .set(auth(ownerToken))
+      .send({ name: "Swap B", icon: "🔁" });
+    a = ra.body.data.category;
+    b = rb.body.data.category;
+  });
+
+  afterAll(async () => {
+    for (const c of [a, b]) {
+      await request(app)
+        .delete(`/api/families/${family.id}/categories/${c.id}`)
+        .set(auth(ownerToken));
+    }
+  });
+
+  it("hoán đổi order 2 category — 200, trả cả 2 row đã cập nhật", async () => {
+    const res = await request(app)
+      .post(`/api/families/${family.id}/categories/swap`)
+      .set(auth(ownerToken))
+      .send({ categoryId: a.id, targetId: b.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.categories).toHaveLength(2);
+    const [first, second] = res.body.data.categories;
+    expect(first).toMatchObject({ id: a.id, order: b.order });
+    expect(second).toMatchObject({ id: b.id, order: a.order });
+  });
+
+  it("GET list sau swap đổi vị trí (b → a), swap lại thì về nguyên", async () => {
+    const getList = async () => {
+      const list = await request(app).get(`/api/families/${family.id}/categories`).set(auth(ownerToken));
+      return list.body.data.categories as { id: string }[];
+    };
+    const doSwap = () =>
+      request(app)
+        .post(`/api/families/${family.id}/categories/swap`)
+        .set(auth(ownerToken))
+        .send({ categoryId: a.id, targetId: b.id });
+
+    // Tự chứa: chuẩn hoá về trạng thái a đứng trước b (không phụ thuộc test trước)
+    const list0 = await getList();
+    if (list0.findIndex((c) => c.id === a.id) > list0.findIndex((c) => c.id === b.id)) {
+      await doSwap();
+    }
+
+    const listBefore = await getList();
+    expect(listBefore.findIndex((c) => c.id === a.id)).toBeLessThan(
+      listBefore.findIndex((c) => c.id === b.id),
+    );
+
+    // Swap → b đứng trước a
+    const swapped = await doSwap();
+    expect(swapped.status).toBe(200);
+    const listAfter = await getList();
+    expect(listAfter.findIndex((c) => c.id === a.id)).toBeGreaterThan(
+      listAfter.findIndex((c) => c.id === b.id),
+    );
+
+    // Swap lại → về thứ tự ban đầu
+    const back = await doSwap();
+    expect(back.status).toBe(200);
+    const listBack = await getList();
+    expect(listBack.findIndex((c) => c.id === a.id)).toBeLessThan(
+      listBack.findIndex((c) => c.id === b.id),
+    );
+  });
+
+  it("categoryId = targetId → 400", async () => {
+    const res = await request(app)
+      .post(`/api/families/${family.id}/categories/swap`)
+      .set(auth(ownerToken))
+      .send({ categoryId: a.id, targetId: a.id });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("body thiếu field → 400", async () => {
+    const res = await request(app)
+      .post(`/api/families/${family.id}/categories/swap`)
+      .set(auth(ownerToken))
+      .send({ categoryId: a.id });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("1 id không tồn tại → 404, order 2 row không đổi", async () => {
+    const before = await request(app)
+      .get(`/api/families/${family.id}/categories`)
+      .set(auth(ownerToken));
+    const res = await request(app)
+      .post(`/api/families/${family.id}/categories/swap`)
+      .set(auth(ownerToken))
+      .send({ categoryId: a.id, targetId: "khong-ton-tai" });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("CATEGORY_NOT_FOUND");
+    const after = await request(app).get(`/api/families/${family.id}/categories`).set(auth(ownerToken));
+    const orderOf = (list: unknown, id: string) =>
+      (list as { id: string; order: number }[]).find((c) => c.id === id)!.order;
+    expect(orderOf(after.body.data.categories, a.id)).toBe(orderOf(before.body.data.categories, a.id));
+    expect(orderOf(after.body.data.categories, b.id)).toBe(orderOf(before.body.data.categories, b.id));
+  });
+
+  it("2 swap chồng chéo chạy song song (a↔b + b↔c) → không sinh order trùng", async () => {
+    // Thêm 1 category thứ 3 để có kịch bản chồng row (a,b) + (b,c)
+    const rc = await request(app)
+      .post(`/api/families/${family.id}/categories`)
+      .set(auth(ownerToken))
+      .send({ name: "Swap C", icon: "🔂" });
+    const c = rc.body.data.category as { id: string };
+
+    try {
+      // Gọi song song — không khoá row thì 2 tx có thể cùng đọc pre-image và ghi trùng
+      const [r1, r2] = await Promise.all([
+        request(app)
+          .post(`/api/families/${family.id}/categories/swap`)
+          .set(auth(ownerToken))
+          .send({ categoryId: a.id, targetId: b.id }),
+        request(app)
+          .post(`/api/families/${family.id}/categories/swap`)
+          .set(auth(ownerToken))
+          .send({ categoryId: b.id, targetId: c.id }),
+      ]);
+      expect(r1.status).toBe(200);
+      expect(r2.status).toBe(200);
+
+      const list = (
+        await request(app).get(`/api/families/${family.id}/categories`).set(auth(ownerToken))
+      ).body.data.categories as { id: string; order: number }[];
+      const orders = [a, b, c]
+        .map((row) => list.find((r) => r.id === row.id)!.order)
+        .sort((x, y) => x - y);
+      // 3 order PHẢI KHÁC NHAU và là hoán vị của 3 giá trị ban đầu
+      expect(new Set(orders).size).toBe(3);
+    } finally {
+      await request(app)
+        .delete(`/api/families/${family.id}/categories/${c.id}`)
+        .set(auth(ownerToken));
+    }
+  });
+
+  it("category của family khác → 404 (không lộ/đổi được)", async () => {
+    const reg = await request(app)
+      .post("/api/auth/register")
+      .send({ name: "Swap Khach", username: "swap_other", password: PASSWORD });
+    const otherToken = reg.body.data.accessToken;
+    const fam = await request(app)
+      .post("/api/families")
+      .set(auth(otherToken))
+      .send({ name: "Family Swap Khach" });
+    const otherFamilyId = fam.body.data.family.id as string;
+    const list = await request(app)
+      .get(`/api/families/${otherFamilyId}/categories`)
+      .set(auth(otherToken));
+    const foreignId = (list.body.data.categories as { id: string }[])[0].id;
+
+    const res = await request(app)
+      .post(`/api/families/${family.id}/categories/swap`)
+      .set(auth(ownerToken))
+      .send({ categoryId: a.id, targetId: foreignId });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("CATEGORY_NOT_FOUND");
+  });
 });
 
 describe("noteSuggestions — gợi ý ghi chú nhanh theo category", () => {

@@ -6,6 +6,7 @@ import {
   createCategory,
   deleteCategory,
   fetchCategories,
+  swapCategories,
   updateCategory,
 } from "../core/dataApi";
 import { useAuthStore } from "../core/authStore";
@@ -16,12 +17,14 @@ vi.mock("../core/dataApi", () => ({
   createCategory: vi.fn(),
   updateCategory: vi.fn(),
   deleteCategory: vi.fn(),
+  swapCategories: vi.fn(),
 }));
 
 const fetchCategoriesMock = vi.mocked(fetchCategories);
 const createCategoryMock = vi.mocked(createCategory);
 const updateCategoryMock = vi.mocked(updateCategory);
 const deleteCategoryMock = vi.mocked(deleteCategory);
+const swapCategoriesMock = vi.mocked(swapCategories);
 
 const USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY = {
@@ -49,6 +52,7 @@ describe("Quản lý danh mục chi tiêu", () => {
     createCategoryMock.mockReset();
     updateCategoryMock.mockReset();
     deleteCategoryMock.mockReset();
+    swapCategoriesMock.mockReset();
   });
 
   afterEach(() => {
@@ -313,19 +317,20 @@ describe("Quản lý danh mục chi tiêu", () => {
     expect(screen.getByText("Tiền điện")).toBeInTheDocument();
   });
 
-  it("đổi thứ tự: nút xuống ở hàng giữa → 2 PUT swap order, list đổi vị trí", async () => {
+  it("đổi thứ tự: nút xuống ở hàng giữa → 1 swap atomic, list đổi vị trí", async () => {
     // Arrange
-    fetchCategoriesMock.mockResolvedValue(LIST);
-    updateCategoryMock.mockResolvedValue(CAT_ELEC);
+    fetchCategoriesMock.mockResolvedValueOnce(LIST); // load ban đầu
+    fetchCategoriesMock.mockResolvedValue([CAT_FOOD, CAT_OTHER, CAT_ELEC]); // refetch sau swap = trạng thái server mới
+    swapCategoriesMock.mockResolvedValue([CAT_ELEC, CAT_OTHER]);
     render(<CategoriesPage />);
     await screen.findByText("Tiền điện");
 
     // Act — "Tiền điện" (order 1) xuống dưới "Khác" (order 2)
     fireEvent.click(screen.getByRole("button", { name: "Đưa Tiền điện xuống dưới" }));
 
-    // Assert — 2 PUT với order hoán đổi
-    expect(updateCategoryMock).toHaveBeenNthCalledWith(1, "f1", "c2", { order: 2 });
-    expect(updateCategoryMock).toHaveBeenNthCalledWith(2, "f1", "c3", { order: 1 });
+    // Assert — 1 gọi swap duy nhất (thay cho 2 PUT cũ)
+    expect(swapCategoriesMock).toHaveBeenCalledTimes(1);
+    expect(swapCategoriesMock).toHaveBeenCalledWith("f1", "c2", "c3");
     await waitFor(() => {
       const rows = screen.getAllByRole("listitem");
       expect(rows[1]).toHaveTextContent("Khác");
@@ -333,10 +338,10 @@ describe("Quản lý danh mục chi tiêu", () => {
     });
   });
 
-  it("đổi thứ tự fail (1 PUT lỗi) → banner lỗi, list không đổi", async () => {
+  it("đổi thứ tự fail → banner lỗi, list không đổi, tự đồng bộ lại với API", async () => {
     // Arrange
     fetchCategoriesMock.mockResolvedValue(LIST);
-    updateCategoryMock.mockRejectedValueOnce(
+    swapCategoriesMock.mockRejectedValueOnce(
       new ApiError("CATEGORY_NOT_FOUND", "Không tìm thấy danh mục", 404),
     );
     render(<CategoriesPage />);
@@ -350,6 +355,49 @@ describe("Quản lý danh mục chi tiêu", () => {
     const rows = screen.getAllByRole("listitem");
     expect(rows[1]).toHaveTextContent("Tiền điện");
     expect(rows[2]).toHaveTextContent("Khác");
+    // Refetch để list quay về đúng trạng thái server (transaction đã roll back)
+    await waitFor(() => expect(fetchCategoriesMock).toHaveBeenCalledTimes(2));
+  });
+
+  it("swap theo ID khi refetch cũ đổi thứ tự list giữa chừng (không phải swap theo index)", async () => {
+    // Arrange
+    const FOOD2: Category = { ...CAT_FOOD, name: "Ăn uống 2" };
+    fetchCategoriesMock.mockResolvedValueOnce(LIST); // load ban đầu
+    render(<CategoriesPage />);
+    await screen.findByText("Tiền điện");
+
+    // Giả lập: refetch ngầm từ mutation vừa xong (sửa tên) vẫn đang bay
+    let resolveStaleRefetch!: (cats: Category[]) => void;
+    fetchCategoriesMock.mockImplementationOnce(
+      () => new Promise<Category[]>((resolve) => { resolveStaleRefetch = resolve; }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Sửa danh mục Ăn uống" }));
+    updateCategoryMock.mockResolvedValueOnce(FOOD2);
+    fireEvent.change(nameInput(), { target: { value: "Ăn uống 2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lưu thay đổi" }));
+    await screen.findByText("Ăn uống 2");
+
+    // Refetch cũ resolve với list MÀ member khác đã đổi (Khác lên đầu) —
+    // xảy ra trước cả response của swap
+    const L2: Category[] = [CAT_OTHER, FOOD2, CAT_ELEC];
+    swapCategoriesMock.mockImplementationOnce(() => {
+      resolveStaleRefetch(L2);
+      return Promise.resolve([CAT_ELEC, CAT_OTHER]);
+    });
+    // Refetch sau swap: để pending — không được ghi đè state để thấy rõ kết quả swap
+    fetchCategoriesMock.mockImplementationOnce(() => new Promise<Category[]>(() => {}));
+
+    // Act
+    fireEvent.click(screen.getByRole("button", { name: "Đưa Tiền điện xuống dưới" }));
+
+    // Assert — swap c2↔c3 áp dụng trên L2 theo ID: Tiền điện ↔ Khác
+    // (code cũ swap theo index 1 của list closure → sẽ hoán đổi "Ăn uống 2"↔"Tiền điện" — sai)
+    await waitFor(() => {
+      const rows = screen.getAllByRole("listitem");
+      expect(rows[0]).toHaveTextContent("Tiền điện");
+      expect(rows[1]).toHaveTextContent("Ăn uống 2");
+      expect(rows[2]).toHaveTextContent("Khác");
+    });
   });
 });
 
@@ -395,6 +443,7 @@ describe("Gợi ý ghi chú nhanh trong modal thêm/sửa danh mục", () => {
     createCategoryMock.mockReset();
     updateCategoryMock.mockReset();
     deleteCategoryMock.mockReset();
+    swapCategoriesMock.mockReset();
   });
 
   afterEach(() => {

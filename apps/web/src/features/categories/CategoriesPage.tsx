@@ -6,6 +6,7 @@ import {
   createCategory,
   deleteCategory,
   fetchCategories,
+  swapCategories,
   updateCategory,
 } from "../../core/dataApi";
 import { Button } from "../../shared/ui/Button";
@@ -213,7 +214,12 @@ export default function CategoriesPage() {
     }
   }
 
-  /** Swap `order` của 2 hàng liền kề (2 PUT) — giữ invariant order duy nhất. */
+  /**
+   * Đổi thứ tự 2 hàng liền kề — 1 request swap atomic (transaction phía API).
+   * Swap trong state theo ID (không theo index): an toàn cả khi list vừa bị
+   * cập nhật giữa chừng (refetchSilent từ mutation trước). Fail → refetch
+   * để list quay về đúng trạng thái server (transaction đã roll back).
+   */
   async function moveCategory(index: number, dir: -1 | 1) {
     if (!activeFamilyId) return;
     const target = categories[index];
@@ -222,17 +228,24 @@ export default function CategoriesPage() {
     setReordering(true);
     setError(null);
     try {
-      await Promise.all([
-        updateCategory(activeFamilyId, target.id, { order: other.order }),
-        updateCategory(activeFamilyId, other.id, { order: target.order }),
-      ]);
-      setCategories((prev) => {
-        const next = [...prev];
-        [next[index], next[index + dir]] = [next[index + dir], next[index]];
-        return next;
-      });
+      // Dùng 2 row API trả về (trạng thái mới nhất) thay object closure —
+      // tránh ghi name/icon/noteSuggestions cũ vào state nếu có sửa xen kẽ
+      const [updatedTarget, updatedOther] = await swapCategories(
+        activeFamilyId,
+        target.id,
+        other.id,
+      );
+      setCategories((prev) =>
+        prev.flatMap((c) => {
+          if (c.id === target.id) return [updatedOther];
+          if (c.id === other.id) return [updatedTarget];
+          return [c];
+        }),
+      );
+      refetchSilent();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Không đổi được thứ tự, vui lòng thử lại.");
+      refetchSilent();
     } finally {
       setReordering(false);
     }

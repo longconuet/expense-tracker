@@ -97,6 +97,24 @@ export async function deleteCategory(familyId: string, categoryId: string): Prom
   await invalidateFamilyCache(familyId);
 }
 
+/**
+ * Hoán đổi `order` của 2 danh mục — 1 transaction phía API (cả 2 thành công
+ * hoặc cả 2 roll back). Thay thế 2 PUT song song: partial failure của 2 PUT
+ * làm 2 hàng trùng `order` → thứ tự list trả về không xác định.
+ */
+export async function swapCategories(
+  familyId: string,
+  categoryId: string,
+  targetId: string,
+): Promise<Category[]> {
+  const data = await apiFetch<{ categories: Category[] }>(
+    `/api/families/${familyId}/categories/swap`,
+    { method: "POST", body: { categoryId, targetId } },
+  );
+  await invalidateFamilyCache(familyId);
+  return data.categories;
+}
+
 // ---------------------------------------------------------------------------
 // Expenses
 // ---------------------------------------------------------------------------
