@@ -60,6 +60,9 @@ function toExpenseDto(expense: ExpenseWithRelations) {
     amount: expense.amount,
     date: expense.date,
     note: expense.note,
+    // null = khoản nhập tay; có giá trị = khoản do rule định kỳ sinh ra
+    // (FE hiện icon định kỳ) — spec: docs/spec-recurring.md
+    recurringRuleId: expense.recurringRuleId,
     category: {
       id: expense.category.id,
       name: expense.category.name,
@@ -72,7 +75,8 @@ function toExpenseDto(expense: ExpenseWithRelations) {
   };
 }
 
-async function assertFamilyMember(familyId: string, userId: string) {
+/** Export để route khác (recurring) re-use — 1 nguồn kiểm tra membership. */
+export async function assertFamilyMember(familyId: string, userId: string) {
   const membership = await prisma.familyMember.findUnique({
     where: { familyId_userId: { familyId, userId } },
   });
@@ -82,7 +86,8 @@ async function assertFamilyMember(familyId: string, userId: string) {
   return membership;
 }
 
-async function assertCategoryInFamily(familyId: string, categoryId: string) {
+/** Export để route khác (recurring) re-use — 1 nguồn kiểm tra category. */
+export async function assertCategoryInFamily(familyId: string, categoryId: string) {
   const category = await prisma.category.findFirst({ where: { id: categoryId, familyId } });
   if (!category) {
     throw new AppError(404, "CATEGORY_NOT_FOUND", "Danh mục không thuộc gia đình này");
@@ -354,11 +359,26 @@ expenseRouter.put("/:id", validateBody(updateExpenseSchema), async (req, res) =>
     data.category = { connect: { id: categoryId } };
   }
 
-  const expense = await prisma.expense.update({
-    where: { id: expenseId },
-    data,
-    include: { category: true, user: { select: { name: true } } },
-  });
+  let expense;
+  try {
+    expense = await prisma.expense.update({
+      where: { id: expenseId },
+      data,
+      include: { category: true, user: { select: { name: true } } },
+    });
+  } catch (err) {
+    // P2002: unique (recurringRuleId, date) — đổi date khoản đã sinh sang trùng
+    // ngày kỳ khác của cùng rule. Catch P2002 thay vì pre-check: không bị race
+    // với materialize chạy xen (spec: docs/spec-recurring.md §3.2).
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      throw new AppError(
+        409,
+        "RECURRING_DATE_CONFLICT",
+        "Ngày trùng với một kỳ khác của rule định kỳ — hãy chọn ngày khác",
+      );
+    }
+    throw err;
+  }
 
   sendOk(res, { expense: toExpenseDto(expense) });
 });

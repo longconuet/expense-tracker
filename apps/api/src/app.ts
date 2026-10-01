@@ -7,6 +7,7 @@ import { categoryRouter } from "./routes/category.routes.js";
 import { familyRouter } from "./routes/family.routes.js";
 import { expenseFamilyRouter, expenseRouter } from "./routes/expense.routes.js";
 import { meRouter } from "./routes/me.routes.js";
+import { recurringByIdRouter, recurringRouter } from "./routes/recurring.routes.js";
 import { rentalRouter } from "./routes/rental.routes.js";
 import { statsRouter } from "./routes/stats.routes.js";
 
@@ -39,8 +40,10 @@ export function createApp(): express.Express {
   app.use("/api/families/:id/categories", categoryRouter);
   app.use("/api/families/:id/expenses", expenseFamilyRouter);
   app.use("/api/families/:id/rental", rentalRouter);
+  app.use("/api/families/:id/recurring", recurringRouter);
   app.use("/api/families/:id/stats", statsRouter);
   app.use("/api/expenses", expenseRouter);
+  app.use("/api/recurring", recurringByIdRouter);
   app.use("/api", meRouter);
 
   app.use(notFoundHandler);

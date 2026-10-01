@@ -530,4 +530,33 @@ describe("DELETE /api/families/:id/categories/:categoryId", () => {
       .set(auth(ownerToken));
     expect(ok.status).toBe(200);
   });
+
+  // case 47 (spec-recurring §5.2): category đang có rule định kỳ → 409
+  it("đang có rule định kỳ thì không xoá (409), xoá rule rồi mới xoá được", async () => {
+    const created = await request(app)
+      .post(`/api/families/${family.id}/categories`)
+      .set(auth(ownerToken))
+      .send({ name: "Định kỳ", icon: "🔁" });
+    expect(created.status).toBe(201);
+    const catId = created.body.data.category.id;
+
+    const rule = await request(app)
+      .post(`/api/families/${family.id}/recurring`)
+      .set(auth(ownerToken))
+      .send({ categoryId: catId, amount: 100_000, startDate: "2026-10-01", endType: "FOREVER" });
+    expect(rule.status).toBe(201);
+
+    const blocked = await request(app)
+      .delete(`/api/families/${family.id}/categories/${catId}`)
+      .set(auth(ownerToken));
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.error.code).toBe("CATEGORY_IN_USE");
+
+    // dọn: xoá rule rồi xoá category
+    await request(app).delete(`/api/recurring/${rule.body.data.rule.id}`).set(auth(ownerToken));
+    const ok = await request(app)
+      .delete(`/api/families/${family.id}/categories/${catId}`)
+      .set(auth(ownerToken));
+    expect(ok.status).toBe(200);
+  });
 });
