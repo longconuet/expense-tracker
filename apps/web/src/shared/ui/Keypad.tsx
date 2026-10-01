@@ -1,8 +1,8 @@
-import { BackspaceIcon } from "../../shared/ui/icons";
+import { BackspaceIcon } from "./icons";
 
 /**
- * Bàn phím số cho màn nhập/sửa khoản chi — thay bàn phím hệ thống
- * (spec WBS 9: không dùng bàn phím hệ thống cho số tiền).
+ * Bàn phím số cho màn nhập/sửa khoản chi + form giao dịch định kỳ — thay
+ * bàn phím hệ thống (spec WBS 9: không dùng bàn phím hệ thống cho số tiền).
  * Presentational: không giữ state, cha truyền onKey.
  *
  * Size: "lg" (64px — mặc định) / "md" (56px — màn Thêm + Sửa, tiết kiệm

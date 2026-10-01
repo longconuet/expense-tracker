@@ -16,6 +16,7 @@ import {
   LogoutIcon,
   MoonIcon,
   RefreshIcon,
+  RepeatIcon,
   SunIcon,
   TagIcon,
   UsersIcon,
@@ -217,6 +218,22 @@ export default function MePage() {
             <span className="flex items-center gap-3">
               <TagIcon className="h-5 w-5 text-ink-muted" />
               <span className="font-medium text-ink">Danh mục chi tiêu</span>
+            </span>
+            <ChevronRightIcon className="h-5 w-5 text-ink-muted" />
+          </button>
+        </Card>
+      )}
+
+      {activeFamily && (
+        <Card className="mt-4">
+          <button
+            type="button"
+            onClick={() => navigate("/recurring")}
+            className="flex w-full items-center justify-between"
+          >
+            <span className="flex items-center gap-3">
+              <RepeatIcon className="h-5 w-5 text-ink-muted" />
+              <span className="font-medium text-ink">Giao dịch định kỳ</span>
             </span>
             <ChevronRightIcon className="h-5 w-5 text-ink-muted" />
           </button>

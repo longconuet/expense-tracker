@@ -68,6 +68,7 @@ const EXPENSE = {
   category: CAT,
   createdByName: "An",
   createdAt: "2026-09-01T06:00:00.000Z",
+  recurringRuleId: null,
 };
 
 describe("core/dataApi", () => {
@@ -139,6 +140,20 @@ describe("core/dataApi", () => {
 
     // Assert
     expect(fetchMock.mock.calls[0][0]).toBe("/api/families/f1/expenses");
+  });
+
+  // case 51 (spec-recurring §5.3): payload cache cũ (ghi trước khi có field)
+  it("fetchExpenses: payload cache cũ (thiếu recurringRuleId) → normalize về null", async () => {
+    // Arrange — expense không có key recurringRuleId (payload phiên bản cũ)
+    const stale = { ...EXPENSE, note: null };
+    delete (stale as Record<string, unknown>).recurringRuleId;
+    fetchMock.mockResolvedValueOnce(fakeResponse(envelope({ expenses: [stale] })));
+
+    // Act
+    const result = await fetchExpenses("f1");
+
+    // Assert — consumer luôn nhận `string | null`, không `undefined`
+    expect(result.expenses).toEqual([{ ...stale, recurringRuleId: null }]);
   });
 
   it("createExpense POST đúng payload (category → categoryId)", async () => {

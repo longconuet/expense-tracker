@@ -43,6 +43,7 @@ function renderMe() {
         <Route path="/" element={<div>HOME MARKER</div>} />
         <Route path="/login" element={<div>LOGIN MARKER</div>} />
         <Route path="/categories" element={<div>CATEGORIES MARKER</div>} />
+        <Route path="/recurring" element={<div>RECURRING MARKER</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -253,6 +254,16 @@ describe("Màn Tôi", () => {
 
     // Assert
     expect(await screen.findByText("CATEGORIES MARKER")).toBeInTheDocument();
+  });
+
+  // case 62 (spec-recurring §5.3)
+  it("hàng 'Giao dịch định kỳ' → điều hướng /recurring", async () => {
+    // Arrange + Act
+    renderMe();
+    fireEvent.click(screen.getByRole("button", { name: "Giao dịch định kỳ" }));
+
+    // Assert
+    expect(await screen.findByText("RECURRING MARKER")).toBeInTheDocument();
   });
 
   describe("tạo/join family thêm từ dialog", () => {

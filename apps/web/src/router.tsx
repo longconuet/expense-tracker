@@ -9,6 +9,7 @@ import HomePage from "./features/home/HomePage";
 import HistoryPage from "./features/history/HistoryPage";
 import MePage from "./features/me/MePage";
 import CategoriesPage from "./features/categories/CategoriesPage";
+import RecurringPage from "./features/recurring/RecurringPage";
 import RentalPage from "./features/rental/RentalPage";
 import RentalMonthPage from "./features/rental/RentalMonthPage";
 import JoinPage from "./features/auth/JoinPage";
@@ -37,6 +38,7 @@ function PageFallback() {
  *   - 5 màn chính trong AppShell (header + bottom nav)
  *   - /expenses/:id/edit — màn sửa khoản (trong shell, không có trong nav)
  *   - /categories — quản lý danh mục chi tiêu (từ màn Tôi, không có trong nav)
+ *   - /recurring — giao dịch định kỳ (từ màn Tôi, không có trong nav)
  *   - /rental/stats — thống kê điện/nước phòng trọ (từ màn /rental, lazy)
  */
 export const router = createBrowserRouter([
@@ -73,6 +75,7 @@ export const router = createBrowserRouter([
           { path: "/rental/:month", element: <RentalMonthPage /> },
           { path: "/history", element: <HistoryPage /> },
           { path: "/categories", element: <CategoriesPage /> },
+          { path: "/recurring", element: <RecurringPage /> },
           { path: "/me", element: <MePage /> },
         ],
       },

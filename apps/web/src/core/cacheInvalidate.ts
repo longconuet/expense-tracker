@@ -7,11 +7,12 @@ import { invalidateCache } from "./readCache";
 
 export interface ParsedCacheKey {
   familyId: string;
-  resource: "categories" | "expenses" | "stats" | "rental";
+  resource: "categories" | "expenses" | "stats" | "rental" | "recurring";
   params: URLSearchParams;
 }
 
-const KEY_PATTERN = /^GET \/api\/families\/([^/]+)\/(categories|expenses|stats|rental)(?:\?(.*))?$/;
+const KEY_PATTERN =
+  /^GET \/api\/families\/([^/]+)\/(categories|expenses|stats|rental|recurring)(?:\?(.*))?$/;
 
 /** Parse key cache; trả null cho key không khớp hình dạng chuẩn. */
 export function parseCacheKey(key: string): ParsedCacheKey | null {
@@ -67,5 +68,13 @@ export async function invalidateRentalCache(familyId: string): Promise<void> {
   await invalidateCache((key) => {
     const parsed = parseCacheKey(key);
     return parsed !== null && parsed.familyId === familyId && parsed.resource === "rental";
+  });
+}
+
+/** Xoá cache giao dịch định kỳ của family — gọi sau mọi mutation rule. */
+export async function invalidateRecurringCache(familyId: string): Promise<void> {
+  await invalidateCache((key) => {
+    const parsed = parseCacheKey(key);
+    return parsed !== null && parsed.familyId === familyId && parsed.resource === "recurring";
   });
 }
