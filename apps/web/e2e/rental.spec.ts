@@ -142,10 +142,12 @@ test.describe("Tiền phòng trọ (E2E)", () => {
     await expect(page.getByRole("heading", { name: "Nước", exact: true })).toBeVisible();
     await expect(page.locator(".h-48 svg")).toHaveCount(2);
 
-    // Assert — bảng chi tiết 3 cột (không scroll ngang, không header "Tháng"):
+    // Assert — bảng chi tiết trên CARD RIÊNG (tách khỏi card biểu đồ), 3 cột
+    // (không scroll ngang, không header "Tháng"):
     // badge "280 kWh" + 980.000 ₫ (giá mới) · badge "6 m³" + 210.000 ₫
     const now = new Date();
     const confirmedMonthLabel = `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`;
+    await expect(page.getByRole("heading", { name: "Chi tiết theo tháng" })).toBeVisible();
     const table = page.getByRole("table");
     await expect(table.getByRole("columnheader")).toHaveCount(3);
     await expect(table.getByText("Tháng", { exact: true })).toHaveCount(0);
@@ -156,6 +158,28 @@ test.describe("Tiền phòng trọ (E2E)", () => {
     await expect(table.getByText("980.000 ₫")).toBeVisible();
     await expect(table.getByText("6 m³")).toBeVisible();
     await expect(table.getByText("210.000 ₫")).toBeVisible();
+
+    // Assert — 1 tháng = 1 DÒNG: badge số lượng + tiền cùng dòng (cùng y)
+    const badgeBox = await table.getByText("280 kWh").boundingBox();
+    const costBox = await table.getByText("980.000 ₫").boundingBox();
+    expect(badgeBox && costBox && Math.abs(badgeBox.y - costBox.y)).toBeLessThan(3);
+
+    // Assert — không scroll ngang: bảng vừa trong container
+    const overflow = await page
+      .locator("div.overflow-x-auto")
+      .evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+
+    // Assert — repeat ở viewport mobile 360px (thiết bị user): 1 dòng +
+    // không scroll ngang (yêu cầu chính của redesign bảng)
+    await page.setViewportSize({ width: 360, height: 740 });
+    const overflowMobile = await page
+      .locator("div.overflow-x-auto")
+      .evaluate((el) => el.scrollWidth - el.clientWidth);
+    expect(overflowMobile).toBeLessThanOrEqual(1);
+    const badgeBoxMobile = await table.getByText("280 kWh").boundingBox();
+    const costBoxMobile = await table.getByText("980.000 ₫").boundingBox();
+    expect(badgeBoxMobile && costBoxMobile && Math.abs(badgeBoxMobile.y - costBoxMobile.y)).toBeLessThan(3);
 
     // Assert — summary panel Điện (1 tháng → không có phần cao/thấp nhất)
     await expect(page.getByText(/TB 280 kWh/)).toHaveText("TB 280 kWh · 980.000 ₫/tháng");

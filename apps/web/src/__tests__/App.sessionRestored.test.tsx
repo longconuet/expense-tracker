@@ -26,7 +26,9 @@ const MOCK_FAMILY = {
 
 describe("App — phiên đăng nhập (còn refresh cookie)", () => {
   it("khôi phục phiên từ refresh cookie → vào thẳng trang chủ", async () => {
-    // Arrange: 1) refresh OK, 2) /me OK, 3) stats, 4) expenses, 5) rental (trang chủ gọi 3 API)
+    // Arrange: 1) refresh OK, 2) /me OK, 3) stats, 4) expenses, 5) rental
+    // (trang chủ gọi 3 API — rental fetch CUỐI: RentalCard nằm trong nhánh
+    // đã-load của HomePage, mount sau khi Promise.all(stats, expenses) resolve)
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -34,10 +36,6 @@ describe("App — phiên đăng nhập (còn refresh cookie)", () => {
       )
       .mockResolvedValueOnce(
         fakeResponse({ success: true, data: { user: MOCK_USER, families: [MOCK_FAMILY] }, error: null }),
-      )
-      // RentalCard (child effect chạy trước HomePage) fetch rental trước
-      .mockResolvedValueOnce(
-        fakeResponse({ success: true, data: { config: null, months: [] }, error: null }),
       )
       .mockResolvedValueOnce(
         fakeResponse({
@@ -59,14 +57,19 @@ describe("App — phiên đăng nhập (còn refresh cookie)", () => {
           200,
           { page: 1, pageSize: 5, total: 0 },
         ),
+      )
+      .mockResolvedValueOnce(
+        fakeResponse({ success: true, data: { config: null, months: [] }, error: null }),
       );
     vi.stubGlobal("fetch", fetchMock);
 
     // Act
     render(<App />);
 
-    // Assert — heading để phân biệt với nav link "Trang chủ"
+    // Assert — heading để phân biệt với nav link "Trang chủ"; chờ tới khi
+    // RentalCard mount (sau stats resolve) để đủ 5 fetch
     expect(await screen.findByRole("heading", { name: "Trang chủ" })).toBeInTheDocument();
+    expect(await screen.findByText("Tiền phòng trọ")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 });
