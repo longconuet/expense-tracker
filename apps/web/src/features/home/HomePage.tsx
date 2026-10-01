@@ -95,16 +95,11 @@ export default function HomePage() {
         </p>
       )}
 
-      {/* Tiền phòng trọ — fetch độc lập trong RentalCard, không block phần còn lại */}
-      <div className="mt-4">
-        <RentalCard />
-      </div>
-
+      {/* Tổng tháng này */}
       {!stats || !recent ? (
         <HomeSkeleton />
       ) : (
         <>
-          {/* Tổng tháng này */}
           <Card className="mt-4">
             <p className="text-sm text-ink-muted">Tổng chi tiêu</p>
             <p className="mt-1 text-3xl font-bold text-ink">{formatVnd(stats.total)}</p>
@@ -118,6 +113,13 @@ export default function HomePage() {
               </p>
             )}
           </Card>
+
+          {/* Tiền phòng trọ — dưới card Tổng chi tiêu; fetch độc lập trong
+              RentalCard, không block phần còn lại. Card chỉ render khi stats
+              đã load (nằm trong nhánh loaded của HomePage). */}
+          <div className="mt-4">
+            <RentalCard />
+          </div>
 
           {stats.total === 0 ? (
             <Card className="mt-4 text-center">

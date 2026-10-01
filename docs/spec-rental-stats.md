@@ -6,7 +6,9 @@
 > dưới list tháng. **Đổi 01/10/2026** (request trực tiếp user): thống kê
 > chuyển sang **màn riêng `/rental/stats`** (nút vào trên danh sách tháng
 > /rental + nút back) + **bảng 3 cột** không scroll ngang (badge số lượng,
-> icon ⚡/💧 cho label Điện/Nước).
+> icon ⚡/💧 cho label Điện/Nước). **Đổi 01/10/2026 (lượt 2)**: bảng tách
+> **card riêng** + 1 tháng = **1 dòng** (badge + tiền ngang hàng) + badge đổi
+> màu; Home: card Tiền phòng trọ xuống dưới card Tổng chi tiêu.
 
 ## 1. Tổng quan
 
@@ -49,11 +51,13 @@ vào thẳng URL/refresh được) — không endpoint mới, không đổi API/
 | File | Vai trò |
 |---|---|
 | `rentalStats.ts` | Pure functions: lọc/sort/chọn phạm vi + summary + map data chart (test được trực tiếp, không phụ thuộc UI) |
-| `RentalStatsPage.tsx` (mới) | Màn `/rental/stats` (default export — lazy route): header back + tiêu đề + ghi chú + selector chip + 2 panel `MeterTrendPanel` + bảng 3 cột; tự fetch `fetchRental` (pattern `RentalMonthPage`) |
+| `RentalStatsPage.tsx` (mới) | Màn `/rental/stats` (default export — lazy route): header back + tiêu đề + ghi chú + **2 card** (selector chip + 2 panel `MeterTrendPanel` / bảng chi tiết 3 cột, card riêng với heading "Chi tiết theo tháng"); tự fetch `fetchRental` (pattern `RentalMonthPage`) |
 | `MeterTrendPanel.tsx` | 1 panel = tiêu đề ("Điện" / "Nước") + icon (⚡ `BoltIcon` / 💧 `DropletIcon`) + dòng summary + recharts `ComposedChart` (cột lượng + đường tiền, dual axis) — dùng chung 2 lần (props: data, unit, màu, titleIcon) |
 | `RentalPage.tsx` (sửa) | Nút "Thống kê sử dụng điện & nước" (Link → `/rental/stats`) **trên** khối list tháng — thay section inline cũ; mọi member thấy |
 | `router.tsx` (sửa) | Route `/rental/stats` (lazy + Suspense như `StatsPage`) khai báo TRƯỚC `/rental/:month` (static segment thắng dynamic — RR v6/v7 ranking) |
 | `icons.tsx` (sửa, shared/ui) | Thêm `BoltIcon` + `DropletIcon` (SVG stroke currentColor, không thêm icon library) |
+| `index.css` (sửa) | Token màu nước cho màn thống kê: `--color-water` (light #2563eb / dark #60a5fa), `--color-water-soft` (nền badge), `--color-water-text` (chữ badge 11px — WCAG AA trên soft) |
+| `HomePage.tsx` (sửa) | Card `RentalCard` di chuyển xuống **dưới** card "Tổng chi tiêu" (trước ở trên cùng) — chỉ render khi stats đã load |
 
 `RentalStatsPage` tự fetch `fetchRental(activeFamilyId)` khi mount (không nhận
 prop — là route độc lập, user vào thẳng/refresh được). State local: `range`
@@ -113,20 +117,34 @@ Mỗi `MeterTrendPanel`:
 `TB 280 kWh · 1.120.000 ₫/tháng · Cao nhất 07/2026 (512 kWh) · Thấp nhất 01/2026 (180 kWh)`
 (chỉ 1 tháng → bỏ phần cao/thấp nhất). Rỗng → không render panel (xem 3.6).
 
-### 3.5 Bảng chi tiết — 3 cột (mobile 360px không scroll ngang)
+### 3.5 Bảng chi tiết — 3 cột, card riêng, 1 tháng = 1 dòng (360px không scroll ngang)
 
 > Đổi 01/10/2026 (request user): bảng 5 cột cũ phải scroll ngang ở điện thoại.
+> Đổi 01/10/2026 (request user, lượt 2): tách bảng thành **card riêng** (trước
+> chung card với biểu đồ) + 1 tháng chỉ **1 dòng** (trước badge trên/tiền dưới
+> = 2 dòng) + badge đổi màu để phân biệt số lượng vs tiền.
 
-| (không header "Tháng") | ⚡ Điện | 💧 Nước |
-
-- Sort **desc** theo tháng; cột 1 = `monthLabel` ("Tháng 7/2026") — header **không
-  hiện text "Tháng"** (th rỗng + `aria-label="Tháng"` cho screen reader).
-- Mỗi cột điện/nước **gộp số lượng + tiền**: số lượng trong **badge**
-  (`rounded-full bg-ink/5 px-2 py-0.5`, `formatMeter` + đơn vị — VD "262 kWh"),
-  tiền nằm **dưới badge** (`formatVnd` — "917.000 ₫"); căn phải + `tabular-nums`.
-- Header cột Điện/Nước kèm icon `BoltIcon`/`DropletIcon` (màu khớp chart:
-  `--color-primary` / palette nước cố định) — icon ở header panel cũng như vậy.
-- `text-xs` + `w-full`, không `min-width`/`overflow-x` — vừa 360px.
+- **Card riêng** với heading `"Chi tiết theo tháng"` (`font-semibold text-ink`,
+  khớp convention h2 card khác) — tách khỏi card selector + 2 panel.
+- 3 cột: (không header "Tháng") | ⚡ Điện | 💧 Nước. Sort **desc** theo tháng;
+  cột 1 = `monthLabel` ("Tháng 7/2026") — header **không hiện text "Tháng"**
+  (th rỗng + `aria-label="Tháng"` cho screen reader).
+- Mỗi cột điện/nước **1 DÒNG**: badge số lượng + tiền nằm **ngang hàng**
+  (`flex items-center justify-end`, `whitespace-nowrap`, căn phải,
+  `tabular-nums`):
+  - Badge điện: `bg-primary-soft text-primary-text`; badge nước:
+    `bg-water-soft text-water-text` — màu khác tone tiền để phân biệt.
+    (Token `--color-water-text` riêng cho chữ badge 11px vì `water` trên nền
+    soft không đạt WCAG AA: light 2.8:1 → `water-text` #1e40af ≈ 6.6:1;
+    dark #93c5fd ≈ 5.9:1 — review 01/10/2026).
+- Header cột Điện/Nước kèm icon `BoltIcon`/`DropletIcon` (màu:
+  `--color-primary` / `--color-water`); icon panel Nước cũng `text-water`.
+  Token màu nước định nghĩa tập trung trong `index.css` (`--color-water`,
+  `--color-water-soft`, `--color-water-text` — light + dark). Line chart nước
+  dùng `var(--color-water)`; bar chart giữ hex cố định `#3b82f6` (precedent
+  palette chart).
+- `text-xs` + `w-full` + wrapper `overflow-x-auto` (safety net — với dữ liệu
+  thực tế bảng vừa 360px, E2E assert không overflow ở cả desktop và 360px).
 - Δ % so tháng trước: **vạch ngoài v1** (biểu đồ + tooltip đã đủ so sánh;
   follow-up nếu user muốn).
 
@@ -160,7 +178,7 @@ Mỗi `MeterTrendPanel`:
 | # | Case | Kỳ vọng |
 |---|------|---------|
 | 10a | `RentalPage` có config | nút "Thống kê sử dụng điện & nước" (Link `/rental/stats`) trên list; MEMBER cũng thấy; click → vào màn thống kê (h1 + back) |
-| 10 | `RentalStatsPage` 2 tháng CONFIRMED (data thật tháng 7 + 1 tháng khác) | ghi chú "Chỉ tính các tháng đã chốt", 2 panel (heading Điện/Nước + icon), bảng 3 cột: 3 columnheader **không** text "Tháng" (visible), badge "280 kWh" + "1.120.000 ₫" · "6 m³" + "210.000 ₫" · "140.000 ₫", chip "12 tháng gần" pressed |
+| 10 | `RentalStatsPage` 2 tháng CONFIRMED (data thật tháng 7 + 1 tháng khác) | ghi chú "Chỉ tính các tháng đã chốt", 2 panel (heading Điện/Nước + icon), heading "Chi tiết theo tháng" (bảng trên **card riêng**), bảng 3 cột: 3 columnheader **không** text "Tháng" (visible), badge "280 kWh" (class `bg-primary-soft text-primary-text`) + "1.120.000 ₫" · "6 m³" (class `bg-water-soft text-water-text`) + "210.000 ₫" · "140.000 ₫", chip "12 tháng gần" pressed |
 | 11 | `RentalStatsPage` tháng chỉ DRAFT (chưa chốt lần nào) | dòng "Chưa có dữ liệu…", không có chart/bảng/selector |
 | 11b | `RentalStatsPage` vào thẳng URL khi chưa có config | dòng "Chưa có thông tin phòng trọ…", không có bảng |
 | 12 | Selector: click chip năm | bảng + chart chỉ còn tháng năm đó (assert 1 hàng trong bảng) |
@@ -176,7 +194,7 @@ summary) + pure functions (đã phủ ở 4.1); không assert pixel/tooltip.)
 
 | # | Case | Kỳ vọng |
 |---|------|---------|
-| 57 | (kéo dài 54: đã chốt **tháng hiện tại** — draft tự tạo khi lưu config) ở `/rental` → click nút thống kê → assert màn thống kê → back | màn: back + h1 + chip "12 tháng gần" pressed + ghi chú "Chỉ tính các tháng đã chốt"; 2 panel (heading Điện/Nước) + 2 chart svg; bảng **3 cột** (3 columnheader, không "Tháng"): 1 hàng — tháng hiện tại · badge **280 kWh** + **980.000 ₫** (tiền điện sau khi case 54 đổi giá 3.500) · badge **6 m³** + 210.000 ₫; summary "TB 280 kWh · 980.000 ₫/tháng" (1 tháng → không có cao/thấp nhất); hover cột → tooltip đúng series; back → /rental (list tháng) |
+| 57 | (kéo dài 54: đã chốt **tháng hiện tại** — draft tự tạo khi lưu config) ở `/rental` → click nút thống kê → assert màn thống kê → back | màn: back + h1 + chip "12 tháng gần" pressed + ghi chú "Chỉ tính các tháng đã chốt"; 2 panel (heading Điện/Nước) + 2 chart svg; heading "Chi tiết theo tháng" (bảng trên **card riêng**); bảng **3 cột** (3 columnheader, không "Tháng"): 1 hàng — tháng hiện tại · badge **280 kWh** + **980.000 ₫** (tiền điện sau khi case 54 đổi giá 3.500) · badge **6 m³** + 210.000 ₫; **1 tháng = 1 dòng** (boundingBox badge & tiền cùng y ±3px) + **không overflow ngang** (scrollWidth−clientWidth ≤ 1) ở cả desktop **và 360px mobile**; summary "TB 280 kWh · 980.000 ₫/tháng" (1 tháng → không có cao/thấp nhất); hover cột → tooltip đúng series; back → /rental (list tháng) |
 
 ## 5. Vạch ngoài (v1)
 
@@ -197,8 +215,11 @@ summary) + pure functions (đã phủ ở 4.1); không assert pixel/tooltip.)
   nghìn ("210k") — quyết định lúc code, giữ 1 helper `formatCostTick` duy nhất.
 - 12-month = 12 tháng **đã chốt** gần nhất (không phải cửa sổ lịch) — đã ghi
   rõ §1; nếu user sau này muốn theo lịch thì chỉ đổi 1 hàm `selectStatsMonths`.
-- Mobile: bảng 3 cột (không `min-width`/`overflow-x` — đổi 01/10/2026) vừa
-  360px; 2 panel chart xếp dọc (không side-by-side).
+- Mobile: bảng 3 cột trên card riêng, 1 tháng = 1 dòng (badge + tiền ngang
+  hàng, nowrap) vừa 360px — E2E assert không overflow (desktop + 360px);
+  `overflow-x-auto` chỉ là safety net cho giá trị bất thường (VD kWh 4 chữ số
+  hàng nghìn — không thực tế với hộ gia đình). 2 panel chart xếp dọc
+  (không side-by-side).
 - Không đụng: API, Prisma, cache. Router thêm 1 route `/rental/stats` (lazy —
   recharts **ra khỏi main bundle**, trước đó bị kéo qua section eager ở
   `RentalPage`).
@@ -212,3 +233,4 @@ summary) + pure functions (đã phủ ở 4.1); không assert pixel/tooltip.)
 | 3 | `feat(web)` | `MeterTrendPanel` + section inline (biểu đồ recharts + bảng + selector + empty state) + tích hợp `RentalPage` + test case 10–15 |
 | 4 | `test` | E2E case 57 + cập nhật `docs/handoff/progress.md` |
 | 5 | `feat(web)` | **(đổi 01/10/2026)** section inline → **màn riêng `/rental/stats`** (nút vào + back) + bảng 3 cột không scroll ngang (badge + icon) — spec §1/§3.1/§3.5/§4 cập nhật + test case 10a/11b/16 + E2E case 57 flow mới |
+| 6 | `feat(web)` | **(đổi 01/10/2026, lượt 2)** bảng chi tiết tách **card riêng** + 1 tháng = **1 dòng** (badge + tiền ngang hàng) + badge đổi màu (token `--color-water*` mới, chữ badge `water-text` đạt WCAG AA — fix review HIGH) + Home: card Tiền phòng trọ xuống dưới Tổng chi tiêu — spec §3.1/§3.5/§4 cập nhật + test order Home + E2E assert 1 dòng & không overflow 360px |

@@ -372,7 +372,9 @@ describe("RentalStatsPage (/rental/stats)", () => {
     expect(screen.getByRole("heading", { name: "Điện" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Nước" })).toBeInTheDocument();
 
-    // Bảng chi tiết 3 cột (desc: 07/2026 trên, 06/2026 dưới) — không text "Tháng" ở header
+    // Bảng chi tiết trên CARD RIÊNG (tách khỏi card biểu đồ), 3 cột
+    // (desc: 07/2026 trên, 06/2026 dưới) — không text "Tháng" ở header
+    expect(screen.getByRole("heading", { name: "Chi tiết theo tháng" })).toBeInTheDocument();
     const table = screen.getByRole("table");
     expect(within(table).getAllByRole("columnheader")).toHaveLength(3);
     expect(within(table).queryByText("Tháng")).toBeNull();
@@ -380,8 +382,10 @@ describe("RentalStatsPage (/rental/stats)", () => {
     expect(within(table).getByRole("columnheader", { name: "Nước" })).toBeInTheDocument();
     expect(within(table).getByText(monthLabel("2026-07"))).toBeInTheDocument();
     expect(within(table).getByText(monthLabel("2026-06"))).toBeInTheDocument();
-    // Badge số lượng + tiền gộp trong 1 cột
-    expect(within(table).getByText("280 kWh")).toBeInTheDocument();
+    // Badge số lượng (màu khác để phân biệt: điện = primary-soft, nước = water-soft)
+    // + tiền gộp cùng 1 dòng
+    expect(within(table).getByText("280 kWh")).toHaveClass("bg-primary-soft", "text-primary-text");
+    expect(within(table).getByText("6 m³")).toHaveClass("bg-water-soft", "text-water-text");
     expect(within(table).getByText("1.120.000 ₫")).toBeInTheDocument();
     expect(within(table).getByText("6 m³")).toBeInTheDocument();
     expect(within(table).getByText("210.000 ₫")).toBeInTheDocument();

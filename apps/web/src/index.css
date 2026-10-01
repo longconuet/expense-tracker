@@ -26,6 +26,15 @@
      #b45309 ≈ 4.6:1 trên nền trắng — đạt WCAG AA cho chữ nhỏ. */
   --color-warning: #b45309;
   --color-warning-soft: #fef3c7;
+  /* Màu "nước" (blue) cho màn thống kê /rental/stats — icon 💧 + line chart
+     (badge số m³ dùng `water-text`, nền soft). blue-600 #2563eb ≈ 5.2:1
+     trên card trắng. */
+  --color-water: #2563eb;
+  --color-water-soft: #dbeafe;
+  /* Accent text cho chữ nhỏ badge (text-[11px]): blue-800 #1e40af ≈ 6.6:1
+     trên nền water-soft #dbeafe — đạt WCAG AA. Token `water` (#2563eb) chỉ
+     đạt ~2.8:1 trên nền soft → không dùng cho chữ badge. */
+  --color-water-text: #1e40af;
 
   --animate-fade-in: fade-in 0.15s ease-out;
   --animate-modal-in: modal-in 0.15s ease-out;
@@ -122,6 +131,11 @@
   --color-border: #334155;
   --color-warning: #fbbf24;
   --color-warning-soft: #78350f;
+  /* Dark: blue-400 #60a5fa đạt ~5.4:1 trên card #1e293b; nền soft blue-900. */
+  --color-water: #60a5fa;
+  --color-water-soft: #1e3a8a;
+  /* Blue-300 #93c5fd ≈ 5.9:1 trên nền soft #1e3a8a — đạt WCAG AA chữ nhỏ. */
+  --color-water-text: #93c5fd;
 }
 
 /*

@@ -188,6 +188,8 @@ describe("Trang chủ", () => {
 
     // Assert
     expect(await screen.findByRole("alert")).toHaveTextContent("Không kết nối được máy chủ.");
+    // Stats lỗi (không bao giờ load) → RentalCard không render (nằm trong nhánh loaded)
+    expect(screen.queryByText("Tiền phòng trọ")).toBeNull();
   });
 
   it("tải lần đầu → hiện skeleton (không spinner), tiêu đề + tháng hiện thật", async () => {
@@ -312,11 +314,16 @@ describe("Trang chủ", () => {
     });
     renderHome();
 
-    // Assert
+    // Assert — chờ card render + fetchRental resolve (card mount sau stats)
     const card = await screen.findByText("Tiền phòng trọ");
     expect(card).toBeInTheDocument();
-    expect(screen.getByText("Chờ chốt · 4.930.000 ₫")).toBeInTheDocument();
+    expect(await screen.findByText("Chờ chốt · 4.930.000 ₫")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Tiền phòng trọ/ })).toHaveAttribute("href", "/rental");
+    // Card nằm DƯỚI card "Tổng chi tiêu" (đổi thứ tự theo request user)
+    expect(
+      screen.getByText("Tổng chi tiêu").compareDocumentPosition(card) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("card Tiền phòng trọ: fetchRental lỗi (offline) → không crash Home, card chỉ hiện tiêu đề", async () => {
