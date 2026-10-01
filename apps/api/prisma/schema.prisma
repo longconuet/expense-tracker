@@ -32,11 +32,12 @@ model Family {
   inviteCode String   @unique
   createdAt  DateTime @default(now())
 
-  members      FamilyMember[]
-  categories   Category[]
-  expenses     Expense[]
-  rentalConfig RentalConfig?
-  rentalMonths RentalMonth[]
+  members        FamilyMember[]
+  categories     Category[]
+  expenses       Expense[]
+  rentalConfig   RentalConfig?
+  rentalMonths   RentalMonth[]
+  recurringRules RecurringRule[]
 }
 
 model FamilyMember {
@@ -63,8 +64,9 @@ model Category {
   // Gợi ý ghi chú nhanh: JSON array string (≤8 mục, mỗi mục 1–30 ký tự) — null = không có.
   noteSuggestions String?
 
-  family   Family    @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  expenses Expense[]
+  family         Family         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  expenses       Expense[]
+  recurringRules RecurringRule[]
 
   @@unique([familyId, name])
 }
@@ -86,9 +88,16 @@ model Expense {
   // Khoản chi do "chốt tháng phòng trọ" tạo ra (RentalMonth.expenseId) —
   // có link = KHÔNG sửa/xoá được từ endpoint expenses thường (409).
   rentalMonth RentalMonth?
+  // Khoản chi do rule định kỳ sinh ra (spec: docs/spec-recurring.md) — sửa/xoá
+  // được như khoản thường; xoá rule → link rỗng (SetNull), khoản giữ lại.
+  // Unique (recurringRuleId, date) = idempotency khi materialize (NULL không
+  // xung đột — khoản nhập tay nhiều cùng ngày vẫn được).
+  recurringRuleId String?
+  recurringRule   RecurringRule? @relation(fields: [recurringRuleId], references: [id], onDelete: SetNull)
 
   @@index([familyId, date])
   @@index([familyId, categoryId, date])
+  @@unique([recurringRuleId, date])
 }
 
 // Tiền phòng trọ hàng tháng (spec: docs/spec-rental.md)
@@ -136,4 +145,42 @@ model RentalMonth {
 
   @@unique([familyId, month])
   @@index([familyId])
+}
+
+// Giao dịch định kỳ — lặp hàng tháng (spec: docs/spec-recurring.md)
+//
+// Rule do OWNER setup 1 lần (tiền + danh mục + ghi chú + ngày "Từ" + điều kiện
+// kết thúc). Hệ thống "materialize" (sinh Expense) theo chuỗi kỳ neo ngày
+// "Từ" — lazy khi FE gọi endpoint materialize (không có cron phía server).
+//
+// - nextDate     = con trỏ kỳ kế tiếp cần sinh; null = rule hết vòng đời.
+// - generatedCount = số kỳ ĐÃ sinh (đếm theo kỳ, KHÔNG giảm khi xoá khoản).
+// - frequency    = cố định "MONTHLY" ở MVP (user chốt 01/10) — cột dự phòng
+//                  để mở rộng tần suất khác (additive) mà không phá schema.
+// - khoản sinh ra (Expense.recurringRuleId) sửa/xoá được như khoản thường;
+//   xoá rule → SetNull, khoản giữ lại như khoản thường.
+
+model RecurringRule {
+  id              String   @id @default(cuid())
+  familyId        String
+  userId          String // người tạo (luôn OWNER)
+  categoryId      String
+  amount          Int // số nguyên VND — cap như Expense.amount
+  note            String? // ghi chú kế thừa xuống mọi khoản sinh ra
+  frequency       String   @default("MONTHLY") // MVP chỉ "MONTHLY"
+  startDate       String // "Từ" — YYYY-MM-DD; NGÀY của nó = anchor chuỗi kỳ
+  endType         String // "FOREVER" | "UNTIL_DATE" | "COUNT"
+  endDate         String? // endType = UNTIL_DATE
+  occurrenceCount Int? // endType = COUNT
+  nextDate        String? // kỳ kế tiếp cần sinh — null = hoàn tất
+  generatedCount  Int      @default(0)
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  family   Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  expenses Expense[]
+
+  @@index([familyId, nextDate])
 }
