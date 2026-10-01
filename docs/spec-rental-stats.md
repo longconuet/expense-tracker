@@ -1,17 +1,22 @@
 # Spec — Thống kê điện/nước theo tháng (màn Tiền phòng trọ)
 
 > Bổ sung cho feature "Tiền phòng trọ" (spec chính: `docs/spec-rental.md`).
-> User chốt 4 điểm thiết kế: **section dưới list tháng cùng màn `/rental`** ·
-> **biểu đồ + bảng** · **chỉ tháng Đã chốt (CONFIRMED)** · **12 tháng gần nhất
-> + selector năm**.
+> User chốt 4 điểm thiết kế: **biểu đồ + bảng** · **chỉ tháng Đã chốt
+> (CONFIRMED)** · **12 tháng gần nhất + selector năm** · ban đầu làm section
+> dưới list tháng. **Đổi 01/10/2026** (request trực tiếp user): thống kê
+> chuyển sang **màn riêng `/rental/stats`** (nút vào trên danh sách tháng
+> /rental + nút back) + **bảng 3 cột** không scroll ngang (badge số lượng,
+> icon ⚡/💧 cho label Điện/Nước).
 
 ## 1. Tổng quan
 
-Section "📊 Sử dụng điện & nước" mới trong `RentalPage` (route `/rental`),
-đặt **dưới** khối list tháng: so sánh theo tháng số điện (kWh) + tiền điện,
-số nước (m³) + tiền nước — 1 panel biểu đồ cho điện, 1 panel cho nước +
-bảng chi tiết. Dữ liệu **đọc từ payload `fetchRental` hiện có** — không endpoint
-mới, không đổi API/schema/cache.
+**Màn riêng** `RentalStatsPage` (route `/rental/stats`, lazy load — recharts).
+Điểm vào: nút "Thống kê sử dụng điện & nước" **trên** danh sách tháng ở
+`/rental` (mọi member thấy); nút back "← Về danh sách tháng" về `/rental`.
+So sánh theo tháng số điện (kWh) + tiền điện, số nước (m³) + tiền nước — 1
+panel biểu đồ cho điện, 1 panel cho nước + bảng chi tiết. Dữ liệu **đọc từ
+payload `fetchRental` hiện có** (màn tự fetch như `RentalMonthPage` — user
+vào thẳng URL/refresh được) — không endpoint mới, không đổi API/schema/cache.
 
 **Phạm vi hiển thị** (quyết định chốt):
 
@@ -43,14 +48,16 @@ mới, không đổi API/schema/cache.
 
 | File | Vai trò |
 |---|---|
-| `rentalStats.ts` (mới) | Pure functions: lọc/sort/chọn phạm vi + summary + map data chart (test được trực tiếp, không phụ thuộc UI) |
-| `RentalStatsSection.tsx` (mới) | Section chứa: tiêu đề + ghi chú + selector chip + 2 panel `MeterTrendPanel` + bảng |
-| `MeterTrendPanel.tsx` (mới) | 1 panel = tiêu đề ("Điện" / "Nước") + dòng summary + recharts `ComposedChart` (cột lượng + đường tiền, dual axis) — dùng chung 2 lần (props: data, unit, màu) |
-| `RentalPage.tsx` (sửa) | Render `<RentalStatsSection months={data.months} />` sau khối list tháng (data đã có sẵn từ `fetchRental`) |
+| `rentalStats.ts` | Pure functions: lọc/sort/chọn phạm vi + summary + map data chart (test được trực tiếp, không phụ thuộc UI) |
+| `RentalStatsPage.tsx` (mới) | Màn `/rental/stats` (default export — lazy route): header back + tiêu đề + ghi chú + selector chip + 2 panel `MeterTrendPanel` + bảng 3 cột; tự fetch `fetchRental` (pattern `RentalMonthPage`) |
+| `MeterTrendPanel.tsx` | 1 panel = tiêu đề ("Điện" / "Nước") + icon (⚡ `BoltIcon` / 💧 `DropletIcon`) + dòng summary + recharts `ComposedChart` (cột lượng + đường tiền, dual axis) — dùng chung 2 lần (props: data, unit, màu, titleIcon) |
+| `RentalPage.tsx` (sửa) | Nút "Thống kê sử dụng điện & nước" (Link → `/rental/stats`) **trên** khối list tháng — thay section inline cũ; mọi member thấy |
+| `router.tsx` (sửa) | Route `/rental/stats` (lazy + Suspense như `StatsPage`) khai báo TRƯỚC `/rental/:month` (static segment thắng dynamic — RR v6/v7 ranking) |
+| `icons.tsx` (sửa, shared/ui) | Thêm `BoltIcon` + `DropletIcon` (SVG stroke currentColor, không thêm icon library) |
 
-`RentalStatsSection` nhận `months: RentalMonth[]` bằng prop (không tự fetch —
-`RentalPage` đang giữ `data`). State local: `range` (chip đang chọn, default
-`"12m"`).
+`RentalStatsPage` tự fetch `fetchRental(activeFamilyId)` khi mount (không nhận
+prop — là route độc lập, user vào thẳng/refresh được). State local: `range`
+(chip đang chọn, default `"12m"`).
 
 ### 3.2 `rentalStats.ts` — pure functions
 
@@ -106,21 +113,29 @@ Mỗi `MeterTrendPanel`:
 `TB 280 kWh · 1.120.000 ₫/tháng · Cao nhất 07/2026 (512 kWh) · Thấp nhất 01/2026 (180 kWh)`
 (chỉ 1 tháng → bỏ phần cao/thấp nhất). Rỗng → không render panel (xem 3.6).
 
-### 3.5 Bảng chi tiết
+### 3.5 Bảng chi tiết — 3 cột (mobile 360px không scroll ngang)
 
-5 cột: **Tháng** | **Điện (kWh)** | **Tiền điện** | **Nước (m³)** | **Tiền nước**
+> Đổi 01/10/2026 (request user): bảng 5 cột cũ phải scroll ngang ở điện thoại.
 
-- Sort **desc** theo tháng; "Tháng" = `monthLabel` ("Tháng 7/2026").
-- Số lượng: `formatMeter`; tiền: `formatVnd` ("1.120.000 ₫").
-- `text-xs` + wrapper `overflow-x-auto` (mobile 360px không vỡ layout).
+| (không header "Tháng") | ⚡ Điện | 💧 Nước |
+
+- Sort **desc** theo tháng; cột 1 = `monthLabel` ("Tháng 7/2026") — header **không
+  hiện text "Tháng"** (th rỗng + `aria-label="Tháng"` cho screen reader).
+- Mỗi cột điện/nước **gộp số lượng + tiền**: số lượng trong **badge**
+  (`rounded-full bg-ink/5 px-2 py-0.5`, `formatMeter` + đơn vị — VD "262 kWh"),
+  tiền nằm **dưới badge** (`formatVnd` — "917.000 ₫"); căn phải + `tabular-nums`.
+- Header cột Điện/Nước kèm icon `BoltIcon`/`DropletIcon` (màu khớp chart:
+  `--color-primary` / palette nước cố định) — icon ở header panel cũng như vậy.
+- `text-xs` + `w-full`, không `min-width`/`overflow-x` — vừa 360px.
 - Δ % so tháng trước: **vạch ngoài v1** (biểu đồ + tooltip đã đủ so sánh;
   follow-up nếu user muốn).
 
 ### 3.6 Empty states
 
-- **0 tháng CONFIRMED** (chưa chốt lần nào): section hiện Card tiêu đề + 1 dòng
+- **0 tháng CONFIRMED** (chưa chốt lần nào): màn hiện Card 1 dòng
   "Chưa có dữ liệu — thống kê hiện sau khi bạn chốt tháng đầu tiên." — không
-  render selector/chart/bảng.
+  render selector/chart/bảng. Chưa có config (vào thẳng URL): dòng
+  "Chưa có thông tin phòng trọ — thống kê hiện sau khi chốt tháng đầu tiên."
 - Range năm được chọn mà năm đó rỗng (không xảy ra do selector chỉ liệt năm
   có data — không cần handle).
 
@@ -144,12 +159,15 @@ Mỗi `MeterTrendPanel`:
 
 | # | Case | Kỳ vọng |
 |---|------|---------|
-| 10 | `RentalPage` có config + 2 tháng CONFIRMED (data thật tháng 7 + 1 tháng khác) | section "Sử dụng điện & nước" hiện: ghi chú "Chỉ tính các tháng đã chốt", 2 panel (Điện/Nước), bảng 2 hàng đúng giá trị (280 kWh · 1.120.000 ₫ · 6 m³ · 210.000 ₫), svg chart hiện |
-| 11 | `RentalPage` tháng chỉ DRAFT (chưa chốt lần nào) | section hiện dòng "Chưa có dữ liệu…", không có chart/bảng/selector |
-| 12 | Selector: 3 năm có data → click chip năm | bảng + chart chỉ còn tháng năm đó (assert 1 hàng trong bảng) |
-| 13 | DRAFT + CONFIRMED cùng năm | tháng DRAFT KHÔNG hiện trong bảng |
-| 14 | MEMBER (mock role) | section hiện như OWNER (chỉ-đọc, mọi thứ xem được) |
+| 10a | `RentalPage` có config | nút "Thống kê sử dụng điện & nước" (Link `/rental/stats`) trên list; MEMBER cũng thấy; click → vào màn thống kê (h1 + back) |
+| 10 | `RentalStatsPage` 2 tháng CONFIRMED (data thật tháng 7 + 1 tháng khác) | ghi chú "Chỉ tính các tháng đã chốt", 2 panel (heading Điện/Nước + icon), bảng 3 cột: 3 columnheader **không** text "Tháng" (visible), badge "280 kWh" + "1.120.000 ₫" · "6 m³" + "210.000 ₫" · "140.000 ₫", chip "12 tháng gần" pressed |
+| 11 | `RentalStatsPage` tháng chỉ DRAFT (chưa chốt lần nào) | dòng "Chưa có dữ liệu…", không có chart/bảng/selector |
+| 11b | `RentalStatsPage` vào thẳng URL khi chưa có config | dòng "Chưa có thông tin phòng trọ…", không có bảng |
+| 12 | Selector: click chip năm | bảng + chart chỉ còn tháng năm đó (assert 1 hàng trong bảng) |
+| 13 | DRAFT + CONFIRMED cùng năm | tháng DRAFT KHÔNG hiện trong bảng (cũng không ở đâu trên màn) |
+| 14 | MEMBER (mock role) | màn thống kê hiện như OWNER (chỉ-đọc, mọi thứ xem được) |
 | 15 | Dòng summary panel điện (2 tháng) | "TB" + giá trị đúng + "Cao nhất" đúng tháng |
+| 16 | Nút back "← Về danh sách tháng" | về /rental — list tháng hiện |
 
 (Ghi chú implement: test recharts trên jsdom — assert qua DOM (svg, text bảng,
 summary) + pure functions (đã phủ ở 4.1); không assert pixel/tooltip.)
@@ -158,7 +176,7 @@ summary) + pure functions (đã phủ ở 4.1); không assert pixel/tooltip.)
 
 | # | Case | Kỳ vọng |
 |---|------|---------|
-| 57 | (kéo dài 54: đã chốt **tháng hiện tại** — draft tự tạo khi lưu config) quay lại `/rental` | section "Sử dụng điện & nước": chip "12 tháng gần" pressed + ghi chú "Chỉ tính các tháng đã chốt"; 2 panel (heading Điện/Nước) + 2 chart svg; bảng 1 hàng: tháng hiện tại · 280 · **980.000 ₫** (tiền điện sau khi case 54 đổi giá 3.500) · 210.000 ₫; summary "TB 280 kWh · 980.000 ₫/tháng" (1 tháng → không có cao/thấp nhất) |
+| 57 | (kéo dài 54: đã chốt **tháng hiện tại** — draft tự tạo khi lưu config) ở `/rental` → click nút thống kê → assert màn thống kê → back | màn: back + h1 + chip "12 tháng gần" pressed + ghi chú "Chỉ tính các tháng đã chốt"; 2 panel (heading Điện/Nước) + 2 chart svg; bảng **3 cột** (3 columnheader, không "Tháng"): 1 hàng — tháng hiện tại · badge **280 kWh** + **980.000 ₫** (tiền điện sau khi case 54 đổi giá 3.500) · badge **6 m³** + 210.000 ₫; summary "TB 280 kWh · 980.000 ₫/tháng" (1 tháng → không có cao/thấp nhất); hover cột → tooltip đúng series; back → /rental (list tháng) |
 
 ## 5. Vạch ngoài (v1)
 
@@ -179,10 +197,11 @@ summary) + pure functions (đã phủ ở 4.1); không assert pixel/tooltip.)
   nghìn ("210k") — quyết định lúc code, giữ 1 helper `formatCostTick` duy nhất.
 - 12-month = 12 tháng **đã chốt** gần nhất (không phải cửa sổ lịch) — đã ghi
   rõ §1; nếu user sau này muốn theo lịch thì chỉ đổi 1 hàm `selectStatsMonths`.
-- Mobile: bảng 5 cột → `overflow-x-auto`; 2 panel chart xếp dọc (không
-  side-by-side).
-- Không đụng: API, Prisma, cache, router (không route mới), các file khác của
-  feature.
+- Mobile: bảng 3 cột (không `min-width`/`overflow-x` — đổi 01/10/2026) vừa
+  360px; 2 panel chart xếp dọc (không side-by-side).
+- Không đụng: API, Prisma, cache. Router thêm 1 route `/rental/stats` (lazy —
+  recharts **ra khỏi main bundle**, trước đó bị kéo qua section eager ở
+  `RentalPage`).
 
 ## 7. WBS (1 task = 1 commit vào `develop`)
 
@@ -190,5 +209,6 @@ summary) + pure functions (đã phủ ở 4.1); không assert pixel/tooltip.)
 |---|--------|----------|
 | 1 | `docs` | Spec này |
 | 2 | `feat(web)` | `features/rental/rentalStats.ts` (pure functions) + `rentalStats.test.ts` (case 1–9) |
-| 3 | `feat(web)` | `MeterTrendPanel` + `RentalStatsSection` (biểu đồ recharts + bảng + selector + empty state) + tích hợp `RentalPage` + test case 10–15 |
+| 3 | `feat(web)` | `MeterTrendPanel` + section inline (biểu đồ recharts + bảng + selector + empty state) + tích hợp `RentalPage` + test case 10–15 |
 | 4 | `test` | E2E case 57 + cập nhật `docs/handoff/progress.md` |
+| 5 | `feat(web)` | **(đổi 01/10/2026)** section inline → **màn riêng `/rental/stats`** (nút vào + back) + bảng 3 cột không scroll ngang (badge + icon) — spec §1/§3.1/§3.5/§4 cập nhật + test case 10a/11b/16 + E2E case 57 flow mới |

@@ -14,8 +14,8 @@ import { Card } from "../../shared/ui/Card";
 import { Input } from "../../shared/ui/Input";
 import { Modal } from "../../shared/ui/Modal";
 import { Spinner } from "../../shared/ui/Spinner";
+import { ChartIcon } from "../../shared/ui/icons";
 import { NumberInput } from "./NumberInput";
-import { RentalStatsSection } from "./RentalStatsSection";
 
 /**
  * Tiền phòng trọ — route /rental.
@@ -290,6 +290,15 @@ export default function RentalPage() {
         </Card>
       )}
 
+      {/* Vào màn thống kê điện/nước (route /rental/stats) — mọi member xem được */}
+      <Link
+        to="/rental/stats"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary-soft px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/20"
+      >
+        <ChartIcon className="h-4 w-4" />
+        Thống kê sử dụng điện &amp; nước
+      </Link>
+
       <div className="mt-4 space-y-5">
         {years.map((year) => (
           <section key={year} aria-label={year}>
@@ -306,9 +315,6 @@ export default function RentalPage() {
           </section>
         ))}
       </div>
-
-      {/* Thống kê điện/nước theo tháng — mọi member xem được (spec-rental-stats) */}
-      <RentalStatsSection months={data.months} />
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Thêm tháng" showClose>
         <div className="mt-4">

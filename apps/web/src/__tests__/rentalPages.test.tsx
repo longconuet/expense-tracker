@@ -15,6 +15,7 @@ import { useAuthStore } from "../core/authStore";
 import { addMonths, currentMonth, monthLabel } from "../core/dates";
 import RentalPage from "../features/rental/RentalPage";
 import RentalMonthPage from "../features/rental/RentalMonthPage";
+import RentalStatsPage from "../features/rental/RentalStatsPage";
 import { RentalCard } from "../features/rental/RentalCard";
 
 vi.mock("../core/dataApi", () => ({
@@ -114,11 +115,32 @@ function makeCarryOverDraft(): RentalMonth {
   });
 }
 
+/** Overrides cho 1 tháng đã chốt (CONFIRMED). */
+const CONFIRMED: Partial<RentalMonth> = {
+  status: "CONFIRMED",
+  expenseId: "e1",
+  confirmedAt: "2026-07-31T00:00:00.000Z",
+};
+
 function renderRentalRoutes() {
   return render(
     <MemoryRouter initialEntries={["/rental"]}>
       <Routes>
         <Route path="/rental" element={<RentalPage />} />
+        <Route path="/rental/stats" element={<RentalStatsPage />} />
+        <Route path="/rental/:month" element={<RentalMonthPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+/** Render bắt đầu từ màn thống kê (/rental/stats) — để test back về /rental. */
+function renderStatsRoutes() {
+  return render(
+    <MemoryRouter initialEntries={["/rental/stats"]}>
+      <Routes>
+        <Route path="/rental" element={<RentalPage />} />
+        <Route path="/rental/stats" element={<RentalStatsPage />} />
         <Route path="/rental/:month" element={<RentalMonthPage />} />
       </Routes>
     </MemoryRouter>,
@@ -245,11 +267,8 @@ describe("RentalPage (/rental)", () => {
     });
     renderRentalRoutes();
 
-    // Chờ data render (2025-12 unique — DRAFT không vào bảng thống kê)
-    expect(await screen.findByText(monthLabel("2025-12"))).toBeInTheDocument();
-    // "Tháng 7/2026" hiện cả ở list + bảng thống kê (tháng CONFIRMED) —
-    // match đầu theo DOM order là item list (list nằm trên section thống kê).
-    expect(screen.getAllByText(monthLabel("2026-07"))[0].closest("ul")).toBeTruthy();
+    expect(await screen.findByText(monthLabel("2026-07"))).toBeInTheDocument();
+    expect(screen.getByText(monthLabel("2025-12"))).toBeInTheDocument();
     expect(screen.getByText("Đã chốt")).toBeInTheDocument();
     expect(screen.getByText("Chờ chốt")).toBeInTheDocument();
     expect(screen.getByText("4.930.000 ₫")).toBeInTheDocument();
@@ -297,17 +316,40 @@ describe("RentalPage (/rental)", () => {
     expect(await screen.findByText(monthLabel(prev2))).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Thêm tháng/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Chưa có Tháng/ })).toBeNull();
+    // MEMBER vẫn có điểm vào màn thống kê (chỉ-đọc)
+    expect(screen.getByRole("link", { name: /Thống kê sử dụng điện/ })).toBeInTheDocument();
   });
 
-  // --- Section "📊 Sử dụng điện & nước" (spec-rental-stats case 10–15) -------
+  it("có config → nút 'Thống kê sử dụng điện & nước' trên list; click → vào màn thống kê", async () => {
+    fetchRentalMock.mockResolvedValue({ config: CONFIG, months: [makeMonth(CONFIRMED)] });
+    renderRentalRoutes();
+    await screen.findByText(monthLabel("2026-07"));
 
-  const CONFIRMED: Partial<RentalMonth> = {
-    status: "CONFIRMED",
-    expenseId: "e1",
-    confirmedAt: "2026-07-31T00:00:00.000Z",
-  };
+    const statsLink = screen.getByRole("link", { name: /Thống kê sử dụng điện/ });
+    expect(statsLink).toHaveAttribute("href", "/rental/stats");
 
-  it("case 10: CONFIRMED → section thống kê: 2 panel + bảng đúng giá trị", async () => {
+    fireEvent.click(statsLink);
+    expect(await screen.findByRole("heading", { name: "Sử dụng điện & nước" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Về danh sách tháng/ })).toBeInTheDocument();
+  });
+});
+
+describe("RentalStatsPage (/rental/stats)", () => {
+  beforeEach(() => {
+    useAuthStore.setState({ user: USER, families: [FAMILY], activeFamilyId: FAMILY.id });
+    fetchRentalMock.mockReset();
+    saveRentalConfigMock.mockReset();
+    createRentalMonthMock.mockReset();
+    updateRentalMonthMock.mockReset();
+    confirmRentalMonthMock.mockReset();
+    deleteRentalMonthMock.mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("case 10: CONFIRMED → 2 panel + bảng 3 cột (badge số lượng + tiền, không header 'Tháng')", async () => {
     fetchRentalMock.mockResolvedValue({
       config: CONFIG,
       months: [
@@ -324,17 +366,24 @@ describe("RentalPage (/rental)", () => {
         }),
       ],
     });
-    renderRentalRoutes();
-    expect(await screen.findByText("📊 Sử dụng điện & nước")).toBeInTheDocument();
+    renderStatsRoutes();
+    expect(await screen.findByRole("heading", { name: "Sử dụng điện & nước" })).toBeInTheDocument();
     expect(screen.getByText("Chỉ tính các tháng đã chốt.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Điện" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Nước" })).toBeInTheDocument();
 
-    // Bảng chi tiết (desc: 07/2026 trên, 06/2026 dưới)
+    // Bảng chi tiết 3 cột (desc: 07/2026 trên, 06/2026 dưới) — không text "Tháng" ở header
     const table = screen.getByRole("table");
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(3);
+    expect(within(table).queryByText("Tháng")).toBeNull();
+    expect(within(table).getByRole("columnheader", { name: "Điện" })).toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "Nước" })).toBeInTheDocument();
     expect(within(table).getByText(monthLabel("2026-07"))).toBeInTheDocument();
     expect(within(table).getByText(monthLabel("2026-06"))).toBeInTheDocument();
+    // Badge số lượng + tiền gộp trong 1 cột
+    expect(within(table).getByText("280 kWh")).toBeInTheDocument();
     expect(within(table).getByText("1.120.000 ₫")).toBeInTheDocument();
+    expect(within(table).getByText("6 m³")).toBeInTheDocument();
     expect(within(table).getByText("210.000 ₫")).toBeInTheDocument();
     expect(within(table).getByText("140.000 ₫")).toBeInTheDocument();
 
@@ -344,13 +393,23 @@ describe("RentalPage (/rental)", () => {
 
   it("case 11: chỉ DRAFT (chưa chốt lần nào) → 'Chưa có dữ liệu', không có bảng/selector", async () => {
     fetchRentalMock.mockResolvedValue({ config: CONFIG, months: [makeMonth()] }); // DRAFT
-    renderRentalRoutes();
-    expect(await screen.findByText("📊 Sử dụng điện & nước")).toBeInTheDocument();
+    renderStatsRoutes();
+    expect(await screen.findByRole("heading", { name: "Sử dụng điện & nước" })).toBeInTheDocument();
     expect(
       screen.getByText("Chưa có dữ liệu — thống kê hiện sau khi bạn chốt tháng đầu tiên."),
     ).toBeInTheDocument();
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("button", { name: "12 tháng gần" })).toBeNull();
+  });
+
+  it("case 11b: vào thẳng URL khi chưa có config → 'Chưa có thông tin phòng trọ'", async () => {
+    fetchRentalMock.mockResolvedValue({ config: null, months: [] });
+    renderStatsRoutes();
+    expect(await screen.findByRole("heading", { name: "Sử dụng điện & nước" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Chưa có thông tin phòng trọ — thống kê hiện sau khi chốt tháng đầu tiên."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
   it("case 12: click chip năm → bảng chỉ còn tháng năm đó", async () => {
@@ -369,8 +428,8 @@ describe("RentalPage (/rental)", () => {
         }),
       ],
     });
-    renderRentalRoutes();
-    await screen.findByText("📊 Sử dụng điện & nước");
+    renderStatsRoutes();
+    await screen.findByRole("heading", { name: "Sử dụng điện & nước" });
     expect(within(screen.getByRole("table")).getByText(monthLabel("2026-07"))).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "2025" }));
@@ -380,29 +439,29 @@ describe("RentalPage (/rental)", () => {
     expect(within(table).queryByText(monthLabel("2026-07"))).toBeNull();
   });
 
-  it("case 13: tháng DRAFT cùng năm KHÔNG hiện trong bảng thống kê (vẫn ở list)", async () => {
+  it("case 13: tháng DRAFT cùng năm KHÔNG hiện trong bảng thống kê", async () => {
     fetchRentalMock.mockResolvedValue({
       config: CONFIG,
       months: [makeMonth(CONFIRMED), makeMonth({ month: "2026-08" })], // 08 = DRAFT
     });
-    renderRentalRoutes();
-    await screen.findByText("📊 Sử dụng điện & nước");
+    renderStatsRoutes();
+    await screen.findByRole("heading", { name: "Sử dụng điện & nước" });
     const table = screen.getByRole("table");
     expect(within(table).getByText(monthLabel("2026-07"))).toBeInTheDocument();
     expect(within(table).queryByText(monthLabel("2026-08"))).toBeNull();
-    // Tháng 08 vẫn hiện đúng 1 lần — ở list, không phải bảng thống kê
-    expect(screen.getByText(monthLabel("2026-08"))).toBeInTheDocument();
+    // Màn thống kê không có list tháng — "Tháng 8/2026" không xuất hiện ở đâu
+    expect(screen.queryByText(monthLabel("2026-08"))).toBeNull();
   });
 
-  it("case 14: MEMBER xem được section thống kê (chỉ-đọc)", async () => {
+  it("case 14: MEMBER xem được màn thống kê (chỉ-đọc)", async () => {
     useAuthStore.setState({
       user: USER,
       families: [{ ...FAMILY, myRole: "MEMBER" }],
       activeFamilyId: FAMILY.id,
     });
     fetchRentalMock.mockResolvedValue({ config: CONFIG, months: [makeMonth(CONFIRMED)] });
-    renderRentalRoutes();
-    expect(await screen.findByText("📊 Sử dụng điện & nước")).toBeInTheDocument();
+    renderStatsRoutes();
+    expect(await screen.findByRole("heading", { name: "Sử dụng điện & nước" })).toBeInTheDocument();
     expect(screen.getByRole("table")).toBeInTheDocument();
   });
 
@@ -420,12 +479,22 @@ describe("RentalPage (/rental)", () => {
         }),
       ],
     });
-    renderRentalRoutes();
-    await screen.findByText("📊 Sử dụng điện & nước");
+    renderStatsRoutes();
+    await screen.findByRole("heading", { name: "Sử dụng điện & nước" });
     // (280+150)/2 = 215 kWh; (1.120.000+600.000)/2 = 860.000 ₫
     const summary = screen.getByText(/TB 215 kWh/);
     expect(summary).toHaveTextContent("860.000 ₫/tháng");
     expect(summary).toHaveTextContent("Cao nhất 07/26 (280 kWh) · Thấp nhất 06/26");
+  });
+
+  it("nút back → về /rental (list tháng)", async () => {
+    fetchRentalMock.mockResolvedValue({ config: CONFIG, months: [makeMonth(CONFIRMED)] });
+    renderStatsRoutes();
+    await screen.findByRole("heading", { name: "Sử dụng điện & nước" });
+
+    fireEvent.click(screen.getByRole("link", { name: /Về danh sách tháng/ }));
+    expect(await screen.findByRole("heading", { name: "Tiền phòng trọ" })).toBeInTheDocument();
+    expect(screen.getByText(monthLabel("2026-07"))).toBeInTheDocument();
   });
 });
 

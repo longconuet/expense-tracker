@@ -7,6 +7,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import type { ReactNode } from "react";
 import { formatMeter, formatVnd } from "@expense-tracker/shared";
 import { monthLabel } from "../../core/dates";
 import {
@@ -28,6 +29,8 @@ const TOOLTIP_STYLE = {
 
 interface MeterTrendPanelProps {
   title: string; // "Điện" | "Nước"
+  /** Icon trước tiêu đề (BoltIcon / DropletIcon) — giúp phân biệt 2 panel. */
+  titleIcon?: ReactNode;
   unit: string; // "kWh" | "m³"
   data: TrendPoint[]; // asc (caller đã chọn theo range)
   summary: TrendSummary; // caller đã guard tập không rỗng
@@ -40,10 +43,21 @@ interface MeterTrendPanelProps {
  * ComposedChart: CỘT = lượng tiêu thụ (trục trái) + ĐƯỜNG = tiền (trục phải,
  * compact "triệu đ"). Pattern recharts + token màu theo StatsPage hiện có.
  */
-export function MeterTrendPanel({ title, unit, data, summary, barColor, lineColor }: MeterTrendPanelProps) {
+export function MeterTrendPanel({
+  title,
+  titleIcon,
+  unit,
+  data,
+  summary,
+  barColor,
+  lineColor,
+}: MeterTrendPanelProps) {
   return (
     <section aria-label={title} className="mt-4">
-      <h3 className="text-sm font-semibold text-ink">{title}</h3>
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+        {titleIcon}
+        {title}
+      </h3>
       <p className="mt-0.5 text-xs text-ink-muted">
         TB {formatMeter(summary.avgQty)} {unit} · {formatVnd(summary.avgCost)}/tháng
         {data.length > 1 &&

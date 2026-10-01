@@ -1,7 +1,7 @@
 import { formatMeter, formatVnd, type RentalMonth } from "@expense-tracker/shared";
 
 /**
- * Pure functions cho section "Sử dụng điện & nước" (màn Tiền phòng trọ).
+ * Pure functions cho màn thống kê "Sử dụng điện & nước" (route /rental/stats).
  * Nguồn dữ liệu: payload `GET /rental` (fetchRental) — tháng đã có
  * elecConsumption/electricityCost/waterConsumption/waterCost do API tính.
  *

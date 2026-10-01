@@ -18,6 +18,8 @@ import RegisterPage from "./features/auth/RegisterPage";
 
 // Stats page kéo recharts (~700 kB) — lazy load để không phình main bundle
 const StatsPage = lazy(() => import("./features/stats/StatsPage"));
+// Màn thống kê điện/nước phòng trọ — cũng dùng recharts (MeterTrendPanel)
+const RentalStatsPage = lazy(() => import("./features/rental/RentalStatsPage"));
 
 function PageFallback() {
   return (
@@ -35,6 +37,7 @@ function PageFallback() {
  *   - 5 màn chính trong AppShell (header + bottom nav)
  *   - /expenses/:id/edit — màn sửa khoản (trong shell, không có trong nav)
  *   - /categories — quản lý danh mục chi tiêu (từ màn Tôi, không có trong nav)
+ *   - /rental/stats — thống kê điện/nước phòng trọ (từ màn /rental, lazy)
  */
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -59,6 +62,14 @@ export const router = createBrowserRouter([
           { path: "/add", element: <AddPage /> },
           { path: "/expenses/:id/edit", element: <EditPage /> },
           { path: "/rental", element: <RentalPage /> },
+          {
+            path: "/rental/stats",
+            element: (
+              <Suspense fallback={<PageFallback />}>
+                <RentalStatsPage />
+              </Suspense>
+            ),
+          },
           { path: "/rental/:month", element: <RentalMonthPage /> },
           { path: "/history", element: <HistoryPage /> },
           { path: "/categories", element: <CategoriesPage /> },
