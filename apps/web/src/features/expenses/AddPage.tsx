@@ -5,13 +5,13 @@ import { ApiError } from "../../core/api";
 import { useAuthStore } from "../../core/authStore";
 import { createExpense, fetchCategories } from "../../core/dataApi";
 import { today } from "../../core/dates";
+import { haptic } from "../../core/haptic";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
 import { CategoryChips } from "../../shared/ui/CategoryChips";
 import { Input } from "../../shared/ui/Input";
 import { Keypad, type KeypadKey } from "../../shared/ui/Keypad";
 import { Spinner } from "../../shared/ui/Spinner";
-import { haptic } from "./haptic";
 import { NoteSuggestions } from "./NoteSuggestions";
 import { suggestAmounts } from "./amountSuggestions";
 
