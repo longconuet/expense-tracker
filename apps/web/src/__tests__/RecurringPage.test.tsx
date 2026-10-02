@@ -123,7 +123,7 @@ describe("Màn giao dịch định kỳ (spec-recurring §5.3: case 52–53)", (
     expect(screen.getByText("EDIT MARKER")).toBeInTheDocument();
   });
 
-  it("#53 rỗng (OWNER): icon + text + CTA 'Tạo giao dịch định kỳ' → /recurring/new", async () => {
+  it("#53 rỗng (OWNER): icon + text + nút 'Tạo giao dịch định kỳ' (1 nút duy nhất) → /recurring/new", async () => {
     // Arrange
     fetchRecurringMock.mockResolvedValue({ rules: [] });
 
@@ -132,7 +132,21 @@ describe("Màn giao dịch định kỳ (spec-recurring §5.3: case 52–53)", (
 
     // Assert
     expect(await screen.findByText("Chưa có giao dịch định kỳ")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Tạo giao dịch định kỳ" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Tạo giao dịch định kỳ" }));
+    expect(screen.getByText("NEW MARKER")).toBeInTheDocument();
+  });
+
+  it("#53 list KHÔNG rỗng (OWNER): nút 'Tạo giao dịch định kỳ' vẫn thấy (regression) → /recurring/new", async () => {
+    // Arrange — list đã có rule (bug cũ: nút chỉ nằm trong empty state)
+    fetchRecurringMock.mockResolvedValue({ rules: [makeRule()] });
+
+    // Act
+    renderPage();
+    await screen.findByText("Tiền điện");
+    fireEvent.click(screen.getByRole("button", { name: "Tạo giao dịch định kỳ" }));
+
+    // Assert
     expect(screen.getByText("NEW MARKER")).toBeInTheDocument();
   });
 

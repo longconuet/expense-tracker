@@ -3,6 +3,8 @@
 > File checkpoint để session sau chỉ cần đọc file này (không dựa vào nhớ).
 > Cập nhật mỗi khi 1 task WBS xong.
 
+## Cập nhật: 02/10/2026 — **Bug-fix: nút "Tạo giao dịch định kỳ" biến mất khi list đã có item** — request trực tiếp user: màn `/recurring` nút tạo chỉ nằm trong empty state → list có rule thì **không tạo thêm được** rule mới. Fix theo pattern `CategoriesPage`: nút (chỉ OWNER, `PlusIcon`, `w-full`) nằm **dưới tiêu đề, LUÔN thấy** (list rỗng lẫn có rule; disabled khi đang load) — empty state giờ chỉ còn icon + text (bỏ CTA riêng, tránh 2 nút). Test: case 53 cập nhật (assert đúng 1 nút) + **regression test mới** (list không rỗng → nút thấy → /recurring/new). Spec §4.3 + case 53 cập nhật. E2E case 63 chạy lại pass. Baseline: web **395/395** (394 + 1 regression) · tsc + eslint sạch.
+
 ## Cập nhật: 02/10/2026 — **Giao dịch định kỳ (recurring expenses) XONG 7/7 WBS** (spec `docs/spec-recurring.md`, user chốt 6 điểm 01/10: màn `/recurring` riêng entry từ "Tôi" · lazy materialize qua API khi mở app/đổi family/về online — KHÔNG cron (Vercel serverless) · không backfill (kỳ đầu = ngày khớp ≥ hôm nay) · khoản sinh ra sửa/xoá được như khoản thường (KHÔNG 409 lock như rental) · chỉ OWNER tạo/sửa/xoá rule · tần suất CỐ ĐỊNH hàng tháng — không có tần suất selector nào; UI khối "Tùy Chỉnh" theo đúng screenshot Apple Reminders của user):
 
 - `62a05f6` docs: spec 603 dòng (data model `RecurringRule` + `Expense.recurringRuleId` + `@@unique([recurringRuleId,date])`, nghĩa **anchor-day** của chuỗi kỳ, thuật toán materialize, 6 endpoint, FE, 63 test case, WBS 7 task)
