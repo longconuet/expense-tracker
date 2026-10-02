@@ -379,9 +379,14 @@ Mọi mutation **online-only** — không offline queue (precedent category/rent
 
 **`RecurringPage.tsx`** — route `/recurring`.
 
-- `fetchRecurring` (read cache); loading → `Skeleton`.
-- **Trạng thái rỗng**: icon lặp + "Chưa có giao dịch định kỳ" + (chỉ OWNER)
-  Button "Tạo giao dịch định kỳ" → `/recurring/new`.
+- `fetchRecurring` (read cache); loading → `Skeleton` (nút tạo vẫn hiện,
+  disabled — pattern `CategoriesPage`).
+- **Nút tạo LUÔN thấy (chỉ OWNER)**: Button "Tạo giao dịch định kỳ" (icon `+`)
+  nằm DƯỚI TIÊU ĐỀ, hiển thị cả khi list rỗng lẫn đã có rule, → `/recurring/new`.
+  (Bug-fix 02/10: trước chỉ nằm trong empty state → list có rule thì không tạo
+  thêm được.)
+- **Trạng thái rỗng**: icon lặp + "Chưa có giao dịch định kỳ" + "Thiết lập
+  một lần — ứng dụng tự ghi khoản mỗi tháng." (không CTA riêng — nút ở trên).
 - **List rule** (Card mỗi rule):
   - Dòng 1: icon danh mục + tên danh mục + `formatVnd(amount)`.
   - Dòng 2: "Hàng tháng · từ <shortDate(startDate)>" + chip điều kiện kết
@@ -548,7 +553,7 @@ qua API; `today` lấy `todayStr()` khi chạy test.
 | 50 | `materializeRecurring` `count 2` (2 tháng khác nhau) | invalidate expense cache đúng 2 months + 2 dates (spy) |
 | 51 | `fetchExpenses` payload cache **cũ** (không có `recurringRuleId`) | normalize về `null` — consumer không thấy `undefined` |
 | 52 | `RecurringPage` list: 1 active (COUNT 3, đã sinh 1) + 1 completed | 2 card đúng: "1/3 lần", "Kỳ tới: …", "Đã hoàn thành" |
-| 53 | `RecurringPage` rỗng (OWNER) / (MEMBER) | OWNER: CTA "Tạo giao dịch định kỳ"; MEMBER: không CTA, card không chạm |
+| 53 | `RecurringPage` rỗng (OWNER) / (MEMBER) | OWNER: nút "Tạo giao dịch định kỳ" **luôn thấy** (rỗng lẫn list có rule — regression test riêng); MEMBER: không nút, card không chạm |
 | 54 | `RecurringRulePage` (new) — chọn từng loại kết thúc | UI hiện/ẩn đúng: Mãi mãi (không dòng phụ) / Cho đến ngày (date input) / Số lần (input số) — như thiết kế |
 | 55 | `RecurringRulePage` validate: endDate < kỳ đầu tiên · số tiền 0 | message lỗi + nút Lưu disabled |
 | 56 | `RecurringRulePage` lưu mới | payload đúng (endType/endDate/occurrenceCount map đúng theo lựa chọn) + navigate `/recurring` |

@@ -11,7 +11,7 @@ import { fetchRecurring, materializeRecurring } from "../../core/dataApi";
 import { shortDate } from "../../core/dates";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
-import { RepeatIcon } from "../../shared/ui/icons";
+import { PlusIcon, RepeatIcon } from "../../shared/ui/icons";
 import { Skeleton } from "../../shared/ui/Skeleton";
 
 /**
@@ -22,7 +22,9 @@ import { Skeleton } from "../../shared/ui/Skeleton";
  * bỏ qua — AppShell cũng tự trigger materialize khi mở app/đổi family).
  *
  * Quyền: OWNER chạm card → màn sửa; MEMBER chỉ xem (card không chạm, không
- * có CTA tạo).
+ * có nút tạo). Nút "Tạo giao dịch định kỳ" (chỉ OWNER) nằm DƯỚI TIÊU ĐỀ,
+ * LUÔN thấy dù list rỗng hay đã có rule (pattern `CategoriesPage`) — tránh
+ * user không tạo thêm được rule khi list không rỗng.
  */
 export default function RecurringPage() {
   const navigate = useNavigate();
@@ -84,9 +86,20 @@ export default function RecurringPage() {
 
   if (!rules) {
     return (
-      <div role="status" aria-label="Đang tải" className="space-y-3 py-2">
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-24 w-full" />
+      <div>
+        <h1 className="text-xl font-bold text-ink">Giao dịch định kỳ</h1>
+        {isOwner && (
+          <div className="mt-4">
+            <Button className="w-full" disabled onClick={() => navigate("/recurring/new")}>
+              <PlusIcon className="h-5 w-5" />
+              Tạo giao dịch định kỳ
+            </Button>
+          </div>
+        )}
+        <div role="status" aria-label="Đang tải" className="mt-4 space-y-3">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
       </div>
     );
   }
@@ -95,18 +108,22 @@ export default function RecurringPage() {
     <div>
       <h1 className="text-xl font-bold text-ink">Giao dịch định kỳ</h1>
 
+      {isOwner && (
+        <div className="mt-4">
+          <Button className="w-full" onClick={() => navigate("/recurring/new")}>
+            <PlusIcon className="h-5 w-5" />
+            Tạo giao dịch định kỳ
+          </Button>
+        </div>
+      )}
+
       {rules.length === 0 ? (
-        <div className="mt-16 flex flex-col items-center text-center">
+        <div className="mt-10 flex flex-col items-center text-center">
           <RepeatIcon className="h-12 w-12 text-ink-muted/50" />
           <p className="mt-4 font-medium text-ink">Chưa có giao dịch định kỳ</p>
           <p className="mt-1 text-sm text-ink-muted">
             Thiết lập một lần — ứng dụng tự ghi khoản mỗi tháng.
           </p>
-          {isOwner && (
-            <Button size="lg" className="mt-6" onClick={() => navigate("/recurring/new")}>
-              Tạo giao dịch định kỳ
-            </Button>
-          )}
         </div>
       ) : (
         <ul className="mt-4 space-y-3">
