@@ -185,6 +185,7 @@ describe("Thống kê", () => {
           category: CAT_A,
           createdByName: "An",
           createdAt: "2026-09-10T04:00:00.000Z",
+          recurringRuleId: null,
         },
         {
           id: "e2",
@@ -194,6 +195,7 @@ describe("Thống kê", () => {
           category: CAT_B,
           createdByName: "Bình",
           createdAt: "2026-09-10T05:00:00.000Z",
+          recurringRuleId: null,
         },
       ],
       meta: { page: 1, pageSize: 100, total: 2 },

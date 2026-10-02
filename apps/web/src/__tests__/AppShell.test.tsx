@@ -1,11 +1,19 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { fireEvent } from "@testing-library/react";
 import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "../core/AppShell";
 import { useAuthStore } from "../core/authStore";
 import { useCacheStatus } from "../core/cacheStatus";
 import { useSyncStore } from "../core/syncQueue";
+
+vi.mock("../core/dataApi", () => ({
+  materializeRecurring: vi.fn(),
+}));
+
+import { materializeRecurring } from "../core/dataApi";
+
+const materializeMock = vi.mocked(materializeRecurring);
 
 const MOCK_USER = { id: "u1", name: "An", username: "an2310" };
 const FAMILY_A = {
@@ -49,6 +57,10 @@ describe("core/AppShell", () => {
     });
     useSyncStore.setState({ pendingCount: 0 });
     useCacheStatus.setState({ servedFromCacheAt: null, markedAt: null });
+    materializeMock.mockReset();
+    materializeMock.mockResolvedValue({ count: 0, created: [] });
+    // jsdom mặc định navigator.onLine = true
+    Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
   });
 
   afterEach(() => {
@@ -169,6 +181,46 @@ describe("core/AppShell", () => {
 
     // Assert
     expect(screen.getByText("ONBOARDING PAGE")).toBeInTheDocument();
+  });
+
+  // case 61 (spec-recurring §5.3): AppShell tự trigger materialize
+  it("#61 online + activeFamilyId → gọi materializeRecurring(fid); đổi family → gọi lại với fid mới", async () => {
+    // Arrange + Act
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="/" element={<div>HOME CONTENT</div>} />
+            <Route path="/other" element={<div>OTHER PAGE</div>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    // Assert — gọi đúng 1 lần với family đang active
+    expect(materializeMock).toHaveBeenCalledTimes(1);
+    expect(materializeMock).toHaveBeenCalledWith(FAMILY_A.id);
+
+    // Act — đổi active family (store) → effect chạy lại
+    useAuthStore.setState({ activeFamilyId: FAMILY_B.id });
+    await waitFor(() => expect(materializeMock).toHaveBeenCalledTimes(2));
+
+    // Assert
+    expect(materializeMock).toHaveBeenLastCalledWith(FAMILY_B.id);
+  });
+
+  it("#61 offline → không gọi materializeRecurring", () => {
+    // Arrange
+    Object.defineProperty(navigator, "onLine", { value: false, configurable: true });
+    try {
+      // Act
+      renderShell();
+
+      // Assert
+      expect(materializeMock).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(navigator, "onLine", { value: true, configurable: true });
+    }
   });
 
   it("PWA iOS: root + banner có safe-area top (nội dung không chui vào vùng status bar bị iOS blur)", () => {

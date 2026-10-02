@@ -3,6 +3,7 @@
 export { formatVnd } from "./formatVnd.js";
 export { formatVndCompact } from "./formatVndCompact.js";
 export * from "./rental.js";
+export * from "./recurring.js";
 
 // ---------------------------------------------------------------------------
 // Envelope API — mọi response REST đều có cấu trúc này
@@ -85,6 +86,8 @@ export interface Expense {
   category: Category;
   createdByName: string;
   createdAt: string; // ISO 8601
+  /** Rule định kỳ sinh ra khoản này — null = khoản nhập tay (spec-recurring.md). */
+  recurringRuleId: string | null;
 }
 
 export interface MonthlyStats {

@@ -10,6 +10,7 @@ import {
 } from "../shared/ui/icons";
 import { useAuthStore } from "./authStore";
 import { useCacheStatus } from "./cacheStatus";
+import { materializeRecurring } from "./dataApi";
 import { formatTimeShort } from "./dates";
 import { useOnline } from "./useOnline";
 import { useSyncStore } from "./syncQueue";
@@ -67,6 +68,17 @@ export function AppShell() {
     }
     useCacheStatus.getState().clear(true);
   }, [location.pathname]);
+
+  // Sinh khoản định kỳ quá hạn — lazy, idempotent, online-only
+  // (spec-recurring §4.6): chạy khi mount (mở app), đổi family, về lại mạng.
+  // Silent: không có toast infra trong app — khoản mới tự hiện ở Lịch sử/
+  // Trang chủ sau khi cache bị invalidate bên trong materializeRecurring.
+  useEffect(() => {
+    if (!online || !activeFamilyId) return;
+    materializeRecurring(activeFamilyId).catch(() => {
+      /* lỗi mạng/server: silent — banner trạng thái đã hiện (offline/sync) */
+    });
+  }, [online, activeFamilyId]);
 
   const activeFamily = families.find((f) => f.id === activeFamilyId) ?? families[0] ?? null;
 

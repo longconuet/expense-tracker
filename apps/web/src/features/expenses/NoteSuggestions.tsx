@@ -1,4 +1,4 @@
-import { haptic } from "./haptic";
+import { haptic } from "../../core/haptic";
 
 /**
  * Hàng chip gợi ý ghi chú nhanh của 1 danh mục — dùng chung màn Tạo khoản chi

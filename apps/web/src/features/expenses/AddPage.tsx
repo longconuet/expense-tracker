@@ -5,14 +5,15 @@ import { ApiError } from "../../core/api";
 import { useAuthStore } from "../../core/authStore";
 import { createExpense, fetchCategories } from "../../core/dataApi";
 import { today } from "../../core/dates";
+import { haptic } from "../../core/haptic";
 import { Button } from "../../shared/ui/Button";
 import { Card } from "../../shared/ui/Card";
+import { CategoryChips } from "../../shared/ui/CategoryChips";
 import { Input } from "../../shared/ui/Input";
+import { Keypad, type KeypadKey } from "../../shared/ui/Keypad";
 import { Spinner } from "../../shared/ui/Spinner";
-import { haptic } from "./haptic";
 import { NoteSuggestions } from "./NoteSuggestions";
 import { suggestAmounts } from "./amountSuggestions";
-import { Keypad, type KeypadKey } from "./Keypad";
 
 /**
  * Màn nhập khoản chi nhanh (WBS 9): full-screen, số tiền gõ bằng
@@ -194,42 +195,15 @@ export default function AddPage() {
         ) : null}
       </div>
 
-      {/* Danh mục — viên tròn cuộn ngang (không tiêu đề, icon gọn để hiện nhiều hơn) */}
-      <div className="-mx-4 mt-4">
-        <div role="group" aria-label="Danh mục chi tiêu" className="flex gap-3 overflow-x-auto px-4 pb-1">
-          {categories.map((category) => {
-            const selected = category.id === categoryId;
-            return (
-              <button
-                key={category.id}
-                type="button"
-                aria-pressed={selected}
-                onClick={() => {
-                  haptic(8);
-                  setCategoryId(category.id);
-                }}
-                className="flex w-[66px] shrink-0 flex-col items-center gap-1.5"
-              >
-                <span
-                  aria-hidden
-                  className={`flex h-[58px] w-[58px] items-center justify-center rounded-full border-2 text-3xl transition ${
-                    selected ? "border-primary bg-primary-soft" : "border-border bg-card"
-                  }`}
-                >
-                  {category.icon}
-                </span>
-                <span
-                  className={`w-full truncate text-center text-xs ${
-                    selected ? "font-semibold text-primary" : "text-ink-muted"
-                  }`}
-                >
-                  {category.name}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      {/* Danh mục — viên tròn cuộn ngang (1 nguồn markup: shared/ui/CategoryChips) */}
+      <CategoryChips
+        categories={categories}
+        selectedId={categoryId}
+        onSelect={(id) => {
+          haptic(8);
+          setCategoryId(id);
+        }}
+      />
 
       {/* Keypad ngay dưới danh mục (trên khu vực ngày + ghi chú) —
           mobile không phải cuộn để thấy cả bàn phím, size md (56px). */}

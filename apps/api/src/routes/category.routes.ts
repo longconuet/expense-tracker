@@ -189,9 +189,13 @@ categoryRouter.delete("/:categoryId", async (req, res) => {
     throw new AppError(404, "CATEGORY_NOT_FOUND", "Không tìm thấy danh mục");
   }
 
-  const expenseCount = await prisma.expense.count({ where: { categoryId: category.id } });
-  if (expenseCount > 0) {
-    throw new AppError(409, "CATEGORY_IN_USE", "Danh mục đang có khoản chi — không thể xoá");
+  // Chặn xoá khi category còn rule định kỳ (FK Restrict sẽ ném 500 nếu bỏ check)
+  const [expenseCount, ruleCount] = await Promise.all([
+    prisma.expense.count({ where: { categoryId: category.id } }),
+    prisma.recurringRule.count({ where: { categoryId: category.id } }),
+  ]);
+  if (expenseCount > 0 || ruleCount > 0) {
+    throw new AppError(409, "CATEGORY_IN_USE", "Danh mục đang có khoản chi hoặc rule định kỳ — không thể xoá");
   }
 
   await prisma.category.delete({ where: { id: category.id } });

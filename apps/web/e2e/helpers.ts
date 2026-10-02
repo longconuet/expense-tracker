@@ -62,18 +62,29 @@ export async function pickCategory(page: Page, name: string): Promise<void> {
 }
 
 /**
- * Một ngày KHÁC hôm nay trong tháng hiện tại (ngày 1 của tháng; nếu hôm nay
- * đúng là ngày 1 thì dùng ngày 2). Label = "DD/MM" (luôn cùng năm hiện tại).
- * Dùng cho test nhóm theo ngày — không phụ thuộc ngày chạy test.
+ * Một ngày trong tháng hiện tại KHÔNG phải hôm nay cũng KHÔNG phải hôm qua —
+ * `dayLabel` render 2 ngày đó là "Hôm nay"/"Hôm qua" (không phải "DD/MM"),
+ * test nhóm theo ngày cần ngày có label "DD/MM" trần. Chọn từ ngày 1–3
+ * (nếu hôm nay là ngày 2 thì ngày 3 có thể là tương lai trong tháng —
+ * lịch sử vẫn nhóm theo ngày bình thường).
+ * Không phụ thuộc ngày chạy test.
  */
 export function anotherDayInCurrentMonth(): { date: string; label: string } {
   const now = new Date();
   const y = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, "0");
-  if (now.getDate() === 1) {
-    return { date: `${y}-${mm}-02`, label: `02/${mm}` };
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  for (let day = 1; day <= 3; day += 1) {
+    const isToday = day === now.getDate();
+    const isYesterday = day === yesterday.getDate() && yesterday.getMonth() === now.getMonth();
+    if (isToday || isYesterday) continue;
+    const dd = String(day).padStart(2, "0");
+    return { date: `${y}-${mm}-${dd}`, label: `${dd}/${mm}` };
   }
-  return { date: `${y}-${mm}-01`, label: `01/${mm}` };
+  // Không chạm tới (mọi tháng ≥ 28 ngày — 3 ứng viên không thể cùng bị chặn
+  // bởi hôm nay + hôm qua).
+  throw new Error("anotherDayInCurrentMonth: không tìm được ngày phù hợp");
 }
 
 /**

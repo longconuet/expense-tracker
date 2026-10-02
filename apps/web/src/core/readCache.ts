@@ -28,6 +28,8 @@ export const CACHE_TTL_MS = {
   stats: 24 * 60 * 60 * 1000,
   /** Tiền phòng trọ: cùng nhịp với expenses (dữ liệu tháng). */
   rental: 24 * 60 * 60 * 1000,
+  /** Giao dịch định kỳ: list rule ít đổi — TTL 24h như rental. */
+  recurring: 24 * 60 * 60 * 1000,
 } as const;
 
 const DEFAULT_TTL_MS = CACHE_TTL_MS.expenses;
@@ -37,6 +39,7 @@ function ttlFor(key: string): number {
   if (key.includes("/stats")) return CACHE_TTL_MS.stats;
   if (key.includes("/expenses")) return CACHE_TTL_MS.expenses;
   if (key.includes("/rental")) return CACHE_TTL_MS.rental;
+  if (key.includes("/recurring")) return CACHE_TTL_MS.recurring;
   return DEFAULT_TTL_MS;
 }
 

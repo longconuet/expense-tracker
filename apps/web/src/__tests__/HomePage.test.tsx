@@ -28,6 +28,7 @@ const EXPENSE = {
   category: CAT,
   createdByName: "An",
   createdAt: `${yesterday()}T06:00:00.000Z`,
+  recurringRuleId: null,
 };
 
 function renderHome() {
@@ -107,6 +108,7 @@ describe("Trang chủ", () => {
           category: CAT,
           createdByName: "An",
           createdAt: `${today()}T05:00:00.000Z`,
+          recurringRuleId: null,
         },
         {
           id: "e2",
@@ -116,6 +118,7 @@ describe("Trang chủ", () => {
           category: CAT,
           createdByName: "An",
           createdAt: `${today()}T04:00:00.000Z`,
+          recurringRuleId: null,
         },
         {
           id: "e3",
@@ -125,6 +128,7 @@ describe("Trang chủ", () => {
           category: CAT,
           createdByName: "An",
           createdAt: `${yesterday()}T05:00:00.000Z`,
+          recurringRuleId: null,
         },
         {
           id: "e4",
@@ -134,6 +138,7 @@ describe("Trang chủ", () => {
           category: CAT,
           createdByName: "An",
           createdAt: `${yesterday()}T04:00:00.000Z`,
+          recurringRuleId: null,
         },
       ],
       meta: { page: 1, pageSize: 5, total: 4 },

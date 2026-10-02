@@ -2,10 +2,13 @@ import type {
   ApiMeta,
   ApiResponse,
   Category,
+  CreateRecurringRuleInput,
   Expense,
   Family,
   FamilyMemberDto,
   MonthlyStats,
+  RecurringMaterializeResult,
+  RecurringRule,
   RentalConfig,
   RentalConfigFields,
   RentalListResponse,
@@ -13,7 +16,12 @@ import type {
   RentalMonthFields,
 } from "@expense-tracker/shared";
 import { apiFetch, apiFetchBinary, apiFetchWithMeta, ApiError, isServerUnavailable } from "./api";
-import { invalidateExpenseCache, invalidateFamilyCache, invalidateRentalCache } from "./cacheInvalidate";
+import {
+  invalidateExpenseCache,
+  invalidateFamilyCache,
+  invalidateRecurringCache,
+  invalidateRentalCache,
+} from "./cacheInvalidate";
 import { monthOf } from "./dates";
 import { withReadCache } from "./readCache";
 import { enqueueExpense } from "./syncQueue";
@@ -149,13 +157,19 @@ export async function fetchExpenses(
   const qs = query.toString();
   const path = `/api/families/${familyId}/expenses${qs ? `?${qs}` : ""}`;
 
-  return withReadCache<ExpenseListResult>(`GET ${path}`, async () => {
+  const result = await withReadCache<ExpenseListResult>(`GET ${path}`, async () => {
     const { data, meta } = await apiFetchWithMeta<{ expenses: Expense[] }>(path);
     return {
       expenses: data.expenses,
       meta: meta ?? { page: 1, pageSize: data.expenses.length, total: data.expenses.length },
     };
   });
+  // Normalize 1 chỗ: payload read cache cũ (ghi trước khi có field) không có
+  // recurringRuleId → null (precedent noteSuggestions ở fetchCategories).
+  return {
+    ...result,
+    expenses: result.expenses.map((e) => ({ ...e, recurringRuleId: e.recurringRuleId ?? null })),
+  };
 }
 
 export type ExportFormat = "xlsx" | "csv";
@@ -398,6 +412,76 @@ export async function deleteRentalMonth(familyId: string, month: string): Promis
     method: "DELETE",
   });
   await Promise.all([invalidateRentalCache(familyId), invalidateExpenseCache(familyId, [month], [])]);
+}
+
+// ---------------------------------------------------------------------------
+// Giao dịch định kỳ (recurring) — spec: docs/spec-recurring.md
+//
+// Read đi qua read cache (TTL 24h như rental); mutation online-only (không
+// offline queue — nhất quán với category/rental) — sau 2xx tự invalidate.
+// ---------------------------------------------------------------------------
+
+export async function fetchRecurring(familyId: string): Promise<{ rules: RecurringRule[] }> {
+  const path = `/api/families/${familyId}/recurring`;
+  return withReadCache<{ rules: RecurringRule[] }>(`GET ${path}`, () =>
+    apiFetch<{ rules: RecurringRule[] }>(path),
+  );
+}
+
+/** Tạo rule — chỉ OWNER (API enforce). */
+export async function createRecurringRule(
+  familyId: string,
+  input: CreateRecurringRuleInput,
+): Promise<RecurringRule> {
+  const data = await apiFetch<{ rule: RecurringRule }>(`/api/families/${familyId}/recurring`, {
+    method: "POST",
+    body: input,
+  });
+  await invalidateRecurringCache(familyId);
+  return data.rule;
+}
+
+/**
+ * Sửa rule — người tạo hoặc OWNER (API enforce). `input` gộp phía API
+ * (body ?? hiện có); `endDate`/`occurrenceCount` = null để chuyển về FOREVER.
+ */
+export async function updateRecurringRule(
+  familyId: string,
+  ruleId: string,
+  input: Partial<CreateRecurringRuleInput>,
+): Promise<RecurringRule> {
+  const data = await apiFetch<{ rule: RecurringRule }>(`/api/recurring/${ruleId}`, {
+    method: "PUT",
+    body: input,
+  });
+  await invalidateRecurringCache(familyId);
+  return data.rule;
+}
+
+/** Xoá rule — người tạo hoặc OWNER. Khoản đã sinh giữ lại (API SetNull). */
+export async function deleteRecurringRule(familyId: string, ruleId: string): Promise<void> {
+  await apiFetch(`/api/recurring/${ruleId}`, { method: "DELETE" });
+  await invalidateRecurringCache(familyId);
+}
+
+/**
+ * Sinh các khoản định kỳ quá hạn — lazy, idempotent, online-only. KHÔNG qua
+ * read cache. Có khoản mới sinh → xoá cache recurring + expense của các
+ * tháng/ngày tương ứng (khoản phải hiện ngay ở Lịch sử/Trang chủ).
+ */
+export async function materializeRecurring(
+  familyId: string,
+): Promise<RecurringMaterializeResult> {
+  const result = await apiFetch<RecurringMaterializeResult>(
+    `/api/families/${familyId}/recurring/materialize`,
+    { method: "POST", body: {} },
+  );
+  if (result.count > 0) {
+    const months = [...new Set(result.created.map((c) => c.month))];
+    const dates = result.created.map((c) => c.date);
+    await Promise.all([invalidateRecurringCache(familyId), invalidateExpenseCache(familyId, months, dates)]);
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

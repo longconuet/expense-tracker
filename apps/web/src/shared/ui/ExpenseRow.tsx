@@ -1,5 +1,6 @@
 import type { Expense } from "@expense-tracker/shared";
 import { formatVnd } from "@expense-tracker/shared";
+import { RepeatIcon } from "./icons";
 
 type Size = "md" | "sm";
 
@@ -40,7 +41,17 @@ export function ExpenseRow({ expense, size = "md" }: ExpenseRowProps) {
         {expense.category.icon}
       </span>
       <div className="min-w-0 flex-1">
-        <p className={title}>{expense.category.name}</p>
+        {/* Icon định kỳ (spec-recurring §4.7): khoản sinh từ rule — cạnh tên
+            danh mục, 12px, không đổi layout; hành vi chạm hàng giữ nguyên. */}
+        <p className={title}>
+          {expense.category.name}
+          {expense.recurringRuleId != null ? (
+            <>
+              <RepeatIcon className="ml-1.5 inline h-3 w-3 text-ink-muted" />
+              <span className="sr-only">định kỳ</span>
+            </>
+          ) : null}
+        </p>
         <p className="truncate text-xs text-ink-muted">
           {expense.createdByName}
           {expense.note ? (
